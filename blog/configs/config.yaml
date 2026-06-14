@@ -1,0 +1,70 @@
+# 应用配置
+app:
+  name: "blog-project"
+  version: "1.0.0"
+  mode: "debug"  # debug, release, test
+  host: "192.168.10.7"
+  port: 9527
+
+# 数据库配置
+database:
+  mysql:
+    host: "localhost"
+    port: 3306
+    username: "root"
+    password: "123456"
+    database: "blog-project"
+    max_idle_conns: 10
+    max_open_conns: 100
+  redis:
+    host: "localhost"
+    port: 6379
+    password: ""
+    db: 0
+    pool_size: 10
+
+# JWT 配置
+jwt:
+  secret: "blog-project"
+  expire_hours: 24
+
+# 日志配置
+log:
+  level: "debug"  # debug, info, warn, error
+  filename: "logs/app.log"
+  max_size: 100    # MB
+  max_backups: 3   # 保留旧文件的最大个数
+  max_age: 30      # 保留旧文件的最大天数
+  compress: true   # 是否压缩
+
+# CORS 配置
+cors:
+  enabled: true
+  allow_origins:
+    - "*"
+  allow_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allow_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Authorization"
+
+#邮箱配置
+email:
+  host: "smtp.qq.com"
+  port: 587
+  username: "1223349392@qq.com"
+  password: "rrqhzuomwdmnfjhc"
+  from: "1223349392@qq.com"
+
+# MinIO 配置
+minio:
+  endpoint: "118.31.10.161:9000"          # MinIO 服务地址
+  access_key_id: "minioadmin"         # Access Key
+  access_key_secret: "minioadmin123"     # Secret Key
+  bucket_name: "core-coach"           # Bucket 名称
+  use_ssl: false                      # 是否使用 SSL
