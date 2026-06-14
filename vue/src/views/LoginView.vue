@@ -1,13 +1,6 @@
 <template>
   <AuthShell
-    hero-eyebrow="AUTH ACCESS"
-    hero-title="欢迎回到你的创作空间"
-    hero-description="登录后即可继续写作、管理内容和处理互动消息。界面升级后，账号登录与邮箱验证码登录保持同一体验节奏。"
-    :hero-highlights="heroHighlights"
-    panel-eyebrow="账号认证"
     panel-title="登录你的账号"
-    panel-description="选择最适合当前场景的登录方式，快速进入博客系统。"
-    :footer-text="footerText"
   >
     <div class="auth-form">
       <div class="tab-switch">
@@ -31,16 +24,10 @@
         </button>
       </div>
 
-      <div class="form-note">
-        <span class="form-note__icon">i</span>
-        <span>{{ loginType === 'account' ? '账号登录需要输入图形验证码。' : '邮箱验证码发送后 60 秒内可再次获取。' }}</span>
-      </div>
-
       <form v-if="loginType === 'account'" class="auth-form" @submit.prevent="handleAccountLogin">
         <div class="form-stack">
           <div class="field-header">
             <label class="field-label" for="account">账号</label>
-            <span class="field-tip">输入已注册账号</span>
           </div>
           <div class="input-shell" :class="{ 'input-shell--error': !!errors.account }">
             <span class="input-shell__icon">&#128100;</span>
@@ -53,15 +40,12 @@
               @input="clearError('account')"
             />
           </div>
-          <p class="helper-text" :class="{ 'helper-text--error': !!errors.account }">
-            {{ errors.account ?? '支持账号密码登录。' }}
-          </p>
+          <p v-if="errors.account" class="helper-text helper-text--error">{{ errors.account }}</p>
         </div>
 
         <div class="form-stack">
           <div class="field-header">
             <label class="field-label" for="password">密码</label>
-            <span class="field-tip">请输入账号对应密码</span>
           </div>
           <div class="input-shell" :class="{ 'input-shell--error': !!errors.password }">
             <span class="input-shell__icon">&#128274;</span>
@@ -74,15 +58,12 @@
               @input="clearError('password')"
             />
           </div>
-          <p class="helper-text" :class="{ 'helper-text--error': !!errors.password }">
-            {{ errors.password ?? '密码区分大小写。' }}
-          </p>
+          <p v-if="errors.password" class="helper-text helper-text--error">{{ errors.password }}</p>
         </div>
 
         <div class="form-stack">
           <div class="field-header">
             <label class="field-label" for="captcha-code">图形验证码</label>
-            <span class="field-tip">点击右侧图片可刷新</span>
           </div>
           <div class="input-shell" :class="{ 'input-shell--error': !!errors.captchaCode }">
             <span class="input-shell__icon">&#128394;</span>
@@ -114,9 +95,7 @@
             </div>
           </div>
           <input v-model="accountForm.captcha_key" type="hidden" />
-          <p class="helper-text" :class="{ 'helper-text--error': !!errors.captchaCode }">
-            {{ errors.captchaCode ?? '验证码用于提升登录安全性。' }}
-          </p>
+          <p v-if="errors.captchaCode" class="helper-text helper-text--error">{{ errors.captchaCode }}</p>
         </div>
 
         <button type="submit" class="submit-primary" :disabled="loading">
@@ -129,7 +108,6 @@
         <div class="form-stack">
           <div class="field-header">
             <label class="field-label" for="email">邮箱</label>
-            <span class="field-tip">用于接收登录验证码</span>
           </div>
           <div class="input-shell" :class="{ 'input-shell--error': !!errors.email }">
             <span class="input-shell__icon">&#9993;</span>
@@ -142,15 +120,12 @@
               @input="clearError('email')"
             />
           </div>
-          <p class="helper-text" :class="{ 'helper-text--error': !!errors.email }">
-            {{ errors.email ?? '请输入可正常接收邮件的邮箱。' }}
-          </p>
+          <p v-if="errors.email" class="helper-text helper-text--error">{{ errors.email }}</p>
         </div>
 
         <div class="form-stack">
           <div class="field-header">
             <label class="field-label" for="email-captcha">邮箱验证码</label>
-            <span class="field-tip">发送前请确认邮箱无误</span>
           </div>
           <div class="input-shell" :class="{ 'input-shell--error': !!errors.emailCaptcha }">
             <span class="input-shell__icon">&#128276;</span>
@@ -174,9 +149,7 @@
               </button>
             </div>
           </div>
-          <p class="helper-text" :class="{ 'helper-text--error': !!errors.emailCaptcha }">
-            {{ errors.emailCaptcha ?? '验证码发送后请尽快完成登录。' }}
-          </p>
+          <p v-if="errors.emailCaptcha" class="helper-text helper-text--error">{{ errors.emailCaptcha }}</p>
         </div>
 
         <button type="submit" class="submit-primary" :disabled="loading">
@@ -224,25 +197,6 @@ interface Errors {
 const router = useRouter()
 
 const loginType = ref<'account' | 'email'>('account')
-
-const footerText = `© ${new Date().getFullYear()} 我的博客. 统一视觉升级版认证页`
-const heroHighlights = [
-  {
-    icon: '01',
-    title: '双模式登录',
-    description: '支持账号密码与邮箱验证码两种登录路径，适配不同使用场景。'
-  },
-  {
-    icon: '02',
-    title: '安全验证',
-    description: '账号登录结合图形验证码，减少异常请求带来的登录风险。'
-  },
-  {
-    icon: '03',
-    title: '清晰反馈',
-    description: '所有输入项、按钮状态和错误信息都按统一层级呈现。'
-  }
-]
 
 const accountForm = ref<AccountForm>({
   account: '',

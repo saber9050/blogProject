@@ -3,56 +3,31 @@
     <div class="auth-page__glow auth-page__glow--left"></div>
     <div class="auth-page__glow auth-page__glow--right"></div>
 
-    <header class="auth-topbar">
-      <div class="auth-topbar__inner">
-        <button type="button" class="brand-mark" @click="goHome">
-          <span class="brand-mark__icon">&#9998;</span>
-          <span class="brand-mark__text">
-            <strong>{{ brandName }}</strong>
-            <small>{{ brandTagline }}</small>
-          </span>
-        </button>
-
-        <nav class="auth-topnav" aria-label="认证页面导航">
-          <RouterLink
-            v-for="item in navItems"
-            :key="item.to"
-            :to="item.to"
-            class="auth-topnav__link"
-            :class="{ 'is-active': route.path === item.to }"
-          >
-            {{ item.label }}
-          </RouterLink>
-        </nav>
-      </div>
-    </header>
-
     <main class="auth-stage">
-      <section class="auth-shell">
-        <aside class="auth-hero">
-          <span class="auth-hero__eyebrow">{{ heroEyebrow }}</span>
-          <h1 class="auth-hero__title">{{ heroTitle }}</h1>
-          <p class="auth-hero__description">{{ heroDescription }}</p>
-
-          <div class="auth-hero__list">
-            <article
-              v-for="item in heroHighlights"
-              :key="`${item.title}-${item.description}`"
-              class="auth-hero__item"
-            >
-              <span class="auth-hero__item-icon">{{ item.icon }}</span>
-              <div>
-                <h3>{{ item.title }}</h3>
-                <p>{{ item.description }}</p>
-              </div>
-            </article>
-          </div>
-        </aside>
-
+      <section class="auth-shell auth-shell--single">
         <section class="auth-panel">
-          <span class="auth-panel__eyebrow">{{ panelEyebrow }}</span>
+          <div class="auth-inlinebar">
+            <button type="button" class="brand-mark" @click="goHome">
+              <span class="brand-mark__icon">&#9998;</span>
+              <span class="brand-mark__text">
+                <strong>{{ brandName }}</strong>
+                <small>{{ brandTagline }}</small>
+              </span>
+            </button>
+
+            <nav class="auth-topnav" aria-label="认证页面导航">
+              <RouterLink
+                v-for="item in navItems"
+                :key="item.to"
+                :to="item.to"
+                class="auth-topnav__link"
+                :class="{ 'is-active': route.path === item.to }"
+              >
+                {{ item.label }}
+              </RouterLink>
+            </nav>
+          </div>
           <h2 class="auth-panel__title">{{ panelTitle }}</h2>
-          <p class="auth-panel__description">{{ panelDescription }}</p>
 
           <slot />
 
@@ -62,10 +37,6 @@
         </section>
       </section>
     </main>
-
-    <footer class="auth-footer">
-      <p>{{ footerText }}</p>
-    </footer>
   </div>
 </template>
 
@@ -73,27 +44,13 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-interface HighlightItem {
-  icon: string
-  title: string
-  description: string
-}
-
 interface Props {
-  heroEyebrow: string
-  heroTitle: string
-  heroDescription: string
-  heroHighlights: HighlightItem[]
-  panelEyebrow: string
   panelTitle: string
-  panelDescription: string
-  footerText?: string
   brandName?: string
   brandTagline?: string
 }
 
 withDefaults(defineProps<Props>(), {
-  footerText: `© ${new Date().getFullYear()} 我的博客. 保留所有权利.`,
   brandName: '我的博客',
   brandTagline: '现代创作空间'
 })
@@ -149,13 +106,13 @@ const goHome = () => {
 .auth-topbar {
   position: relative;
   z-index: 1;
-  padding: 24px 24px 0;
+  padding: 16px 16px 0;
 }
 
 .auth-topbar__inner {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 14px 18px;
+  padding: 10px 14px;
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.66);
@@ -250,21 +207,26 @@ const goHome = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 28px 24px 40px;
+  padding: 16px 16px 18px;
 }
 
 .auth-shell {
   width: min(1180px, 100%);
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: 24px;
+  grid-template-columns: 1fr;
+  gap: 18px;
   align-items: stretch;
+}
+
+.auth-shell--single {
+  width: min(620px, 100%);
+  margin: 0 auto;
 }
 
 .auth-hero,
 .auth-panel {
   border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 32px;
+  border-radius: 28px;
   box-shadow: 0 28px 70px rgba(15, 23, 42, 0.1);
   backdrop-filter: blur(18px);
 }
@@ -272,7 +234,7 @@ const goHome = () => {
 .auth-hero {
   position: relative;
   overflow: hidden;
-  padding: 40px;
+  padding: 30px;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.26), transparent 42%),
     linear-gradient(160deg, #0f766e 0%, #059669 48%, #34d399 100%);
@@ -280,7 +242,7 @@ const goHome = () => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 620px;
+  min-height: 520px;
 }
 
 .auth-hero::after {
@@ -309,69 +271,69 @@ const goHome = () => {
 .auth-hero__eyebrow {
   color: rgba(255, 255, 255, 0.96);
   background: rgba(255, 255, 255, 0.14);
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .auth-hero__title {
   max-width: 12ch;
-  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  font-size: clamp(1.9rem, 4vw, 2.9rem);
   line-height: 1.08;
   font-weight: 800;
   letter-spacing: -0.03em;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .auth-hero__description {
   max-width: 38rem;
-  font-size: 1rem;
-  line-height: 1.8;
+  font-size: 0.94rem;
+  line-height: 1.65;
   color: rgba(255, 255, 255, 0.84);
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 .auth-hero__list {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .auth-hero__item {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 52px 1fr;
-  gap: 14px;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
   align-items: flex-start;
-  padding: 18px;
-  border-radius: 24px;
+  padding: 14px;
+  border-radius: 20px;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .auth-hero__item-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 18px;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.16);
-  font-size: 1.25rem;
+  font-size: 1rem;
 }
 
 .auth-hero__item h3 {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .auth-hero__item p {
   color: rgba(255, 255, 255, 0.76);
-  font-size: 0.92rem;
-  line-height: 1.6;
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
 .auth-panel {
-  padding: 34px 32px 28px;
+  padding: 24px 24px 18px;
   background: rgba(255, 255, 255, 0.8);
   display: flex;
   flex-direction: column;
@@ -381,31 +343,31 @@ const goHome = () => {
 .auth-panel__eyebrow {
   color: var(--primary-700);
   background: var(--primary-soft);
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .auth-panel__title {
-  font-size: clamp(1.7rem, 3vw, 2.3rem);
+  font-size: clamp(1.5rem, 2.8vw, 2rem);
   line-height: 1.2;
   letter-spacing: -0.03em;
   color: var(--text-strong);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .auth-panel__description {
   color: var(--text-secondary);
-  line-height: 1.75;
-  margin-bottom: 26px;
+  line-height: 1.55;
+  margin-bottom: 16px;
 }
 
 .auth-panel__footer {
-  margin-top: 22px;
+  margin-top: 14px;
 }
 
 .auth-footer {
   position: relative;
   z-index: 1;
-  padding: 0 24px 24px;
+  padding: 0 16px 12px;
   text-align: center;
 }
 
@@ -421,11 +383,47 @@ const goHome = () => {
 
   .auth-hero {
     min-height: auto;
-    padding: 32px;
+    padding: 24px;
   }
 
   .auth-hero__title {
     max-width: none;
+  }
+}
+
+@media (min-width: 1025px) and (max-height: 900px) {
+  .auth-page {
+    overflow: hidden;
+  }
+
+  .auth-topbar {
+    padding-top: 12px;
+  }
+
+  .auth-stage {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .auth-hero {
+    min-height: 0;
+    padding: 24px;
+  }
+
+  .auth-hero__description {
+    margin-bottom: 14px;
+  }
+
+  .auth-hero__item p {
+    display: none;
+  }
+
+  .auth-panel {
+    padding: 22px 22px 16px;
+  }
+
+  .auth-footer {
+    display: none;
   }
 }
 

@@ -1,25 +1,12 @@
 <template>
   <AuthShell
-    hero-eyebrow="CREATE ACCOUNT"
-    hero-title="创建一个更好看的博客身份"
-    hero-description="注册页沿用统一设计规范，突出输入节奏、校验反馈与结果状态，让首次注册过程更清晰、更稳定。"
-    :hero-highlights="heroHighlights"
-    panel-eyebrow="注册新账号"
     panel-title="完成你的基础资料"
-    panel-description="昵称和账号支持唯一性检查，密码字段在输入过程中实时反馈格式和一致性。"
-    :footer-text="footerText"
   >
     <div class="auth-form">
-      <div class="form-note">
-        <span class="form-note__icon">i</span>
-        <span>字段格式要求来自后端注册结构体，提交前必须全部通过校验。</span>
-      </div>
-
       <form class="auth-form" @submit.prevent="handleRegister">
         <div class="form-stack">
           <div class="field-header">
             <label class="field-label" for="nickname">昵称</label>
-            <span class="field-tip">1-15 个字符，需唯一</span>
           </div>
           <div
             class="input-shell"
@@ -41,21 +28,12 @@
             <span v-if="nicknameStatus === 'valid'" class="status-mark status-mark--valid">&#10003;</span>
             <span v-if="nicknameStatus === 'checking'" class="status-mark status-mark--checking">&#8635;</span>
           </div>
-          <p
-            class="helper-text"
-            :class="{
-              'helper-text--error': !!errors.nickname,
-              'helper-text--success': !errors.nickname && nicknameStatus === 'valid'
-            }"
-          >
-            {{ errors.nickname ?? (nicknameStatus === 'valid' ? '昵称可用。' : '完成输入后会自动检测是否已存在。') }}
-          </p>
+          <p v-if="errors.nickname" class="helper-text helper-text--error">{{ errors.nickname }}</p>
         </div>
 
         <div class="form-stack">
           <div class="field-header">
             <label class="field-label" for="register-account">账号</label>
-            <span class="field-tip">11 位数字，需唯一</span>
           </div>
           <div
             class="input-shell"
@@ -78,21 +56,12 @@
             <span v-if="accountStatus === 'valid'" class="status-mark status-mark--valid">&#10003;</span>
             <span v-if="accountStatus === 'checking'" class="status-mark status-mark--checking">&#8635;</span>
           </div>
-          <p
-            class="helper-text"
-            :class="{
-              'helper-text--error': !!errors.account,
-              'helper-text--success': !errors.account && accountStatus === 'valid'
-            }"
-          >
-            {{ errors.account ?? (accountStatus === 'valid' ? '账号可用。' : '账号将作为系统登录标识。') }}
-          </p>
+          <p v-if="errors.account" class="helper-text helper-text--error">{{ errors.account }}</p>
         </div>
 
         <div class="form-stack">
           <div class="field-header">
             <label class="field-label" for="register-password">密码</label>
-            <span class="field-tip">11-20 位，需同时包含数字和字母</span>
           </div>
           <div
             class="input-shell"
@@ -112,21 +81,12 @@
             />
             <span v-if="passwordStatus === 'valid'" class="status-mark status-mark--valid">&#10003;</span>
           </div>
-          <p
-            class="helper-text"
-            :class="{
-              'helper-text--error': !!errors.password,
-              'helper-text--success': !errors.password && passwordStatus === 'valid'
-            }"
-          >
-            {{ errors.password ?? (passwordStatus === 'valid' ? '密码格式已通过。' : '仅支持数字与字母组合。') }}
-          </p>
+          <p v-if="errors.password" class="helper-text helper-text--error">{{ errors.password }}</p>
         </div>
 
         <div class="form-stack">
           <div class="field-header">
             <label class="field-label" for="register-password-ack">确认密码</label>
-            <span class="field-tip">需与上方密码保持一致</span>
           </div>
           <div
             class="input-shell"
@@ -146,15 +106,7 @@
             />
             <span v-if="passwordAckStatus === 'valid'" class="status-mark status-mark--valid">&#10003;</span>
           </div>
-          <p
-            class="helper-text"
-            :class="{
-              'helper-text--error': !!errors.passwordAck,
-              'helper-text--success': !errors.passwordAck && passwordAckStatus === 'valid'
-            }"
-          >
-            {{ errors.passwordAck ?? (passwordAckStatus === 'valid' ? '两次密码输入一致。' : '确认密码会实时检查一致性。') }}
-          </p>
+          <p v-if="errors.passwordAck" class="helper-text helper-text--error">{{ errors.passwordAck }}</p>
         </div>
 
         <button type="submit" class="submit-primary" :disabled="loading || !canSubmit">
@@ -196,25 +148,6 @@ interface Errors {
 type FieldStatus = '' | 'valid' | 'error' | 'checking'
 
 const router = useRouter()
-
-const footerText = `© ${new Date().getFullYear()} 我的博客. 注册与校验体验已统一升级`
-const heroHighlights = [
-  {
-    icon: '01',
-    title: '实时格式校验',
-    description: '昵称、账号、密码和确认密码都按统一规范即时反馈。'
-  },
-  {
-    icon: '02',
-    title: '唯一性检测',
-    description: '昵称和账号在输入完成后即可检查是否已被占用。'
-  },
-  {
-    icon: '03',
-    title: '可视化状态',
-    description: '通过成功、校验中、错误三种状态，让用户快速理解当前结果。'
-  }
-]
 
 const form = ref<RegisterForm>({
   nickname: '',
