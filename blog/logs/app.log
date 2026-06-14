@@ -262,3 +262,19 @@
 {"level":"info","time":"2026-06-14T14:48:34.126+0800","caller":"app/app.go:207","msg":"正在关闭服务器..."}
 {"level":"info","time":"2026-06-14T14:48:34.126+0800","caller":"app/app.go:228","msg":"服务器已关闭"}
 {"level":"info","time":"2026-06-14T14:48:34.126+0800","caller":"app/app.go:229","msg":"========================================="}
+{"level":"info","time":"2026-06-14T17:06:59.760+0800","caller":"app/app.go:92","msg":"========================================="}
+{"level":"info","time":"2026-06-14T17:06:59.773+0800","caller":"app/app.go:93","msg":"欢迎使用 blog-project"}
+{"level":"info","time":"2026-06-14T17:06:59.773+0800","caller":"app/app.go:94","msg":"版本: 1.0.0"}
+{"level":"info","time":"2026-06-14T17:06:59.773+0800","caller":"app/app.go:95","msg":"模式: debug"}
+{"level":"info","time":"2026-06-14T17:06:59.773+0800","caller":"app/app.go:96","msg":"配置加载成功"}
+{"level":"info","time":"2026-06-14T17:06:59.773+0800","caller":"app/app.go:97","msg":"========================================="}
+{"level":"info","time":"2026-06-14T17:06:59.868+0800","caller":"database/mysql.go:69","msg":"MySQL 连接成功","host":"localhost","port":3306,"database":"blog-project"}
+{"level":"info","time":"2026-06-14T17:06:59.868+0800","caller":"app/app.go:128","msg":"数据库迁移完成"}
+{"level":"info","time":"2026-06-14T17:06:59.886+0800","caller":"database/redis.go:39","msg":"Redis 连接成功","addr":"localhost:6379","db":0}
+{"level":"info","time":"2026-06-14T17:06:59.886+0800","caller":"app/app.go:188","msg":"HTTP 服务器启动","addr":":9527","mode":"debug"}
+{"level":"info","time":"2026-06-14T17:07:01.555+0800","caller":"middleware/logger.go:42","msg":"HTTP Request","method":"GET","path":"/api/v1/auth/is_exists_account","query":"account=17516371625","status":200,"ip":"127.0.0.1","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0","latency":0.0315099}
+{"level":"info","time":"2026-06-14T17:07:03.391+0800","caller":"middleware/logger.go:42","msg":"HTTP Request","method":"GET","path":"/api/v1/auth/is_exists_account","query":"account=17516371625","status":200,"ip":"127.0.0.1","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0","latency":0.0005046}
+{"level":"info","time":"2026-06-14T17:07:06.632+0800","caller":"middleware/logger.go:42","msg":"HTTP Request","method":"GET","path":"/api/v1/auth/is_exists_account","query":"account=17516371620","status":200,"ip":"127.0.0.1","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0","latency":0.0010117}
+{"level":"info","time":"2026-06-14T17:07:09.152+0800","caller":"app/app.go:207","msg":"正在关闭服务器..."}
+{"level":"info","time":"2026-06-14T17:07:09.152+0800","caller":"app/app.go:228","msg":"服务器已关闭"}
+{"level":"info","time":"2026-06-14T17:07:09.152+0800","caller":"app/app.go:229","msg":"========================================="}
