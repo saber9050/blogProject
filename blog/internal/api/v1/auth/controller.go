@@ -149,7 +149,7 @@ func (c *Controller) Logout(ctx *gin.Context) {
 
 // IsExistName 查验名称是否存在
 func (c *Controller) IsExistName(ctx *gin.Context) {
-	name := ctx.Param("user_name")
+	name := ctx.Query("user_name")
 	ok, err := c.authService.IsExistsName(name)
 	if err != nil {
 		response.BizError(ctx, err)
@@ -160,7 +160,7 @@ func (c *Controller) IsExistName(ctx *gin.Context) {
 
 // IsExistAccount 查验账号是否存在
 func (c *Controller) IsExistAccount(ctx *gin.Context) {
-	account := ctx.Param("account")
+	account := ctx.Query("account")
 	ok, err := c.authService.IsExistsAccount(account)
 	if err != nil {
 		response.BizError(ctx, err)

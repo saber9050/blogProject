@@ -1,0 +1,5 @@
+# 忽略 .idea 文件
+.idea
+
+# 忽略 logs
+blog/logs
