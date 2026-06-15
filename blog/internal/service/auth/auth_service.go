@@ -346,3 +346,24 @@ func (s *authService) verifyPassword(password string) bool {
 	}
 	return false
 }
+
+// GetUserInfo 获取用户信息
+func (s *authService) GetUserInfo(userID uint) (*response.UserInfoResponse, error) {
+	user, err := s.authRepo.FindUserByID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("查找用户失败:%s", err)
+	}
+	if user == nil {
+		return nil, errors.New(errors.CodeNotFound, "该用户不存在")
+	}
+	return &response.UserInfoResponse{
+		UserID:    user.ID,
+		UserName:  user.UserName,
+		Account:   user.Account,
+		Email:     user.Email,
+		AvatarURL: user.AvatarURL,
+		RoleID:    user.RoleID,
+		Staus:     user.Status,
+		CreateAt:  user.CreatedAt,
+	}, nil
+}

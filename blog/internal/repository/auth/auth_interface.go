@@ -8,6 +8,8 @@ type UserAuthRepository interface {
 	FindUserByAccount(account string) (*entity.User, error)
 	// FindUserByEmail 通过邮箱找用户
 	FindUserByEmail(email string) (*entity.User, error)
+	// FindUserByID 通过ID找用户
+	FindUserByID(id uint) (*entity.User, error)
 	// UpdateUserPassword 修改密码
 	UpdateUserPassword(id int, newPassword string) error
 	// IsExistsByName 验证该名字是否存在
