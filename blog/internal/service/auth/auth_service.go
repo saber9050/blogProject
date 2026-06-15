@@ -107,7 +107,7 @@ func (s *authService) Login(req *request.LoginRequest) (*response.LoginResponse,
 // EmailLogin 邮箱登录
 func (s *authService) EmailLogin(req *request.EmailLoginRequest) (*response.LoginResponse, error) {
 	// 验证邮箱验证码
-	err := s.verifyCaptcha(req.Email, req.Purpose, req.Captcha)
+	err := s.VerifyCaptcha(req.Email, req.Purpose, req.Captcha)
 	if err != nil {
 		return nil, err
 	}
@@ -294,8 +294,8 @@ func (s *authService) verifyImageCaptcha(captchaKey, captchaCode string) error {
 	return nil
 }
 
-// verifyCaptcha 验证并删除邮箱验证码
-func (s *authService) verifyCaptcha(email, purpose, captcha string) error {
+// VerifyCaptcha 验证并删除邮箱验证码
+func (s *authService) VerifyCaptcha(email, purpose, captcha string) error {
 	captchaCode, err := s.cache.GetEmailCaptcha(email, purpose)
 	if err != nil {
 		return errors.New(errors.CodeNotFound, "验证码不存在或已经过期")
@@ -345,25 +345,4 @@ func (s *authService) verifyPassword(password string) bool {
 		}
 	}
 	return false
-}
-
-// GetUserInfo 获取用户信息
-func (s *authService) GetUserInfo(userID uint) (*response.UserInfoResponse, error) {
-	user, err := s.authRepo.FindUserByID(userID)
-	if err != nil {
-		return nil, fmt.Errorf("查找用户失败:%s", err)
-	}
-	if user == nil {
-		return nil, errors.New(errors.CodeNotFound, "该用户不存在")
-	}
-	return &response.UserInfoResponse{
-		UserID:    user.ID,
-		UserName:  user.UserName,
-		Account:   user.Account,
-		Email:     user.Email,
-		AvatarURL: user.AvatarURL,
-		RoleID:    user.RoleID,
-		Staus:     user.Status,
-		CreateAt:  user.CreatedAt,
-	}, nil
 }

@@ -43,19 +43,6 @@ func (r *authRepository) FindUserByEmail(email string) (*entity.User, error) {
 	return &user, nil
 }
 
-// FindUserByID 通过ID找用户
-func (r *authRepository) FindUserByID(id uint) (*entity.User, error) {
-	var user entity.User
-	err := r.db.Find(&user, id).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &user, nil
-}
-
 // UpdateUserPassword 修改密码
 func (r *authRepository) UpdateUserPassword(id int, newPasswordHash string) error {
 	return r.db.Model(&entity.User{}).Where("id = ?", id).

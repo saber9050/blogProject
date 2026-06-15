@@ -27,6 +27,6 @@ type AuthService interface {
 	IsExistsName(name string) (bool, error)
 	// IsExistsAccount 检测账号是否存在
 	IsExistsAccount(account string) (bool, error)
-	// GetUserInfo 获取用户信息
-	GetUserInfo(userID uint) (*response.UserInfoResponse, error)
+	// VerifyCaptcha 验证并删除邮箱验证码
+	VerifyCaptcha(email, purpose, captcha string) error
 }

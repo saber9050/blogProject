@@ -10,7 +10,6 @@ func (c *Controller) RegisterRouter(r *gin.RouterGroup) {
 		authGroup.GET("/image_captcha", c.SendImageCaptcha)   // 图形验证码
 		authGroup.POST("/login", c.Login)                     // 登录
 		authGroup.POST("/email_login", c.EmailLogin)          // 邮箱登录
-		authGroup.GET("/info", c.GetUserInfo)                 // 获取个人信息
 		authGroup.POST("/refresh", c.RefreshToken)            // 刷新token
 		authGroup.POST("/captcha", c.SendEmailCaptcha)        // 发送邮箱验证码
 		authGroup.POST("/logout", c.Logout)                   // 登出

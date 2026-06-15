@@ -3,3 +3,6 @@
 
 # 忽略 logs
 blog/logs/app.log
+
+# 忽略doce
+blog/doce

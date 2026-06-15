@@ -4,9 +4,10 @@ import (
 	"blog/pkg/config"
 	"blog/pkg/logger"
 	"fmt"
+	"net/url"
+
 	"go.uber.org/zap"
 	"gopkg.in/gomail.v2"
-	"net/url"
 )
 
 // SendCaptchaEmail 发送验证码邮件
@@ -27,7 +28,7 @@ func SendCaptchaEmail(to string, captcha string, purpose string) error {
 	m := gomail.NewMessage()
 	m.SetHeader("From", cfg.From)
 	m.SetHeader("To", to)
-	m.SetHeader("Subject", "【核心力量】验证码通知")
+	m.SetHeader("Subject", "【个人博客】验证码通知")
 	m.SetBody("text/plain; charset=UTF-8", body)
 
 	// 创建邮件发送器
@@ -76,11 +77,11 @@ func SendVerificationEmail(toEmail, token string) error {
 		toEmail, confirmLink,
 	)
 
-	subject := "【核心力量】邮箱修改确认"
+	subject := "【个人博客】邮箱修改确认"
 
 	m := gomail.NewMessage()
 	// 发件人带显示名称
-	m.SetHeader("From", m.FormatAddress(cfg.From, "核心力量"))
+	m.SetHeader("From", m.FormatAddress(cfg.From, "个人博客"))
 	m.SetHeader("To", toEmail)
 	m.SetHeader("Subject", subject)
 	// 先设置纯文本正文，再添加 HTML 作为富文本替代

@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"blog/internal/middleware"
 	"blog/internal/model/dto/request"
 	response2 "blog/internal/model/dto/response"
 	"blog/internal/service/auth"
@@ -63,18 +62,6 @@ func (c *Controller) EmailLogin(ctx *gin.Context) {
 	}
 
 	authResponse, err := c.authService.EmailLogin(&req)
-	if err != nil {
-		response.BizError(ctx, err)
-		return
-	}
-	response.Success(ctx, authResponse)
-}
-
-// GetUserInfo 获取用户信息
-func (c *Controller) GetUserInfo(ctx *gin.Context) {
-	userID := middleware.GetUserID(ctx)
-
-	authResponse, err := c.authService.GetUserInfo(userID)
 	if err != nil {
 		response.BizError(ctx, err)
 		return

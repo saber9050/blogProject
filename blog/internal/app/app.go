@@ -4,22 +4,26 @@ import (
 	"blog/internal/api"
 	auth3 "blog/internal/cache/auth"
 	"blog/internal/repository/auth"
+	userRepo "blog/internal/repository/user"
 	auth2 "blog/internal/service/auth"
+	userSvc "blog/internal/service/user"
 	"blog/pkg/config"
 	"blog/pkg/database"
 	"blog/pkg/logger"
+	minioPkg "blog/pkg/minio"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // App 应用结构体
@@ -27,6 +31,7 @@ type App struct {
 	cfg          *config.Config
 	mysqlDB      *gorm.DB
 	redis        *redis.Client
+	minioClient  *minioPkg.Client
 	router       *api.Router
 	server       *http.Server
 	workerCtx    context.Context
@@ -56,9 +61,9 @@ func (a *App) Initialize() error {
 	}
 
 	// 4. 初始化 MinIO
-	//if err := a.initMinIO(); err != nil {
-	//	return err
-	//}
+	if err := a.initMinIO(); err != nil {
+		return err
+	}
 
 	// 5. 初始化依赖
 	a.initDependencies()
@@ -111,17 +116,17 @@ func (a *App) initDatabase() error {
 	//自动迁移数据库表
 	//logger.Info("开始数据库迁移...")
 	if err := a.mysqlDB.AutoMigrate(
-		// 用户相关
-		//&entity.User{},
+	// 用户相关
+	//&entity.User{},
 
-		// 文章相关
-		//&entity.Article{},
-		//&entity.Tag{},
-		//&entity.TagArticle{},
-		//&entity.Category{},
-		//&entity.Comment{},
-		//&entity.Like{},
-		
+	// 文章相关
+	//&entity.Article{},
+	//&entity.Tag{},
+	//&entity.TagArticle{},
+	//&entity.Category{},
+	//&entity.Comment{},
+	//&entity.Like{},
+
 	); err != nil {
 		logger.Warn("数据库迁移警告", zap.Error(err))
 	} else {
@@ -137,25 +142,32 @@ func (a *App) initDatabase() error {
 	return nil
 }
 
+// initMinIO 初始化 MinIO 客户端
+func (a *App) initMinIO() error {
+	client, err := minioPkg.NewClient(a.cfg.Minio)
+	if err != nil {
+		return fmt.Errorf("MinIO 初始化失败: %w", err)
+	}
+	a.minioClient = client
+	logger.Info("MinIO 客户端初始化成功")
+	return nil
+}
+
 // initDependencies 初始化依赖注入
 func (a *App) initDependencies() {
 	a.workerCtx, a.workerCancel = context.WithCancel(context.Background())
 
-	// 初始化 MinIO 客户端
-	//minioClient, err := minio.NewClient(a.cfg.Minio)
-	//if err != nil {
-	//	logger.Warn("MinIO 初始化失败，上传功能不可用", zap.Error(err))
-	//}
-
 	// 创建 Repository
 	authCache := auth3.NewLoginCache()
 	authRepo := auth.NewAuthRepository(a.mysqlDB)
+	uRepo := userRepo.NewUserRepository(a.mysqlDB)
 
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
+	uSvc := userSvc.NewUserService(uRepo, a.minioClient, authSvc, authCache)
 
 	// 创建 Router
-	a.router = api.NewRouter(authSvc)
+	a.router = api.NewRouter(authSvc, uSvc)
 }
 
 // initRouter 初始化路由
