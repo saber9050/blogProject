@@ -12,6 +12,7 @@ func (c *Controller) RegisterRouter(r *gin.RouterGroup) {
 		authGroup.POST("/email_login", c.EmailLogin)          // 邮箱登录
 		authGroup.POST("/refresh", c.RefreshToken)            // 刷新token
 		authGroup.POST("/captcha", c.SendEmailCaptcha)        // 发送邮箱验证码
+		authGroup.POST("/reset_password", c.ResetPassword)    // 重设密码
 		authGroup.POST("/logout", c.Logout)                   // 登出
 		authGroup.GET("/is_exists_name", c.IsExistName)       // 检测名字唯一性
 		authGroup.GET("/is_exists_account", c.IsExistAccount) // 检测账号唯一性

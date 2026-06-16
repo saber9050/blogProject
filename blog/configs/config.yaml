@@ -63,8 +63,8 @@ email:
 
 # MinIO 配置
 minio:
-  endpoint: "118.31.10.161:9000"          # MinIO 服务地址
-  access_key_id: "minioadmin"         # Access Key
-  access_key_secret: "minioadmin123"     # Secret Key
-  bucket_name: "core-coach"           # Bucket 名称
+  endpoint: "192.168.21.14:9000"          # MinIO 服务地址
+  access_key_id: "admin"         # Access Key
+  access_key_secret: "1223349392Zxp"     # Secret Key
+  bucket_name: "blog-project"           # Bucket 名称
   use_ssl: false                      # 是否使用 SSL

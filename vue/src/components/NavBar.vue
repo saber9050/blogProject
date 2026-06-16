@@ -36,8 +36,8 @@
 
           <div
             class="navbar__user-area"
-            @mouseenter="dropdownOpen = true"
-            @mouseleave="dropdownOpen = false"
+            @mouseenter="openDropdown"
+            @mouseleave="scheduleClose"
             @click="dropdownOpen = !dropdownOpen"
           >
             <img
@@ -49,7 +49,7 @@
             <span v-else class="navbar__avatar navbar__avatar--placeholder">&#128100;</span>
             <span class="navbar__nick">{{ user.user_name }}</span>
 
-            <div v-if="dropdownOpen" class="navbar__dropdown">
+            <div v-if="dropdownOpen" class="navbar__dropdown" @mouseenter="keepOpen" @mouseleave="scheduleClose">
               <button class="navbar__dropdown-item" @click.stop="goProfile">
                 <span>&#128100;</span> 个人信息
               </button>
@@ -92,6 +92,22 @@ const user = ref<UserInfo | null>(null)
 const searchText = ref('')
 const notificationCount = ref(0)
 const dropdownOpen = ref(false)
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+
+const openDropdown = () => {
+  if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
+  dropdownOpen.value = true
+}
+
+const scheduleClose = () => {
+  closeTimer = setTimeout(() => {
+    dropdownOpen.value = false
+  }, 150)
+}
+
+const keepOpen = () => {
+  if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
+}
 
 const emit = defineEmits<{ search: [q: string] }>()
 
@@ -109,6 +125,7 @@ const handleBell = () => {
 
 const goProfile = () => {
   dropdownOpen.value = false
+  router.push('/profile')
 }
 
 const handleLogout = async () => {
@@ -120,10 +137,22 @@ const handleLogout = async () => {
   router.push('/login')
 }
 
-onMounted(() => {
-  const stored = localStorage.getItem('user')
-  if (stored) {
-    try { user.value = JSON.parse(stored) } catch { user.value = null }
+onMounted(async () => {
+  const token = localStorage.getItem('token')
+  if (!token) return
+
+  try {
+    const res = await api.get('/user/info')
+    if (res.data.data) {
+      user.value = res.data.data
+      localStorage.setItem('user', JSON.stringify(res.data.data))
+    }
+  } catch {
+    // API 失败时尝试从 localStorage 读取
+    const stored = localStorage.getItem('user')
+    if (stored) {
+      try { user.value = JSON.parse(stored) } catch { user.value = null }
+    }
   }
   notificationCount.value = 3
 })

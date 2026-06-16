@@ -10,15 +10,19 @@ import (
 	"blog/pkg/email"
 	"blog/pkg/errors"
 	"blog/pkg/jwt"
+	"blog/pkg/logger"
 	minioPkg "blog/pkg/minio"
 	"blog/pkg/utils"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"mime/multipart"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // userService 用户服务实现
@@ -49,15 +53,17 @@ func (s *userService) GetUserInfo(userID uint) (*response.UserInfoResponse, erro
 		return nil, errors.ErrUserNotFound
 	}
 
+	fmt.Println("------" + s.minio.GetFileURL(user.AvatarURL))
 	return &response.UserInfoResponse{
-		UserID:    user.ID,
-		UserName:  user.UserName,
-		Account:   user.Account,
-		Email:     user.Email,
-		AvatarURL: s.minio.GetFileURL(user.AvatarURL),
-		RoleID:    user.RoleID,
-		Staus:     user.Status,
-		CreateAt:  user.CreatedAt,
+		UserID:       user.ID,
+		UserName:     user.UserName,
+		Account:      user.Account,
+		Email:        user.Email,
+		AvatarURL:    s.minio.GetFileURL(user.AvatarURL),
+		Introduction: user.Introduction,
+		RoleID:       user.RoleID,
+		Staus:        user.Status,
+		CreateAt:     user.CreatedAt,
 	}, nil
 }
 
@@ -85,31 +91,16 @@ func (s *userService) UpdateProfile(userID uint, req *request.UpdateUserProfileR
 
 // UpdateAvatar 更换头像
 func (s *userService) UpdateAvatar(userID uint, fileHeader *multipart.FileHeader) (*response.UpdateUserAvatarResponse, error) {
-	// 打开上传的文件
-	src, err := fileHeader.Open()
-	if err != nil {
-		return nil, fmt.Errorf("打开上传文件失败: %w", err)
-	}
-	defer func() {
-		_ = src.Close()
-	}()
-
-	// 获取文件扩展名
-	ext := filepath.Ext(fileHeader.Filename)
-	if ext == "" {
-		ext = minioPkg.ExtByContentType(fileHeader.Header.Get("Content-Type"))
+	// 找到用户
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil || user == nil {
+		return nil, fmt.Errorf("获取用户信息失败:%s", err)
 	}
 
-	// 生成唯一的对象名称
-	objectName := fmt.Sprintf("avatars/%s/%s%s", time.Now().Format("20060102"), uuid.New().String(), ext)
-
-	// 上传到 MinIO
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	fileKey, err := s.minio.Upload(ctx, objectName, src, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
+	// 上传新头像
+	fileKey, err := s.UpLoadImage(fileHeader)
 	if err != nil {
-		return nil, fmt.Errorf("上传头像失败: %w", err)
+		return nil, err
 	}
 
 	// 更新用户头像 URL
@@ -117,9 +108,57 @@ func (s *userService) UpdateAvatar(userID uint, fileHeader *multipart.FileHeader
 		return nil, fmt.Errorf("更新用户头像失败: %w", err)
 	}
 
+	// 删除旧头像
+	ctx := context.Background()
+	err = s.minio.Delete(ctx, user.AvatarURL)
+	if err != nil {
+		logger.Error("删除旧头像失败", zap.Error(err))
+	}
+
 	return &response.UpdateUserAvatarResponse{
 		AvatarURL: s.minio.GetFileURL(fileKey),
 	}, nil
+}
+
+// UpLoadImage 上传图片文件
+// 返回 fileKey , error
+func (s *userService) UpLoadImage(fileHeader *multipart.FileHeader) (string, error) {
+	// 验证文件大小
+	if fileHeader.Size > constant.ImageMaxLength {
+		str := fmt.Sprintf("头像大小不能超过 %dMB", constant.ImageMaxLength>>20)
+		return "", errors.New(errors.CodeBadRequest, str)
+	}
+
+	// 打开上传的文件
+	src, err := fileHeader.Open()
+	if err != nil {
+		return "", fmt.Errorf("打开上传文件失败: %w", err)
+	}
+	defer func() {
+		_ = src.Close()
+	}()
+
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	// 校验文件格式
+	if _, ok := constant.AllowedImageExt[ext]; !ok {
+		return "", errors.New(errors.CodeBadRequest, "不支持的文件格式")
+	}
+
+	// 生成唯一的对象名称
+	objectName := fmt.Sprintf("all/%s/%s%s",
+		time.Now().Format("20060102"),
+		randomName(),
+		ext)
+
+	// 上传到 MinIO
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	fileKey, err := s.minio.Upload(ctx, objectName, src, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
+	if err != nil {
+		return "", fmt.Errorf("上传头像失败: %w", err)
+	}
+	return fileKey, nil
 }
 
 // UpdateEmail 更换邮箱确认
@@ -188,4 +227,13 @@ func (s *userService) UpdateAdminEmail(id uint, token, newEmail string) error {
 		return fmt.Errorf("将token加入黑名单失败:%w", err)
 	}
 	return nil
+}
+
+// randomName 随机名字
+func randomName() string {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("%d_%s", time.Now().Unix(), hex.EncodeToString(buf))
 }

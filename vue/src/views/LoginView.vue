@@ -338,9 +338,17 @@ const handleAccountLogin = async () => {
   loading.value = true
   try {
     const response = await axios.post('/api/v1/auth/login', accountForm.value)
-    const { token, user_name } = response.data.data
+    const { token } = response.data.data
     localStorage.setItem('token', token)
-    localStorage.setItem('user_name', user_name)
+    // 获取完整用户信息并存储
+    try {
+      const userRes = await axios.get('/api/v1/user/info', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (userRes.data.data) {
+        localStorage.setItem('user', JSON.stringify(userRes.data.data))
+      }
+    } catch { /* 忽略，NavBar 会自行获取 */ }
     router.push('/')
   } catch (error: any) {
     console.error('登录失败:', error)
@@ -366,9 +374,17 @@ const handleEmailLogin = async () => {
       captcha: emailForm.value.captcha,
       purpose: 'login'
     })
-    const { token, user_name } = response.data.data
+    const { token } = response.data.data
     localStorage.setItem('token', token)
-    localStorage.setItem('user_name', user_name)
+    // 获取完整用户信息并存储
+    try {
+      const userRes = await axios.get('/api/v1/user/info', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (userRes.data.data) {
+        localStorage.setItem('user', JSON.stringify(userRes.data.data))
+      }
+    } catch { /* 忽略，NavBar 会自行获取 */ }
     router.push('/')
   } catch (error: any) {
     console.error('邮箱登录失败:', error)

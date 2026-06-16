@@ -58,7 +58,7 @@ func SendVerificationEmail(toEmail, token string) error {
 	// URL 参数编码
 	escapedToken := url.QueryEscape(token)
 
-	confirmLink := fmt.Sprintf("%s/api/v1/ack/center/email?token=%s",
+	confirmLink := fmt.Sprintf("%s/api/v1/user/email?token=%s",
 		baseURL, escapedToken)
 
 	htmlBody := fmt.Sprintf(`

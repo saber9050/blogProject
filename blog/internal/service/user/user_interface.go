@@ -18,4 +18,7 @@ type UserService interface {
 	UpdateEmail(userID uint, req *request.UpdateUserEmailRequest) (*response.UpdateUserEmailResponse, error)
 	//	UpdateAdminEmail 修改邮箱
 	UpdateAdminEmail(id uint, token, newEmail string) error
+	// UpLoadImage 上传图片文件
+	// 返回 fileKey , error
+	UpLoadImage(fileHeader *multipart.FileHeader) (string, error)
 }
