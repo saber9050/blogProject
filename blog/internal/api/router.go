@@ -49,7 +49,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		r.authCtrl.RegisterRouter(v1)
 		// 用户路由组
 		r.userCtrl.RegisterRouter(v1)
-		r.userCtrl.RegisterRouterACK(v1)
+		r.userCtrl.RegisterRouterPublic(v1)
 	}
 
 }

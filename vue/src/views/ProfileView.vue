@@ -143,7 +143,7 @@
                     <button
                         type="button"
                         class="inline-action"
-                        :disabled="emailSending || emailCountdown > 0"
+                        :disabled="emailSending || emailCountdown > 0 || emailErrors.newEmail === '该邮箱已被使用，请更换'"
                         @click="sendEmailCaptcha('reset_email')"
                     >
                       {{ emailCountdown > 0 ? `${emailCountdown}s` : (emailSending ? '发送中' : '获取验证码') }}
@@ -184,12 +184,13 @@
                       type="email"
                       placeholder="请输入新邮箱"
                       @input="clearEmailError('newEmail')"
+                      @blur="checkEmailUnique"
                   />
                 </div>
                 <p v-if="emailErrors.newEmail" class="helper-text helper-text--error">{{ emailErrors.newEmail }}</p>
               </div>
 
-              <button type="submit" class="submit-primary" :disabled="emailLoading">
+              <button type="submit" class="submit-primary" :disabled="emailLoading || emailErrors.newEmail === '该邮箱已被使用，请更换'">
                 <span v-if="emailLoading" class="spinner"></span>
                 <span>{{ emailLoading ? '提交中...' : '确认修改' }}</span>
               </button>
@@ -223,6 +224,7 @@
                       type="email"
                       placeholder="请输入邮箱地址"
                       @input="clearAddEmailError('newEmail')"
+                      @blur="checkAddEmailUnique"
                   />
                 </div>
                 <p v-if="addEmailErrors.newEmail" class="helper-text helper-text--error">{{ addEmailErrors.newEmail }}</p>
@@ -247,7 +249,7 @@
                     <button
                         type="button"
                         class="inline-action"
-                        :disabled="addEmailSending || addEmailCountdown > 0"
+                        :disabled="addEmailSending || addEmailCountdown > 0 || addEmailErrors.newEmail === '该邮箱已被使用，请更换'"
                         @click="sendAddEmailCaptcha"
                     >
                       {{ addEmailCountdown > 0 ? `${addEmailCountdown}s` : (addEmailSending ? '发送中' : '获取验证码') }}
@@ -257,7 +259,7 @@
                 <p v-if="addEmailErrors.captcha" class="helper-text helper-text--error">{{ addEmailErrors.captcha }}</p>
               </div>
 
-              <button type="submit" class="submit-primary" :disabled="addEmailLoading">
+              <button type="submit" class="submit-primary" :disabled="addEmailLoading || addEmailErrors.newEmail === '该邮箱已被使用，请更换'">
                 <span v-if="addEmailLoading" class="spinner"></span>
                 <span>{{ addEmailLoading ? '提交中...' : '确认添加' }}</span>
               </button>
@@ -550,6 +552,24 @@ const sendEmailCaptcha = async (purpose: string) => {
   }
 }
 
+const checkEmailUnique = async () => {
+  const val = emailForm.value.newEmail.trim()
+  if (!val) return
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(val)) return
+
+  try {
+    const res = await api.get('/user/is_exists_email', { params: { new_email: val } })
+    if (res.data.data?.is_exists) {
+      emailErrors.newEmail = '该邮箱已被使用，请更换'
+    } else {
+      emailErrors.newEmail = undefined
+    }
+  } catch {
+    // 接口异常时跳过检查
+  }
+}
+
 const validateEmailForm = (): boolean => {
   let valid = true
 
@@ -563,6 +583,11 @@ const validateEmailForm = (): boolean => {
 
   if (!emailForm.value.password) {
     emailErrors.password = '当前密码不能为空'
+    valid = false
+  }
+
+  // 如果失焦检查已经发现邮箱被占用，直接阻止提交
+  if (emailErrors.newEmail === '该邮箱已被使用，请更换') {
     valid = false
   }
 
@@ -653,8 +678,31 @@ const sendAddEmailCaptcha = async () => {
   }
 }
 
+const checkAddEmailUnique = async () => {
+  const val = addEmailForm.value.newEmail.trim()
+  if (!val) return
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(val)) return
+
+  try {
+    const res = await api.get('/user/is_exists_email', { params: { new_email: val } })
+    if (res.data.data?.is_exists) {
+      addEmailErrors.newEmail = '该邮箱已被使用，请更换'
+    } else {
+      addEmailErrors.newEmail = undefined
+    }
+  } catch {
+    // 接口异常时跳过检查
+  }
+}
+
 const validateAddEmailForm = (): boolean => {
   let valid = true
+
+  // 如果失焦检查已经发现邮箱被占用，直接阻止提交
+  if (addEmailErrors.newEmail === '该邮箱已被使用，请更换') {
+    valid = false
+  }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!addEmailForm.value.newEmail) {

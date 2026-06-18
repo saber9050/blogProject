@@ -19,8 +19,8 @@ func (c *Controller) RegisterRouter(r *gin.RouterGroup) {
 	}
 }
 
-// RegisterRouterACK 注册用户修改邮箱路由组
-func (c *Controller) RegisterRouterACK(r *gin.RouterGroup) {
+// RegisterRouterPublic 注册无需登录使用的路由组
+func (c *Controller) RegisterRouterPublic(r *gin.RouterGroup) {
 	userGroup := r.Group("/user")
 	{
 		userGroup.GET("/email", c.UpdateEmail) // 修改邮箱
