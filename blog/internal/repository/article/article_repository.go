@@ -147,6 +147,16 @@ func (r *articleRepository) LikeArticle(articleID, userID uint) error {
 	return r.db.Create(&like).Error
 }
 
+// IsLike 检查是否点赞过
+func (r *articleRepository) IsLike(articleID, userID uint) (bool, error) {
+	var count int64
+	err := r.db.Model(&entity.Like{}).Where("article_id = ? AND user_id = ?", articleID, userID).Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // UnlikeArticle 取消点赞
 func (r *articleRepository) UnlikeArticle(articleID, userID uint) error {
 	result := r.db.Where("article_id = ? AND user_id = ?", articleID, userID).Delete(&entity.Like{})

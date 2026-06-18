@@ -6,7 +6,6 @@ import (
 	"blog/pkg/errors"
 	"blog/pkg/logger"
 	"fmt"
-	"strings"
 
 	"go.uber.org/zap"
 )
@@ -157,11 +156,16 @@ func (s *articleService) LikeArticle(articleID, userID uint) error {
 		return errors.ErrResourceNotFound
 	}
 
+	// 检查是否点赞过
+	ok, err := s.articleRepo.IsLike(articleID, userID)
+	if err != nil {
+		return fmt.Errorf("检查是否点赞过失败: %w", err)
+	}
+	if ok {
+		return errors.ErrForbidden
+	}
+
 	if err := s.articleRepo.LikeArticle(articleID, userID); err != nil {
-		// 唯一索引冲突 → 已点赞
-		if isDuplicateError(err) {
-			return errors.ErrResourceAlreadyExists
-		}
 		return fmt.Errorf("点赞失败: %w", err)
 	}
 	return nil
@@ -213,14 +217,4 @@ func (s *articleService) ListTags() ([]response.TagInfo, error) {
 		result[i] = response.TagInfo{ID: t.ID, Name: t.TagName}
 	}
 	return result, nil
-}
-
-// isDuplicateError 判断是否为唯一索引冲突错误
-func isDuplicateError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "Duplicate entry") ||
-		strings.Contains(err.Error(), "UNIQUE constraint failed") ||
-		strings.Contains(err.Error(), "duplicate key")
 }

@@ -58,7 +58,21 @@ func Auth(userRole ...uint) gin.HandlerFunc {
 		// 注入上下文信息
 		c.Set(ContextUserID, claims.GetUserID())
 		c.Set(ContextUsername, claims.GetUsername())
+		c.Set(ContextRoleID, claims.UserRoleID)
 
+		c.Next()
+	}
+}
+
+// OptionalAuth 可选认证中间件：有有效token就注入用户上下文，没有也放行
+func OptionalAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, err := parseBearerToken(c)
+		if err == nil {
+			c.Set(ContextUserID, claims.GetUserID())
+			c.Set(ContextUsername, claims.GetUsername())
+			c.Set(ContextRoleID, claims.UserRoleID)
+		}
 		c.Next()
 	}
 }

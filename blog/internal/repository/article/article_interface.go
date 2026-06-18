@@ -16,6 +16,8 @@ type ArticleRepository interface {
 	GetPrevAndNext(id uint) (*PrevNextArticle, *PrevNextArticle, error)
 	// LikeArticle 点赞
 	LikeArticle(articleID, userID uint) error
+	// IsLike 检查是否点赞过
+	IsLike(articleID, userID uint) (bool, error)
 	// UnlikeArticle 取消点赞
 	UnlikeArticle(articleID, userID uint) error
 	// BatchLikeStatus 批量查询用户是否点赞

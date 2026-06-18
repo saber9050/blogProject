@@ -10,9 +10,12 @@ import (
 func (c *Controller) RegisterRouter(r *gin.RouterGroup) {
 	articleGroup := r.Group("/articles")
 	{
-		// 公开接口（无需登录）
-		articleGroup.GET("", c.ListArticles)         // 文章列表
-		articleGroup.GET("/:id", c.GetArticleDetail) // 文章详情
+		// 公开接口 — 可选认证（有token自动注入用户上下文，用于点赞状态等）
+		publicGroup := articleGroup.Group("", middleware.OptionalAuth())
+		{
+			publicGroup.GET("", c.ListArticles)         // 文章列表
+			publicGroup.GET("/:id", c.GetArticleDetail) // 文章详情
+		}
 
 		// 需要登录的接口
 		authGroup := articleGroup.Group("", middleware.Auth())
