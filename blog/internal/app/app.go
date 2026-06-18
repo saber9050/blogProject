@@ -3,9 +3,13 @@ package app
 import (
 	"blog/internal/api"
 	auth3 "blog/internal/cache/auth"
+	"blog/internal/repository/article"
 	"blog/internal/repository/auth"
+	commentRepo "blog/internal/repository/comment"
 	userRepo "blog/internal/repository/user"
+	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
+	commentSvc "blog/internal/service/comment"
 	userSvc "blog/internal/service/user"
 	"blog/pkg/config"
 	"blog/pkg/database"
@@ -161,13 +165,17 @@ func (a *App) initDependencies() {
 	authCache := auth3.NewLoginCache()
 	authRepo := auth.NewAuthRepository(a.mysqlDB)
 	uRepo := userRepo.NewUserRepository(a.mysqlDB)
+	aRepo := article.NewArticleRepository(a.mysqlDB)
+	cRepo := commentRepo.NewCommentRepository(a.mysqlDB)
 
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
 	uSvc := userSvc.NewUserService(uRepo, a.minioClient, authSvc, authCache)
+	aSvc := articleSvc.NewArticleService(aRepo)
+	cSvc := commentSvc.NewCommentService(cRepo)
 
 	// 创建 Router
-	a.router = api.NewRouter(authSvc, uSvc)
+	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc)
 }
 
 // initRouter 初始化路由
@@ -195,6 +203,9 @@ func (a *App) initServer() {
 
 // Run 开始（纯http）
 func (a *App) Run() {
+	// 启动浏览量定时刷盘任务
+	go a.startViewFlushWorker()
+
 	// 启动 HTTP 服务器
 	go func() {
 		logger.Info("HTTP 服务器启动",
@@ -208,6 +219,30 @@ func (a *App) Run() {
 
 	// 优雅关闭
 	a.gracefulShutdown()
+}
+
+// startViewFlushWorker 启动浏览量定时刷盘 goroutine
+func (a *App) startViewFlushWorker() {
+	logger.Info("浏览量定时刷盘任务已启动（每 5 分钟）")
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := a.router.ArticleSvc().FlushViewCounts(); err != nil {
+				logger.Error("浏览量刷盘失败", zap.Error(err))
+			}
+		case <-a.workerCtx.Done():
+			logger.Info("浏览量刷盘任务正在退出...")
+			// 退出前最后一次刷盘
+			if err := a.router.ArticleSvc().FlushViewCounts(); err != nil {
+				logger.Error("最后一次浏览量刷盘失败", zap.Error(err))
+			}
+			return
+		}
+	}
 }
 
 // gracefulShutdown 优雅关闭

@@ -9,8 +9,17 @@
           <div class="article-content__meta">
             <span>&#128100; {{ article.author }}</span>
             <span>&#128197; {{ fmt(article.created_at) }}</span>
-            <span>&#128065; {{ article.views }} 阅读</span>
-            <span>&#128077; {{ article.likes }} 点赞</span>
+            <span>&#128065; {{ article.view_count || article.views }} 阅读</span>
+            <button
+              class="article-content__like-btn"
+              :class="{ 'article-content__like-btn--liked': article.is_liked }"
+              @click="toggleDetailLike"
+            >
+              <span v-if="article.is_liked">&#10084;</span>
+              <span v-else>&#9825;</span>
+              {{ article.like_count || article.likes }} 点赞
+            </button>
+            <span>&#128172; {{ article.comment_count || 0 }} 评论</span>
           </div>
           <div class="article-content__body">{{ article.content }}</div>
         </section>
@@ -169,7 +178,11 @@ interface Article {
   cover_url: string
   summary: string
   views: number
+  view_count: number
   likes: number
+  like_count: number
+  comment_count: number
+  is_liked: boolean
   author: string
   type_id: number
   created_at: string
@@ -200,7 +213,11 @@ const article = ref<Article>({
   cover_url: '',
   summary: '',
   views: 0,
+  view_count: 0,
   likes: 0,
+  like_count: 0,
+  comment_count: 0,
+  is_liked: false,
   author: '',
   type_id: 0,
   created_at: ''
@@ -240,6 +257,35 @@ const fmt = (d: string) => {
   return new Date(d).toLocaleDateString('zh-CN')
 }
 
+// 详情页点赞/取消点赞（乐观更新）
+const toggleDetailLike = async () => {
+  if (!currentUser.value) {
+    alert('请先登录')
+    return
+  }
+
+  const wasLiked = article.value.is_liked
+  const oldLikeCount = article.value.like_count || article.value.likes || 0
+
+  // 乐观更新 UI
+  article.value.is_liked = !wasLiked
+  if (article.value.like_count !== undefined) article.value.like_count += wasLiked ? -1 : 1
+  if (article.value.likes !== undefined) article.value.likes += wasLiked ? -1 : 1
+
+  try {
+    if (wasLiked) {
+      await api.delete(`/articles/${article.value.id}/like`)
+    } else {
+      await api.post(`/articles/${article.value.id}/like`)
+    }
+  } catch {
+    // 失败回滚
+    article.value.is_liked = wasLiked
+    if (article.value.like_count !== undefined) article.value.like_count = oldLikeCount
+    if (article.value.likes !== undefined) article.value.likes = oldLikeCount
+  }
+}
+
 const PAGE_SIZE = 20
 const CHILD_PAGE_SIZE = 10
 const CHILD_INITIAL = 2
@@ -247,34 +293,38 @@ const CHILD_INITIAL = 2
 // 发表一级评论
 const submitComment = async () => {
   if (!newComment.value.trim()) return
+  if (!currentUser.value) {
+    alert('请先登录')
+    return
+  }
   try {
-    await api.post(`/articles/${route.params.id}/comments`, {
+    const res = await api.post(`/articles/${route.params.id}/comments`, {
       content: newComment.value,
       parent_id: null
     })
-    newComment.value = ''
-    commentPage.value = 1
-    loadComments()
-  } catch {
-    // mock
-    comments.value.unshift({
-      id: Date.now() + Math.random(),
+    const data = res.data.data || res.data
+    // 用 API 返回的 id/时间 + 本地用户信息拼接新评论
+    const newC: Comment = {
+      id: data.id,
       content: newComment.value,
-      user_name: currentUser.value?.user_name || '当前用户',
+      user_name: currentUser.value.user_name,
       avatar_url: '',
-      user_id: currentUser.value?.id || 99,
+      user_id: currentUser.value.id,
       parent_id: null,
       reply_to_name: '',
       is_deleted: false,
-      created_at: new Date().toISOString(),
+      created_at: data.created_at || new Date().toISOString(),
       _childrenLoaded: false,
       _children: [],
       _childrenTotal: 0,
       _childrenPage: 1,
       _childrenHasMore: false
-    })
+    }
+    comments.value.unshift(newC)
     commentTotal.value++
     newComment.value = ''
+  } catch {
+    alert('发表评论失败，请稍后重试')
   }
 }
 
@@ -292,6 +342,10 @@ const cancelReply = () => {
 // 提交回复（二级评论，parent_id 始终是根评论 ID）
 const submitReply = async (rootCommentId: number) => {
   if (!replyText.value.trim() || !replyingTo.value) return
+  if (!currentUser.value) {
+    alert('请先登录')
+    return
+  }
 
   try {
     await api.post(`/articles/${route.params.id}/comments`, {
@@ -305,34 +359,7 @@ const submitReply = async (rootCommentId: number) => {
     const parent = comments.value.find((c) => c.id === rootCommentId)
     if (parent) refreshChildren(parent)
   } catch {
-    // mock
-    const parent = comments.value.find((c) => c.id === rootCommentId)
-    if (parent) {
-      const newSub: Comment = {
-        id: Date.now() + Math.random(),
-        content: replyText.value,
-        user_name: currentUser.value?.user_name || '当前用户',
-        avatar_url: '',
-        user_id: currentUser.value?.id || 99,
-        parent_id: rootCommentId,
-        reply_to_name: replyingTo.value?.userName || '',
-        is_deleted: false,
-        created_at: new Date().toISOString(),
-        _childrenLoaded: true,
-        _children: [],
-        _childrenTotal: 0,
-        _childrenPage: 1,
-        _childrenHasMore: false
-      }
-      parent._children.push(newSub)
-      parent._childrenTotal++
-      if (!parent._childrenLoaded) {
-        parent._childrenLoaded = true
-        parent._childrenHasMore = parent._childrenTotal > CHILD_INITIAL
-      }
-    }
-    replyText.value = ''
-    replyingTo.value = null
+    alert('回复失败，请稍后重试')
   }
 }
 
@@ -341,7 +368,8 @@ const doDelete = async (commentId: number, parentId: number | null) => {
   try {
     await api.delete(`/articles/${route.params.id}/comments/${commentId}`)
   } catch {
-    // mock: soft delete
+    alert('删除失败，请稍后重试')
+    return
   }
 
   if (parentId) {
@@ -353,6 +381,7 @@ const doDelete = async (commentId: number, parentId: number | null) => {
         sub.is_deleted = true
         sub.content = ''
       }
+      parent._childrenTotal = Math.max(0, parent._childrenTotal - 1)
     }
   } else {
     // 删除一级评论
@@ -361,6 +390,7 @@ const doDelete = async (commentId: number, parentId: number | null) => {
       c.is_deleted = true
       c.content = ''
     }
+    commentTotal.value = Math.max(0, commentTotal.value - 1)
   }
 }
 
@@ -397,37 +427,11 @@ const loadChildren = async (c: Comment, page: number) => {
       c._children.push(...list)
     }
     c._childrenLoaded = true
-    c._childrenTotal = data.total || c._childrenTotal
+    c._childrenTotal = data.total || 0
     c._childrenPage = page
     c._childrenHasMore = (data.total || 0) > page * CHILD_PAGE_SIZE
   } catch {
-    // mock: generate children
-    if (page === 1) {
-      const mockList: Comment[] = []
-      const count = Math.min(c._childrenTotal || 2, CHILD_PAGE_SIZE)
-      for (let i = 0; i < count; i++) {
-        mockList.push({
-          id: c.id * 1000 + i + 1,
-          content: `这是对评论 ${c.id} 的第 ${i + 1} 条回复`,
-          user_name: `读者${String.fromCharCode(65 + i)}`,
-          avatar_url: '',
-          user_id: 10 + i,
-          parent_id: c.id,
-          reply_to_name: c.user_name,
-          is_deleted: false,
-          created_at: new Date(Date.now() - (count - i) * 3600000).toISOString(),
-          _childrenLoaded: true,
-          _children: [],
-          _childrenTotal: 0,
-          _childrenPage: 1,
-          _childrenHasMore: false
-        })
-      }
-      c._children = mockList
-    }
-    c._childrenLoaded = true
-    c._childrenPage = page
-    c._childrenHasMore = (c._childrenTotal || CHILD_INITIAL) > page * CHILD_PAGE_SIZE
+    // 加载失败，不做降级处理
   }
 }
 
@@ -458,7 +462,7 @@ const loadComments = async () => {
     const list = (data.list || data || []).map((item: any) => ({
       ...item,
       _childrenLoaded: false,
-      _children: item.children || [],
+      _children: [],
       _childrenTotal: item.children_total || 0,
       _childrenPage: 1,
       _childrenHasMore: (item.children_total || 0) > CHILD_INITIAL
@@ -471,44 +475,7 @@ const loadComments = async () => {
     commentTotal.value = data.total || 0
     commentHasMore.value = (data.total || 0) > commentPage.value * PAGE_SIZE
   } catch {
-    if (commentPage.value === 1) {
-      comments.value = [
-        {
-          id: 1,
-          content: '写得很好，受益匪浅！',
-          user_name: '读者A',
-          avatar_url: '',
-          user_id: 10,
-          parent_id: null,
-          reply_to_name: '',
-          is_deleted: false,
-          created_at: '2026-06-13T10:00:00Z',
-          _childrenLoaded: false,
-          _children: [],
-          _childrenTotal: 3,
-          _childrenPage: 1,
-          _childrenHasMore: true
-        },
-        {
-          id: 2,
-          content: '希望作者能继续更新这个系列。',
-          user_name: '读者B',
-          avatar_url: '',
-          user_id: 11,
-          parent_id: null,
-          reply_to_name: '',
-          is_deleted: false,
-          created_at: '2026-06-13T14:30:00Z',
-          _childrenLoaded: false,
-          _children: [],
-          _childrenTotal: 0,
-          _childrenPage: 1,
-          _childrenHasMore: false
-        }
-      ]
-      commentTotal.value = 2
-      commentHasMore.value = false
-    }
+    // 加载失败，保持现有数据
   }
 }
 
@@ -517,21 +484,18 @@ onMounted(async () => {
   const id = route.params.id as string
   try {
     const res = await api.get(`/articles/${id}`)
-    article.value = res.data.data || res.data
-  } catch {
+    const data = res.data.data || res.data
     article.value = {
-      id: Number(id),
-      title: 'Go 语言并发编程深入解析',
-      content:
-        'Go 语言以其简洁高效的并发模型著称...\n\nGoroutine 是 Go 并发模型的核心，它是一种轻量级线程，由 Go 运行时管理。\n\nChannel 则提供了 goroutine 之间的通信机制...',
-      cover_url: '',
-      summary: '深入理解 goroutine 调度',
-      views: 2340,
-      likes: 186,
-      author: '张三',
-      type_id: 1,
-      created_at: '2026-06-10T08:00:00Z'
+      ...article.value,
+      ...data,
+      // 兼容旧字段名
+      view_count: data.view_count ?? data.views ?? 0,
+      like_count: data.like_count ?? data.likes ?? 0,
+      comment_count: data.comment_count ?? 0,
+      is_liked: data.is_liked ?? false
     }
+  } catch {
+    // 文章加载失败
   }
   loadComments()
 })
@@ -580,6 +544,34 @@ onMounted(async () => {
   line-height: 1.8;
   color: var(--text-secondary);
   white-space: pre-wrap;
+}
+
+/* ========== 详情页点赞按钮 ========== */
+.article-content__like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.7);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.article-content__like-btn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  transform: scale(1.05);
+}
+
+.article-content__like-btn--liked {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(220,38,38,0.06);
 }
 
 /* ========== 评论区 ========== */
