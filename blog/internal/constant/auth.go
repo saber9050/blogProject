@@ -22,4 +22,7 @@ const (
 
 	//	CaptchaPurposeResetEmail 重置有邮箱用途
 	CaptchaPurposeResetEmail = "reset_email"
+
+	// CaptchaPurposeAddEmail 添加邮箱用途
+	CaptchaPurposeAddEmail = "add_email"
 )

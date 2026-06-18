@@ -25,8 +25,8 @@ type EmailLoginRequest struct {
 
 // SendEmailCaptchaRequest 发送邮箱验证码请求
 type SendEmailCaptchaRequest struct {
-	Email   string `json:"email" binding:"required,email"`                                    // 邮箱
-	Purpose string `json:"purpose" binding:"required,oneof=login reset_password reset_email"` // 目的：登录，重设密码，重设邮箱
+	Email   string `json:"email" binding:"required,email"`                                              // 邮箱
+	Purpose string `json:"purpose" binding:"required,oneof=login reset_password reset_email add_email"` // 目的：登录，重设密码，重设邮箱
 }
 
 // RefreshJWTTokenRequest 刷新 JWT TOKEN 请求

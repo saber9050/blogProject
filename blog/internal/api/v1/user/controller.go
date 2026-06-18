@@ -3,6 +3,7 @@ package user
 import (
 	"blog/internal/middleware"
 	"blog/internal/model/dto/request"
+	response2 "blog/internal/model/dto/response"
 	userSvc "blog/internal/service/user"
 	"blog/pkg/jwt"
 	"blog/pkg/response"
@@ -130,6 +131,42 @@ func (c *Controller) UpdateEmail(ctx *gin.Context) {
 		return
 	}
 	renderResultHTML(ctx, true, "邮箱修改成功", "您已成功修改绑定邮箱，下次登录可以使用新邮箱")
+}
+
+// AddEmail 添加邮箱
+func (c *Controller) AddEmail(ctx *gin.Context) {
+	userID := middleware.GetUserID(ctx)
+	if userID == 0 {
+		response.Unauthorized(ctx, "请先登录")
+		return
+	}
+
+	var req request.AddEmailRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(ctx, "请求参数错误")
+		return
+	}
+
+	err := c.userService.AddEmail(userID, &req)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+
+	response.Success(ctx, gin.H{
+		"message": "添加成功",
+	})
+}
+
+// IsExistsEmail 邮箱唯一性检查
+func (c *Controller) IsExistsEmail(ctx *gin.Context) {
+	email := ctx.Query("new_email")
+	ok, err := c.userService.IsExistsEmail(email)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, &response2.IsExistsResponse{IsExists: ok})
 }
 
 // renderResultHTML 渲染统一的结果页面

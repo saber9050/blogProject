@@ -177,17 +177,25 @@ func (s *userService) UpdateEmail(userID uint, req *request.UpdateUserEmailReque
 	if !utils.CheckPassword(req.Password, user.PasswordHash) {
 		return nil, errors.New(errors.CodeBadRequest, "密码错误")
 	}
+	// 验证邮箱唯一性
+	ok, err := s.IsExistsEmail(req.NewEmail)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return nil, errors.New(errors.CodeConflict, "该邮箱已经被绑定")
+	}
 	// 生成token
 	token, err := jwt.GenerateToken(user.ID, req.NewEmail, uint(user.RoleID))
 	if err != nil {
 		return nil, fmt.Errorf("生成Token失败:%s", err)
 	}
 	// 限制频率
-	ok, err := s.authCache.CheckEmailSendLimit(req.NewEmail)
+	res, err := s.authCache.CheckEmailSendLimit(req.NewEmail)
 	if err != nil {
 		return nil, fmt.Errorf("检查邮箱发送频率失败:%s", err)
 	}
-	if ok {
+	if res {
 		return nil, errors.New(errors.CodeTooManyRequests, "请勿频繁发送验证码，请60秒后再试")
 	}
 	err = email.SendVerificationEmail(req.NewEmail, token)
@@ -202,6 +210,39 @@ func (s *userService) UpdateEmail(userID uint, req *request.UpdateUserEmailReque
 	return &response.UpdateUserEmailResponse{
 		Message: "已发送确认邮件到新邮箱，请到邮箱确认",
 	}, nil
+}
+
+// AddEmail 添加邮箱接口，仅在无邮箱时能添加成功
+func (s *userService) AddEmail(userID uint, req *request.AddEmailRequest) error {
+	// 检查有无邮箱
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return fmt.Errorf("获取用户信息失败: %w", err)
+	}
+	if user.Email != "" {
+		return errors.New(errors.CodeForbidden, "用户已存在邮箱，不可再添加")
+	}
+	// 检查邮箱验证码
+	err = s.authSvc.VerifyCaptcha(req.NewEmail, constant.CaptchaPurposeAddEmail, req.Captcha)
+	if err != nil {
+		return fmt.Errorf("验证邮箱验证码失败:%s", err)
+	}
+	// 检查新邮箱是否存在
+	ok, err := s.IsExistsEmail(req.NewEmail)
+	if err != nil {
+		return err
+	}
+	if ok {
+		return errors.New(errors.CodeConflict, "该邮箱已经被绑定")
+	}
+	// 添加邮箱
+	update := make(map[string]interface{})
+	update["email"] = req.NewEmail
+	err = s.userRepo.UpdateProfile(userID, update)
+	if err != nil {
+		return fmt.Errorf("添加邮箱失败:%s", err)
+	}
+	return nil
 }
 
 // UpdateAdminEmail 修改邮箱
@@ -227,6 +268,15 @@ func (s *userService) UpdateAdminEmail(id uint, token, newEmail string) error {
 		return fmt.Errorf("将token加入黑名单失败:%w", err)
 	}
 	return nil
+}
+
+// IsExistsEmail 检查邮箱是否存在
+func (s *userService) IsExistsEmail(rqEmail string) (bool, error) {
+	ok, err := s.userRepo.IsExistsEmail(rqEmail)
+	if err != nil {
+		return false, fmt.Errorf("查询新邮箱是否存在失败:%s", err)
+	}
+	return ok, nil
 }
 
 // randomName 随机名字

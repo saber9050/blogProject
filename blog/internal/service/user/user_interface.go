@@ -18,6 +18,10 @@ type UserService interface {
 	UpdateEmail(userID uint, req *request.UpdateUserEmailRequest) (*response.UpdateUserEmailResponse, error)
 	//	UpdateAdminEmail 修改邮箱
 	UpdateAdminEmail(id uint, token, newEmail string) error
+	// AddEmail 添加邮箱接口，仅在无邮箱时能添加成功
+	AddEmail(userID uint, req *request.AddEmailRequest) error
+	// IsExistsEmail 检查邮箱是否存在
+	IsExistsEmail(rqEmail string) (bool, error)
 	// UpLoadImage 上传图片文件
 	// 返回 fileKey , error
 	UpLoadImage(fileHeader *multipart.FileHeader) (string, error)

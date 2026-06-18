@@ -4,7 +4,7 @@
       <!-- 品牌（不可点击） -->
       <div class="navbar__brand">
         <span class="navbar__brand-icon">&#9998;</span>
-        <strong>我的博客</strong>
+        <strong>{{ user ? user.user_name + '的博客' : '我的博客' }}</strong>
       </div>
 
       <!-- 导航按钮：首页 / 关于 -->
@@ -76,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
 
@@ -155,6 +155,33 @@ onMounted(async () => {
     }
   }
   notificationCount.value = 3
+
+  // 监听用户信息更新事件（来自 ProfileView）
+  const handleUserInfoUpdated = (event: CustomEvent) => {
+    const updatedUser = event.detail
+    if (!updatedUser) return
+    // 更新 NavBar 中显示的用户名和头像
+    if (updatedUser.user_name && user.value) {
+      user.value.user_name = updatedUser.user_name
+    }
+    if (updatedUser.avatar_url && user.value) {
+      user.value.avatar_url = updatedUser.avatar_url
+    }
+    // 同时更新 localStorage 中的用户信息
+    const stored = localStorage.getItem('user')
+    if (stored) {
+      try {
+        const u = JSON.parse(stored)
+        if (updatedUser.user_name) u.user_name = updatedUser.user_name
+        if (updatedUser.avatar_url) u.avatar_url = updatedUser.avatar_url
+        localStorage.setItem('user', JSON.stringify(u))
+      } catch { /* ignore */ }
+    }
+  }
+  window.addEventListener('user-info-updated', handleUserInfoUpdated as EventListener)
+  onUnmounted(() => {
+    window.removeEventListener('user-info-updated', handleUserInfoUpdated as EventListener)
+  })
 })
 </script>
 

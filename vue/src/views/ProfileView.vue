@@ -6,10 +6,10 @@
         <!-- 头像区域 - 可点击更换 -->
         <div class="profile-card__avatar" @click="triggerAvatarUpload" title="点击更换头像">
           <img
-            v-if="avatarPreview || userInfo.avatar_url"
-            :src="avatarPreview || userInfo.avatar_url"
-            class="profile-card__avatar-img"
-            alt="头像"
+              v-if="avatarPreview || userInfo.avatar_url"
+              :src="avatarPreview || userInfo.avatar_url"
+              class="profile-card__avatar-img"
+              alt="头像"
           />
           <span v-else class="profile-card__avatar-placeholder">&#128100;</span>
           <div class="profile-card__avatar-overlay">
@@ -17,26 +17,24 @@
           </div>
         </div>
         <input
-          ref="avatarInput"
-          type="file"
-          accept="image/*"
-          style="display: none"
-          @change="handleAvatarChange"
+            ref="avatarInput"
+            type="file"
+            accept="image/*"
+            style="display: none"
+            @change="handleAvatarChange"
         />
 
         <!-- 用户信息列表 -->
         <div class="profile-card__info-list">
-          <!-- 用户名 -->
+          <!-- 用户名【已修改：移除输入框外壳】 -->
           <div class="info-item">
             <span class="info-item__label">用户名</span>
-            <div class="input-shell" style="flex:1; min-height:42px">
-              <input
+            <input
                 v-model="profileForm.user_name"
-                class="input-shell__control"
+                class="plain-input"
                 type="text"
                 placeholder="请输入用户名"
-              />
-            </div>
+            />
           </div>
 
           <!-- 分隔线 -->
@@ -45,8 +43,17 @@
           <!-- 邮箱 -->
           <div class="info-item">
             <span class="info-item__label">邮箱</span>
-            <span class="info-item__value">{{ userInfo.email }}</span>
-            <button class="info-item__action" @click="showEmailModal = true">修改邮箱</button>
+            <span class="info-item__value">{{ userInfo.email || '未设置' }}</span>
+            <button
+                v-if="userInfo.email"
+                class="info-item__action"
+                @click="showEmailModal = true"
+            >修改邮箱</button>
+            <button
+                v-else
+                class="info-item__action"
+                @click="showAddEmailModal = true"
+            >添加邮箱</button>
           </div>
 
           <!-- 分隔线 -->
@@ -59,24 +66,24 @@
             <button class="info-item__action" @click="showPasswordModal = true">修改密码</button>
           </div>
 
-          <!-- 分隔线 -->
-          <div class="info-divider" />
+          <template v-if="userInfo.role_id === 1">
+            <!-- 分隔线 -->
+            <div class="info-divider" />
 
-          <!-- 个人简介 -->
-          <div class="info-item info-item--bio">
-            <span class="info-item__label">个人简介</span>
-            <div class="input-shell" style="flex:1; min-height:42px">
+            <!-- 个人简介【已修改：移除输入框外壳】 -->
+            <div class="info-item info-item--bio">
+              <span class="info-item__label">个人简介</span>
               <input
-                v-model="profileForm.introduction"
-                class="input-shell__control"
-                type="text"
-                placeholder="这个人很懒，什么都没写~"
+                  v-model="profileForm.introduction"
+                  class="plain-input"
+                  type="text"
+                  placeholder="这个人很懒，什么都没写~"
               />
             </div>
-          </div>
 
-          <!-- 分隔线 -->
-          <div class="info-divider" />
+            <!-- 分隔线 -->
+            <div class="info-divider" />
+          </template>
 
           <!-- 保存修改按钮 -->
           <div class="profile-card__save-row">
@@ -108,11 +115,11 @@
                 <div class="input-shell input-shell--readonly">
                   <span class="input-shell__icon">&#9993;</span>
                   <input
-                    class="input-shell__control"
-                    type="email"
-                    :value="userInfo.email"
-                    readonly
-                    disabled
+                      class="input-shell__control"
+                      type="email"
+                      :value="userInfo.email"
+                      readonly
+                      disabled
                   />
                 </div>
               </div>
@@ -125,19 +132,19 @@
                 <div class="input-shell" :class="{ 'input-shell--error': !!emailErrors.captcha }">
                   <span class="input-shell__icon">&#128276;</span>
                   <input
-                    v-model="emailForm.captcha"
-                    class="input-shell__control"
-                    type="text"
-                    placeholder="请输入6位邮箱验证码"
-                    maxlength="6"
-                    @input="clearEmailError('captcha')"
+                      v-model="emailForm.captcha"
+                      class="input-shell__control"
+                      type="text"
+                      placeholder="请输入6位邮箱验证码"
+                      maxlength="6"
+                      @input="clearEmailError('captcha')"
                   />
                   <div class="input-shell__addon">
                     <button
-                      type="button"
-                      class="inline-action"
-                      :disabled="emailSending || emailCountdown > 0"
-                      @click="sendEmailCaptcha('reset_email')"
+                        type="button"
+                        class="inline-action"
+                        :disabled="emailSending || emailCountdown > 0"
+                        @click="sendEmailCaptcha('reset_email')"
                     >
                       {{ emailCountdown > 0 ? `${emailCountdown}s` : (emailSending ? '发送中' : '获取验证码') }}
                     </button>
@@ -154,11 +161,11 @@
                 <div class="input-shell" :class="{ 'input-shell--error': !!emailErrors.password }">
                   <span class="input-shell__icon">&#128274;</span>
                   <input
-                    v-model="emailForm.password"
-                    class="input-shell__control"
-                    type="password"
-                    placeholder="请输入当前密码"
-                    @input="clearEmailError('password')"
+                      v-model="emailForm.password"
+                      class="input-shell__control"
+                      type="password"
+                      placeholder="请输入当前密码"
+                      @input="clearEmailError('password')"
                   />
                 </div>
                 <p v-if="emailErrors.password" class="helper-text helper-text--error">{{ emailErrors.password }}</p>
@@ -172,11 +179,11 @@
                 <div class="input-shell" :class="{ 'input-shell--error': !!emailErrors.newEmail }">
                   <span class="input-shell__icon">&#9993;</span>
                   <input
-                    v-model="emailForm.newEmail"
-                    class="input-shell__control"
-                    type="email"
-                    placeholder="请输入新邮箱"
-                    @input="clearEmailError('newEmail')"
+                      v-model="emailForm.newEmail"
+                      class="input-shell__control"
+                      type="email"
+                      placeholder="请输入新邮箱"
+                      @input="clearEmailError('newEmail')"
                   />
                 </div>
                 <p v-if="emailErrors.newEmail" class="helper-text helper-text--error">{{ emailErrors.newEmail }}</p>
@@ -185,6 +192,74 @@
               <button type="submit" class="submit-primary" :disabled="emailLoading">
                 <span v-if="emailLoading" class="spinner"></span>
                 <span>{{ emailLoading ? '提交中...' : '确认修改' }}</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ==================== 添加邮箱弹窗（邮箱为空时使用） ==================== -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showAddEmailModal" class="modal-overlay" @click.self="closeAddEmailModal">
+          <div class="modal-panel">
+            <div class="modal-panel__header">
+              <h3 class="modal-panel__title">添加邮箱</h3>
+              <button class="modal-panel__close" @click="closeAddEmailModal">&times;</button>
+            </div>
+
+            <form class="modal-panel__body" @submit.prevent="handleAddEmail">
+              <!-- 新邮箱 -->
+              <div class="form-stack">
+                <div class="field-header">
+                  <label class="field-label">新邮箱</label>
+                </div>
+                <div class="input-shell" :class="{ 'input-shell--error': !!addEmailErrors.newEmail }">
+                  <span class="input-shell__icon">&#9993;</span>
+                  <input
+                      v-model="addEmailForm.newEmail"
+                      class="input-shell__control"
+                      type="email"
+                      placeholder="请输入邮箱地址"
+                      @input="clearAddEmailError('newEmail')"
+                  />
+                </div>
+                <p v-if="addEmailErrors.newEmail" class="helper-text helper-text--error">{{ addEmailErrors.newEmail }}</p>
+              </div>
+
+              <!-- 邮箱验证码 -->
+              <div class="form-stack">
+                <div class="field-header">
+                  <label class="field-label">邮箱验证码</label>
+                </div>
+                <div class="input-shell" :class="{ 'input-shell--error': !!addEmailErrors.captcha }">
+                  <span class="input-shell__icon">&#128276;</span>
+                  <input
+                      v-model="addEmailForm.captcha"
+                      class="input-shell__control"
+                      type="text"
+                      placeholder="请输入6位邮箱验证码"
+                      maxlength="6"
+                      @input="clearAddEmailError('captcha')"
+                  />
+                  <div class="input-shell__addon">
+                    <button
+                        type="button"
+                        class="inline-action"
+                        :disabled="addEmailSending || addEmailCountdown > 0"
+                        @click="sendAddEmailCaptcha"
+                    >
+                      {{ addEmailCountdown > 0 ? `${addEmailCountdown}s` : (addEmailSending ? '发送中' : '获取验证码') }}
+                    </button>
+                  </div>
+                </div>
+                <p v-if="addEmailErrors.captcha" class="helper-text helper-text--error">{{ addEmailErrors.captcha }}</p>
+              </div>
+
+              <button type="submit" class="submit-primary" :disabled="addEmailLoading">
+                <span v-if="addEmailLoading" class="spinner"></span>
+                <span>{{ addEmailLoading ? '提交中...' : '确认添加' }}</span>
               </button>
             </form>
           </div>
@@ -211,19 +286,19 @@
                 <div class="input-shell" :class="{ 'input-shell--error': !!passwordErrors.captcha }">
                   <span class="input-shell__icon">&#128276;</span>
                   <input
-                    v-model="passwordForm.captcha"
-                    class="input-shell__control"
-                    type="text"
-                    placeholder="请输入6位邮箱验证码"
-                    maxlength="6"
-                    @input="clearPasswordError('captcha')"
+                      v-model="passwordForm.captcha"
+                      class="input-shell__control"
+                      type="text"
+                      placeholder="请输入6位邮箱验证码"
+                      maxlength="6"
+                      @input="clearPasswordError('captcha')"
                   />
                   <div class="input-shell__addon">
                     <button
-                      type="button"
-                      class="inline-action"
-                      :disabled="passwordSending || passwordCountdown > 0"
-                      @click="sendPasswordCaptcha"
+                        type="button"
+                        class="inline-action"
+                        :disabled="passwordSending || passwordCountdown > 0"
+                        @click="sendPasswordCaptcha"
                     >
                       {{ passwordCountdown > 0 ? `${passwordCountdown}s` : (passwordSending ? '发送中' : '获取验证码') }}
                     </button>
@@ -240,11 +315,11 @@
                 <div class="input-shell" :class="{ 'input-shell--error': !!passwordErrors.newPassword }">
                   <span class="input-shell__icon">&#128274;</span>
                   <input
-                    v-model="passwordForm.newPassword"
-                    class="input-shell__control"
-                    type="password"
-                    placeholder="请输入新密码"
-                    @input="clearPasswordError('newPassword')"
+                      v-model="passwordForm.newPassword"
+                      class="input-shell__control"
+                      type="password"
+                      placeholder="请输入新密码"
+                      @input="clearPasswordError('newPassword')"
                   />
                 </div>
                 <p v-if="passwordErrors.newPassword" class="helper-text helper-text--error">{{ passwordErrors.newPassword }}</p>
@@ -258,11 +333,11 @@
                 <div class="input-shell" :class="{ 'input-shell--error': !!passwordErrors.ack }">
                   <span class="input-shell__icon">&#128274;</span>
                   <input
-                    v-model="passwordForm.ack"
-                    class="input-shell__control"
-                    type="password"
-                    placeholder="请再次输入新密码"
-                    @input="clearPasswordError('ack')"
+                      v-model="passwordForm.ack"
+                      class="input-shell__control"
+                      type="password"
+                      placeholder="请再次输入新密码"
+                      @input="clearPasswordError('ack')"
                   />
                 </div>
                 <p v-if="passwordErrors.ack" class="helper-text helper-text--error">{{ passwordErrors.ack }}</p>
@@ -348,6 +423,13 @@ const profileForm = ref<ProfileForm>({
 
 const saving = ref(false)
 
+// 触发用户信息更新事件，通知其他组件（如 NavBar）
+const emitUserInfoUpdated = () => {
+  window.dispatchEvent(new CustomEvent('user-info-updated', {
+    detail: userInfo.value
+  }))
+}
+
 // ==================== 头像上传 ====================
 const avatarInput = ref<HTMLInputElement | null>(null)
 const avatarPreview = ref('')
@@ -381,6 +463,8 @@ const handleAvatarChange = async (e: Event) => {
           const u = JSON.parse(stored)
           u.avatar_url = res.data.data.avatar_url
           localStorage.setItem('user', JSON.stringify(u))
+          // 触发事件通知其他组件（如 NavBar）
+          emitUserInfoUpdated()
         } catch { /* ignore */ }
       }
     }
@@ -411,6 +495,8 @@ const handleSaveProfile = async () => {
         const u = JSON.parse(stored)
         u.user_name = profileForm.value.user_name
         localStorage.setItem('user', JSON.stringify(u))
+        // 触发事件通知其他组件（如 NavBar）
+        emitUserInfoUpdated()
       } catch { /* ignore */ }
     }
     alert('保存成功')
@@ -518,6 +604,103 @@ const closeEmailModal = () => {
   emailErrors.captcha = undefined
   emailErrors.password = undefined
   emailErrors.newEmail = undefined
+}
+
+// ==================== 添加邮箱 ====================
+const showAddEmailModal = ref(false)
+const addEmailLoading = ref(false)
+const addEmailSending = ref(false)
+const addEmailCountdown = ref(0)
+const addEmailForm = ref<{ newEmail: string; captcha: string }>({ newEmail: '', captcha: '' })
+const addEmailErrors = reactive<{ newEmail?: string; captcha?: string }>({})
+
+const clearAddEmailError = (field: keyof typeof addEmailErrors) => {
+  addEmailErrors[field] = undefined
+}
+
+const sendAddEmailCaptcha = async () => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!addEmailForm.value.newEmail) {
+    addEmailErrors.newEmail = '请先输入邮箱地址'
+    return
+  }
+  if (!emailRegex.test(addEmailForm.value.newEmail)) {
+    addEmailErrors.newEmail = '邮箱格式不正确'
+    return
+  }
+
+  addEmailSending.value = true
+  try {
+    await api.post('/auth/captcha', {
+      email: addEmailForm.value.newEmail,
+      purpose: 'add_email'
+    })
+
+    addEmailCountdown.value = 60
+    const timer = setInterval(() => {
+      addEmailCountdown.value--
+      if (addEmailCountdown.value <= 0) {
+        clearInterval(timer)
+      }
+    }, 1000)
+
+    alert('验证码已发送到您的邮箱，请注意查收')
+  } catch (error: any) {
+    const msg = error.response?.data?.message || '发送验证码失败，请稍后重试'
+    alert(msg)
+  } finally {
+    addEmailSending.value = false
+  }
+}
+
+const validateAddEmailForm = (): boolean => {
+  let valid = true
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!addEmailForm.value.newEmail) {
+    addEmailErrors.newEmail = '邮箱不能为空'
+    valid = false
+  } else if (!emailRegex.test(addEmailForm.value.newEmail)) {
+    addEmailErrors.newEmail = '邮箱格式不正确'
+    valid = false
+  }
+
+  if (!addEmailForm.value.captcha) {
+    addEmailErrors.captcha = '验证码不能为空'
+    valid = false
+  } else if (addEmailForm.value.captcha.length !== 6) {
+    addEmailErrors.captcha = '验证码必须为6位'
+    valid = false
+  }
+
+  return valid
+}
+
+const handleAddEmail = async () => {
+  if (!validateAddEmailForm()) return
+
+  addEmailLoading.value = true
+  try {
+    await api.post('/user/add_email', {
+      new_email: addEmailForm.value.newEmail,
+      captcha: addEmailForm.value.captcha
+    })
+    userInfo.value.email = addEmailForm.value.newEmail
+    alert('邮箱添加成功')
+    closeAddEmailModal()
+  } catch (error: any) {
+    const msg = error.response?.data?.message || '添加邮箱失败，请稍后重试'
+    alert(msg)
+  } finally {
+    addEmailLoading.value = false
+  }
+}
+
+const closeAddEmailModal = () => {
+  showAddEmailModal.value = false
+  addEmailForm.value = { newEmail: '', captcha: '' }
+  addEmailErrors.newEmail = undefined
+  addEmailErrors.captcha = undefined
 }
 
 // ==================== 修改密码 ====================
@@ -781,6 +964,27 @@ onMounted(async () => {
 .info-divider {
   height: 1px;
   background: rgba(148, 163, 184, 0.14);
+}
+
+/* ========== 无框单行输入框【新增样式】 ========== */
+.plain-input {
+  flex: 1;
+  min-height: 42px;
+  padding: 0 4px;
+  font-size: 0.95rem;
+  color: var(--text-strong);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  outline: none;
+  transition: border-color 0.24s ease;
+}
+/* 聚焦时下划线高亮，提示可编辑 */
+.plain-input:focus {
+  border-bottom-color: var(--primary-500);
+}
+.plain-input::placeholder {
+  color: var(--text-muted);
 }
 
 /* ========== 保存按钮 ========== */

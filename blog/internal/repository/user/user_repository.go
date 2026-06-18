@@ -34,3 +34,13 @@ func (r *userRepository) FindByID(id uint) (*entity.User, error) {
 func (r *userRepository) UpdateProfile(id uint, updates map[string]interface{}) error {
 	return r.db.Model(&entity.User{}).Where("id = ?", id).Updates(updates).Error
 }
+
+// IsExistsEmail 判断邮箱是否存在
+func (r *userRepository) IsExistsEmail(email string) (bool, error) {
+	var count int64
+	err := r.db.Model(&entity.User{}).Where("email = ?", email).Count(&count).Error
+	if err != nil {
+		return false, nil
+	}
+	return count > 0, nil
+}

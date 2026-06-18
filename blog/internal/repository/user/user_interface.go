@@ -8,4 +8,6 @@ type UserRepository interface {
 	FindByID(id uint) (*entity.User, error)
 	// UpdateProfile 更新用户资料
 	UpdateProfile(id uint, updates map[string]interface{}) error
+	// IsExistsEmail 判断邮箱是否存在
+	IsExistsEmail(email string) (bool, error)
 }
