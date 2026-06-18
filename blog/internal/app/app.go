@@ -203,8 +203,6 @@ func (a *App) initServer() {
 
 // Run 开始（纯http）
 func (a *App) Run() {
-	// 启动浏览量定时刷盘任务
-	go a.startViewFlushWorker()
 
 	// 启动 HTTP 服务器
 	go func() {
@@ -219,30 +217,6 @@ func (a *App) Run() {
 
 	// 优雅关闭
 	a.gracefulShutdown()
-}
-
-// startViewFlushWorker 启动浏览量定时刷盘 goroutine
-func (a *App) startViewFlushWorker() {
-	logger.Info("浏览量定时刷盘任务已启动（每 5 分钟）")
-
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			if err := a.router.ArticleSvc().FlushViewCounts(); err != nil {
-				logger.Error("浏览量刷盘失败", zap.Error(err))
-			}
-		case <-a.workerCtx.Done():
-			logger.Info("浏览量刷盘任务正在退出...")
-			// 退出前最后一次刷盘
-			if err := a.router.ArticleSvc().FlushViewCounts(); err != nil {
-				logger.Error("最后一次浏览量刷盘失败", zap.Error(err))
-			}
-			return
-		}
-	}
 }
 
 // gracefulShutdown 优雅关闭

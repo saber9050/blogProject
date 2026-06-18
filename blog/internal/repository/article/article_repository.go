@@ -105,19 +105,9 @@ func (r *articleRepository) FindByID(id uint) (*entity.Article, error) {
 	return &article, nil
 }
 
-// IncrementViews 批量增加文章浏览量
-func (r *articleRepository) IncrementViews(viewMap map[uint]int) error {
-	for articleID, count := range viewMap {
-		if count <= 0 {
-			continue
-		}
-		if err := r.db.Model(&entity.Article{}).
-			Where("id = ?", articleID).
-			UpdateColumn("views", gorm.Expr("views + ?", count)).Error; err != nil {
-			return err
-		}
-	}
-	return nil
+// IncrementViewCount 增加文章浏览量
+func (r *articleRepository) IncrementViewCount(articleID uint) error {
+	return r.db.Exec("UPDATE articles SET views = views + 1 WHERE id = ?", articleID).Error
 }
 
 // GetPrevAndNext 获取上一篇和下一篇

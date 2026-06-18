@@ -3,22 +3,12 @@ package article
 import (
 	"blog/internal/model/dto/response"
 	repo "blog/internal/repository/article"
-	"blog/pkg/database"
 	"blog/pkg/errors"
 	"blog/pkg/logger"
-	"context"
 	"fmt"
-	"strconv"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
-)
-
-const (
-	viewKeyPrefix = "article:view:"  // Redis 浏览量计数器 key 前缀
-	viewTTL       = 30 * time.Minute // Redis key 过期时间
-	flushInterval = 5 * time.Minute  // 定时刷盘间隔
 )
 
 type articleService struct {
@@ -98,8 +88,13 @@ func (s *articleService) ListArticles(params *repo.ArticleListParams) (*response
 	}, nil
 }
 
-// GetArticleDetail 文章详情
+// GetArticleDetail 文章详情（访问时自动增加浏览量）
 func (s *articleService) GetArticleDetail(articleID, userID uint) (*response.ArticleDetail, error) {
+	// 先增加浏览量，再查询文章，确保返回最新数据
+	if err := s.articleRepo.IncrementViewCount(articleID); err != nil {
+		logger.Warn("浏览量+1失败", zap.Uint("articleID", articleID), zap.Error(err))
+	}
+
 	article, err := s.articleRepo.FindByID(articleID)
 	if err != nil {
 		return nil, fmt.Errorf("查询文章详情失败: %w", err)
@@ -189,83 +184,9 @@ func (s *articleService) BatchLikeStatus(userID uint, articleIDs []uint) (*respo
 	return &response.LikeStatusMap{LikedMap: likedMap}, nil
 }
 
-// RecordView 记录阅读（Redis INCR）
-func (s *articleService) RecordView(articleID uint) error {
-	redisClient := database.GetRedis()
-	if redisClient == nil {
-		return nil // Redis 不可用时静默跳过
-	}
-
-	key := fmt.Sprintf("%s%d", viewKeyPrefix, articleID)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	if err := redisClient.Incr(ctx, key).Err(); err != nil {
-		logger.Warn("Redis INCR 浏览量失败", zap.Uint("articleID", articleID), zap.Error(err))
-		return err
-	}
-
-	// 设置过期时间（仅首次设置）
-	redisClient.Expire(ctx, key, viewTTL)
-	return nil
-}
-
-// FlushViewCounts 定时刷新浏览量到 MySQL
-func (s *articleService) FlushViewCounts() error {
-	redisClient := database.GetRedis()
-	if redisClient == nil {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// SCAN 遍历所有 article:view:* key
-	var cursor uint64
-	viewMap := make(map[uint]int)
-
-	for {
-		keys, nextCursor, err := redisClient.Scan(ctx, cursor, viewKeyPrefix+"*", 100).Result()
-		if err != nil {
-			logger.Warn("Redis SCAN 失败", zap.Error(err))
-			return err
-		}
-
-		for _, key := range keys {
-			articleIDStr := strings.TrimPrefix(key, viewKeyPrefix)
-			articleID, parseErr := strconv.ParseUint(articleIDStr, 10, 64)
-			if parseErr != nil {
-				continue
-			}
-
-			countStr, getErr := redisClient.GetDel(ctx, key).Result()
-			if getErr != nil {
-				continue
-			}
-			count, convErr := strconv.Atoi(countStr)
-			if convErr != nil || count <= 0 {
-				continue
-			}
-			viewMap[uint(articleID)] += count
-		}
-
-		cursor = nextCursor
-		if cursor == 0 {
-			break
-		}
-	}
-
-	if len(viewMap) == 0 {
-		return nil
-	}
-
-	if err := s.articleRepo.IncrementViews(viewMap); err != nil {
-		logger.Error("刷盘浏览量失败", zap.Error(err))
-		return err
-	}
-
-	logger.Info(fmt.Sprintf("浏览量刷盘完成，共 %d 篇文章", len(viewMap)))
-	return nil
+// IncrementViewCount 增加文章浏览量（直接更新MySQL）
+func (s *articleService) IncrementViewCount(articleID uint) error {
+	return s.articleRepo.IncrementViewCount(articleID)
 }
 
 // ListCategories 获取所有分类

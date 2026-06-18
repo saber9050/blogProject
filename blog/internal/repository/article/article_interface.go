@@ -10,8 +10,8 @@ type ArticleRepository interface {
 	ListArticles(params *ArticleListParams) ([]entity.Article, int64, error)
 	// FindByID 根据 ID 查找文章
 	FindByID(id uint) (*entity.Article, error)
-	// IncrementViews 批量增加文章浏览量（定时刷盘用）
-	IncrementViews(viewMap map[uint]int) error
+	// IncrementViewCount 增加文章浏览量
+	IncrementViewCount(articleID uint) error
 	// GetPrevAndNext 获取上一篇和下一篇
 	GetPrevAndNext(id uint) (*PrevNextArticle, *PrevNextArticle, error)
 	// LikeArticle 点赞

@@ -6,7 +6,6 @@ import (
 	articleRepo "blog/internal/repository/article"
 	articleSvc "blog/internal/service/article"
 	"blog/pkg/response"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -97,11 +96,6 @@ func (c *Controller) GetArticleDetail(ctx *gin.Context) {
 		response.BizError(ctx, err)
 		return
 	}
-
-	// 异步记录浏览量
-	go func() {
-		_ = c.articleService.RecordView(uint(id))
-	}()
 
 	response.Success(ctx, detail)
 }
@@ -203,6 +197,3 @@ func (c *Controller) ListTags(ctx *gin.Context) {
 	}
 	response.Success(ctx, tags)
 }
-
-// ensure fmt is used
-var _ = fmt.Sprintf("")

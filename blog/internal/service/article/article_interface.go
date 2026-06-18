@@ -17,10 +17,8 @@ type ArticleService interface {
 	UnlikeArticle(articleID, userID uint) error
 	// BatchLikeStatus 批量查询点赞状态
 	BatchLikeStatus(userID uint, articleIDs []uint) (*response.LikeStatusMap, error)
-	// RecordView 记录阅读（Redis计数器）
-	RecordView(articleID uint) error
-	// FlushViewCounts 定时刷新浏览量到MySQL
-	FlushViewCounts() error
+	// IncrementViewCount 增加文章浏览量
+	IncrementViewCount(articleID uint) error
 	// ListCategories 获取所有分类
 	ListCategories() ([]response.CategoryInfo, error)
 	// ListTags 获取所有标签
