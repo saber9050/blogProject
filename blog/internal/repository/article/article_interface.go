@@ -12,8 +12,6 @@ type ArticleRepository interface {
 	FindByID(id uint) (*entity.Article, error)
 	// IncrementViewCount 增加文章浏览量
 	IncrementViewCount(articleID uint) error
-	// GetPrevAndNext 获取上一篇和下一篇
-	GetPrevAndNext(id uint) (*PrevNextArticle, *PrevNextArticle, error)
 	// LikeArticle 点赞
 	LikeArticle(articleID, userID uint) error
 	// IsLike 检查是否点赞过

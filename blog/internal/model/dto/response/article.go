@@ -22,7 +22,6 @@ type ArticleListItem struct {
 	CoverURL     string       `json:"cover_url"`
 	AuthorID     uint         `json:"author_id"`
 	AuthorName   string       `json:"author_name"`
-	AuthorAvatar string       `json:"author_avatar"`
 	Category     CategoryInfo `json:"category"`
 	Tags         []TagInfo    `json:"tags"`
 	ViewCount    uint         `json:"view_count"`
@@ -43,15 +42,7 @@ type ArticleListResponse struct {
 // ArticleDetail 文章详情
 type ArticleDetail struct {
 	ArticleListItem
-	Content     string          `json:"content"`
-	PrevArticle *ArticleNavLink `json:"prev_article,omitempty"`
-	NextArticle *ArticleNavLink `json:"next_article,omitempty"`
-}
-
-// ArticleNavLink 上一篇/下一篇导航
-type ArticleNavLink struct {
-	ID    uint   `json:"id"`
-	Title string `json:"title"`
+	Content string `json:"content"`
 }
 
 // LikeStatusMap 批量点赞状态

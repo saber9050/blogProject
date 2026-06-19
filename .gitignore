@@ -5,4 +5,4 @@
 blog/logs/app.log
 
 # 忽略doce
-blog/doce
+blog/docs

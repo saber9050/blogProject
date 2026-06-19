@@ -110,37 +110,6 @@ func (r *articleRepository) IncrementViewCount(articleID uint) error {
 	return r.db.Exec("UPDATE articles SET views = views + 1 WHERE id = ?", articleID).Error
 }
 
-// GetPrevAndNext 获取上一篇和下一篇
-func (r *articleRepository) GetPrevAndNext(id uint) (*PrevNextArticle, *PrevNextArticle, error) {
-	var prev, next *PrevNextArticle
-
-	// 上一篇：更早创建的文章
-	var prevArticle entity.Article
-	err := r.db.Select("id, title").
-		Where("id < ? AND deleted_at IS NULL", id).
-		Order("id DESC").
-		First(&prevArticle).Error
-	if err == nil {
-		prev = &PrevNextArticle{ID: prevArticle.ID, Title: prevArticle.Title}
-	} else if err != gorm.ErrRecordNotFound {
-		return nil, nil, err
-	}
-
-	// 下一篇：更晚创建的文章
-	var nextArticle entity.Article
-	err = r.db.Select("id, title").
-		Where("id > ? AND deleted_at IS NULL", id).
-		Order("id ASC").
-		First(&nextArticle).Error
-	if err == nil {
-		next = &PrevNextArticle{ID: nextArticle.ID, Title: nextArticle.Title}
-	} else if err != gorm.ErrRecordNotFound {
-		return nil, nil, err
-	}
-
-	return prev, next, nil
-}
-
 // LikeArticle 点赞
 func (r *articleRepository) LikeArticle(articleID, userID uint) error {
 	like := entity.Like{ArticleID: articleID, UserID: userID}

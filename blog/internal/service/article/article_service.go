@@ -67,8 +67,7 @@ func (s *articleService) ListArticles(params *repo.ArticleListParams) (*response
 			Summary:      a.Summary,
 			CoverURL:     a.CoverURL,
 			AuthorID:     a.UserID,
-			AuthorName:   "", // 需 JOIN 用户表，这里留空，实际使用时可在 repository 层 JOIN
-			AuthorAvatar: "",
+			AuthorName:   "",                      // 需 JOIN 用户表，这里留空，实际使用时可在 repository 层 JOIN
 			Category:     response.CategoryInfo{}, // 同上
 			Tags:         []response.TagInfo{},
 			ViewCount:    a.Views,
@@ -113,9 +112,6 @@ func (s *articleService) GetArticleDetail(articleID, userID uint) (*response.Art
 		isLiked = likedMap[articleID]
 	}
 
-	// 获取上一篇/下一篇
-	prev, next, _ := s.articleRepo.GetPrevAndNext(articleID)
-
 	detail := &response.ArticleDetail{
 		ArticleListItem: response.ArticleListItem{
 			ID:           article.ID,
@@ -124,7 +120,6 @@ func (s *articleService) GetArticleDetail(articleID, userID uint) (*response.Art
 			CoverURL:     article.CoverURL,
 			AuthorID:     article.UserID,
 			AuthorName:   "",
-			AuthorAvatar: "",
 			Category:     response.CategoryInfo{},
 			Tags:         []response.TagInfo{},
 			ViewCount:    article.Views,
@@ -134,12 +129,6 @@ func (s *articleService) GetArticleDetail(articleID, userID uint) (*response.Art
 			CreatedAt:    article.CreatedAt,
 		},
 		Content: article.Content,
-	}
-	if prev != nil {
-		detail.PrevArticle = &response.ArticleNavLink{ID: prev.ID, Title: prev.Title}
-	}
-	if next != nil {
-		detail.NextArticle = &response.ArticleNavLink{ID: next.ID, Title: next.Title}
 	}
 
 	return detail, nil
