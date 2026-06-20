@@ -371,11 +371,12 @@ onMounted(async () => {
     if (auRes.data.data) {
       author.value = { ...author.value, ...auRes.data.data }
     }
-  } catch {
-    // 作者信息API失败，使用默认值
+  } catch (err) {
+    // 用户未登录或API失败，使用默认作者信息
+    console.log('用户未登录或获取作者信息失败，使用默认值')
   }
 
-  // 加载文章列表
+  // // 加载文章列表
   loadArticles()
 })
 </script>

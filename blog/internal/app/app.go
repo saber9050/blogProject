@@ -3,7 +3,6 @@ package app
 import (
 	"blog/internal/api"
 	auth3 "blog/internal/cache/auth"
-	"blog/internal/model/entity"
 	"blog/internal/repository/article"
 	"blog/internal/repository/auth"
 	"blog/internal/repository/category"
@@ -125,16 +124,16 @@ func (a *App) initDatabase() error {
 	//自动迁移数据库表
 	//logger.Info("开始数据库迁移...")
 	if err := a.mysqlDB.AutoMigrate(
-		// 用户相关
-		&entity.User{},
+	// 用户相关
+	//&entity.User{},
 
-		// 文章相关
-		&entity.Article{},
-		&entity.Tag{},
-		&entity.TagArticle{},
-		&entity.Category{},
-		&entity.Comment{},
-		&entity.Like{},
+	// 文章相关
+	//&entity.Article{},
+	//&entity.Tag{},
+	//&entity.TagArticle{},
+	//&entity.Category{},
+	//&entity.Comment{},
+	//&entity.Like{},
 	); err != nil {
 		logger.Warn("数据库迁移警告", zap.Error(err))
 	} else {
