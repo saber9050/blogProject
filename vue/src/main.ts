@@ -5,6 +5,9 @@ import router from './router'
 
 import './assets/main.css'
 
+// wangEditor 样式
+import '@wangeditor/editor/dist/css/style.css'
+
 const app = createApp(App)
 
 app.use(createPinia())

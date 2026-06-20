@@ -6,43 +6,32 @@ import (
 
 // ArticleRepository 文章数据访问接口
 type ArticleRepository interface {
-	// ListArticles 分页查询文章列表（含热度排序）
-	ListArticles(params *ArticleListParams) ([]entity.Article, int64, error)
-	// FindByID 根据 ID 查找文章
+	// FindByID 通过 ID 查找文章
 	FindByID(id uint) (*entity.Article, error)
-	// IncrementViewCount 增加文章浏览量
-	IncrementViewCount(articleID uint) error
-	// LikeArticle 点赞
-	LikeArticle(articleID, userID uint) error
-	// IsLike 检查是否点赞过
-	IsLike(articleID, userID uint) (bool, error)
-	// UnlikeArticle 取消点赞
-	UnlikeArticle(articleID, userID uint) error
-	// BatchLikeStatus 批量查询用户是否点赞
-	BatchLikeStatus(userID uint, articleIDs []uint) (map[uint]bool, error)
-	// GetLikeCounts 批量获取点赞数
-	GetLikeCounts(articleIDs []uint) (map[uint]uint, error)
-	// GetCommentCounts 批量获取评论数
-	GetCommentCounts(articleIDs []uint) (map[uint]uint, error)
-	// ListCategories 获取所有分类
-	ListCategories() ([]entity.Category, error)
-	// ListTags 获取所有标签
-	ListTags() ([]entity.Tag, error)
-}
-
-// ArticleListParams 文章列表查询参数
-type ArticleListParams struct {
-	Page       int
-	PageSize   int
-	Sort       string
-	CategoryID *uint
-	TagIDs     []uint
-	Keyword    string
-	UserID     uint // 登录用户ID，用于查询点赞状态
-}
-
-// PrevNextArticle 上一篇/下一篇简要信息
-type PrevNextArticle struct {
-	ID    uint
-	Title string
+	// ListPublic 前台获取已发布的文章列表
+	ListPublic(page, pageSize int, sort string, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error)
+	// ListAdmin 后台获取文章列表（可查看所有状态）
+	ListAdmin(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error)
+	// Create 创建文章
+	Create(article *entity.Article) error
+	// Update 更新文章
+	Update(article *entity.Article) error
+	// Delete 删除文章（软删除）
+	Delete(id uint) error
+	// IncrementViews 增加浏览量
+	IncrementViews(id uint) error
+	// GetTagsByArticleID 获取文章关联的标签
+	GetTagsByArticleID(articleID uint) ([]*entity.Tag, error)
+	// SetArticleTags 设置文章标签（先删后插）
+	SetArticleTags(articleID uint, tagIDs []uint) error
+	// FindLiked 查询用户是否已点赞
+	FindLiked(articleID, userID uint) (bool, error)
+	// CreateLike 创建点赞
+	CreateLike(articleID, userID uint) error
+	// DeleteLike 取消点赞
+	DeleteLike(articleID, userID uint) error
+	// IncrementLikeCount 增加点赞计数
+	IncrementLikeCount(articleID uint) error
+	// DecrementLikeCount 减少点赞计数
+	DecrementLikeCount(articleID uint) error
 }

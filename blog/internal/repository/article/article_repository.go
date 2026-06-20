@@ -2,12 +2,14 @@ package article
 
 import (
 	"blog/internal/model/entity"
+	"errors"
 	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
 )
 
+// articleRepository 文章数据访问实现
 type articleRepository struct {
 	db *gorm.DB
 }
@@ -17,87 +19,12 @@ func NewArticleRepository(db *gorm.DB) ArticleRepository {
 	return &articleRepository{db: db}
 }
 
-// ListArticles 分页查询文章列表
-func (r *articleRepository) ListArticles(params *ArticleListParams) ([]entity.Article, int64, error) {
-	// 基础查询：未删除的文章
-	baseQuery := r.db.Model(&entity.Article{}).Where("articles.deleted_at IS NULL")
-
-	// 分类筛选
-	if params.CategoryID != nil && *params.CategoryID != 0 {
-		baseQuery = baseQuery.Where("articles.type_id = ?", *params.CategoryID)
-	}
-
-	// 标签筛选（多选：AND 语义）
-	if len(params.TagIDs) > 0 {
-		for _, tid := range params.TagIDs {
-			subQuery := r.db.Model(&entity.TagArticle{}).
-				Select("1").
-				Where("tag_articles.article_id = articles.id AND tag_articles.tag_id = ?", tid)
-			baseQuery = baseQuery.Where("EXISTS (?)", subQuery)
-		}
-	}
-
-	// 标题搜索
-	if params.Keyword != "" {
-		baseQuery = baseQuery.Where("articles.title LIKE ?", "%"+params.Keyword+"%")
-	}
-
-	// 先查总数
-	var total int64
-	if err := baseQuery.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	if total == 0 {
-		return []entity.Article{}, 0, nil
-	}
-
-	// 排序
-	sortQuery := baseQuery.Session(&gorm.Session{})
-	switch params.Sort {
-	case "popular":
-		// 热度分排序：SQL 中实时计算
-		sortQuery = r.applyHotScoreOrder(sortQuery)
-	default:
-		// 默认按创建时间倒序
-		sortQuery = sortQuery.Order("articles.created_at DESC")
-	}
-
-	// 分页
-	offset := (params.Page - 1) * params.PageSize
-	var articles []entity.Article
-	if err := sortQuery.Offset(offset).Limit(params.PageSize).Find(&articles).Error; err != nil {
-		return nil, 0, err
-	}
-
-	return articles, total, nil
-}
-
-// applyHotScoreOrder 热度排序
-func (r *articleRepository) applyHotScoreOrder(query *gorm.DB) *gorm.DB {
-	// 热度分 = (views*0.3 + likes*1.0 + comments*0.8) / POW(DATEDIFF(NOW(), created_at)+2, 1.5)
-	likeSub := r.db.Model(&entity.Like{}).
-		Select("COUNT(*)").
-		Where("likes.article_id = articles.id")
-
-	commentSub := r.db.Model(&entity.Comment{}).
-		Select("COUNT(*)").
-		Where("comments.article_id = articles.id AND comments.deleted_at IS NULL")
-
-	hotExpr := fmt.Sprintf(
-		"(articles.views * 0.3 + COALESCE((%s), 0) * 1.0 + COALESCE((%s), 0) * 0.8) / POW(DATEDIFF(NOW(), articles.created_at) + 2, 1.5)",
-		r.db.ToSQL(func(tx *gorm.DB) *gorm.DB { return likeSub.Find(nil) }),
-		r.db.ToSQL(func(tx *gorm.DB) *gorm.DB { return commentSub.Find(nil) }),
-	)
-
-	return query.Select("articles.*, " + hotExpr + " AS hot_score").Order("hot_score DESC")
-}
-
-// FindByID 根据 ID 查找文章
+// FindByID 通过 ID 查找文章
 func (r *articleRepository) FindByID(id uint) (*entity.Article, error) {
 	var article entity.Article
-	err := r.db.Where("id = ? AND deleted_at IS NULL", id).First(&article).Error
+	err := r.db.First(&article, id).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 		return nil, err
@@ -105,138 +32,179 @@ func (r *articleRepository) FindByID(id uint) (*entity.Article, error) {
 	return &article, nil
 }
 
-// IncrementViewCount 增加文章浏览量
-func (r *articleRepository) IncrementViewCount(articleID uint) error {
-	return r.db.Exec("UPDATE articles SET views = views + 1 WHERE id = ?", articleID).Error
+// ListPublic 前台获取已发布的文章列表
+func (r *articleRepository) ListPublic(page, pageSize int, sort string, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error) {
+	var list []*entity.Article
+	var total int64
+
+	query := r.db.Model(&entity.Article{}).Where("status = ?", 1)
+
+	if categoryID > 0 {
+		query = query.Where("type_id = ?", categoryID)
+	}
+	if keyword != "" {
+		query = query.Where("title LIKE ? OR summary LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+
+	// 如果有标签筛选，需要子查询
+	if len(tagIDs) > 0 {
+		tagStr := strings.Trim(strings.Replace(fmt.Sprint(tagIDs), " ", ",", -1), "[]")
+		subQuery := r.db.Table("tag_articles").
+			Select("article_id").
+			Where("tag_id IN (" + tagStr + ")").
+			Group("article_id")
+		query = query.Where("id IN (?)", subQuery)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 排序
+	switch sort {
+	case "popular":
+		// 热度排序：点赞数×3 + 浏览量×1 + 评论数×2
+		query = query.Order("(like_count * 3 + views * 1 + comment_count * 2) DESC")
+	default:
+		query = query.Order("created_at DESC")
+	}
+
+	err := query.Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
 }
 
-// LikeArticle 点赞
-func (r *articleRepository) LikeArticle(articleID, userID uint) error {
-	like := entity.Like{ArticleID: articleID, UserID: userID}
-	return r.db.Create(&like).Error
+// ListAdmin 后台获取文章列表
+func (r *articleRepository) ListAdmin(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error) {
+	var list []*entity.Article
+	var total int64
+
+	query := r.db.Model(&entity.Article{})
+
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+	if categoryID > 0 {
+		query = query.Where("type_id = ?", categoryID)
+	}
+	if keyword != "" {
+		query = query.Where("title LIKE ? OR summary LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+	if len(tagIDs) > 0 {
+		tagStr := strings.Trim(strings.Replace(fmt.Sprint(tagIDs), " ", ",", -1), "[]")
+		subQuery := r.db.Table("tag_articles").
+			Select("article_id").
+			Where("tag_id IN (" + tagStr + ")").
+			Group("article_id")
+		query = query.Where("id IN (?)", subQuery)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.Order("created_at DESC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&list).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
 }
 
-// IsLike 检查是否点赞过
-func (r *articleRepository) IsLike(articleID, userID uint) (bool, error) {
+// Create 创建文章
+func (r *articleRepository) Create(article *entity.Article) error {
+	return r.db.Create(article).Error
+}
+
+// Update 更新文章
+func (r *articleRepository) Update(article *entity.Article) error {
+	return r.db.Save(article).Error
+}
+
+// Delete 删除文章（软删除）
+func (r *articleRepository) Delete(id uint) error {
+	return r.db.Delete(&entity.Article{}, id).Error
+}
+
+// IncrementViews 增加浏览量
+func (r *articleRepository) IncrementViews(id uint) error {
+	return r.db.Model(&entity.Article{}).Where("id = ?", id).
+		UpdateColumn("views", gorm.Expr("views + 1")).Error
+}
+
+// GetTagsByArticleID 获取文章关联的标签
+func (r *articleRepository) GetTagsByArticleID(articleID uint) ([]*entity.Tag, error) {
+	var tags []*entity.Tag
+	err := r.db.Table("tags").
+		Joins("JOIN tag_articles ON tags.id = tag_articles.tag_id").
+		Where("tag_articles.article_id = ?", articleID).
+		Find(&tags).Error
+	if err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+// SetArticleTags 设置文章标签（先删后插）
+func (r *articleRepository) SetArticleTags(articleID uint, tagIDs []uint) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 删除旧关联
+		if err := tx.Where("article_id = ?", articleID).Delete(&entity.TagArticle{}).Error; err != nil {
+			return err
+		}
+		// 插入新关联
+		for _, tagID := range tagIDs {
+			ta := entity.TagArticle{
+				ArticleID: articleID,
+				TagID:     tagID,
+			}
+			if err := tx.Create(&ta).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// FindLiked 查询用户是否已点赞
+func (r *articleRepository) FindLiked(articleID, userID uint) (bool, error) {
 	var count int64
-	err := r.db.Model(&entity.Like{}).Where("article_id = ? AND user_id = ?", articleID, userID).Count(&count).Error
+	err := r.db.Model(&entity.Like{}).
+		Where("article_id = ? AND user_id = ?", articleID, userID).
+		Count(&count).Error
 	if err != nil {
 		return false, err
 	}
 	return count > 0, nil
 }
 
-// UnlikeArticle 取消点赞
-func (r *articleRepository) UnlikeArticle(articleID, userID uint) error {
-	result := r.db.Where("article_id = ? AND user_id = ?", articleID, userID).Delete(&entity.Like{})
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+// CreateLike 创建点赞
+func (r *articleRepository) CreateLike(articleID, userID uint) error {
+	like := entity.Like{
+		ArticleID: articleID,
+		UserID:    userID,
 	}
-	return result.Error
+	return r.db.Create(&like).Error
 }
 
-// BatchLikeStatus 批量查询用户是否点赞
-func (r *articleRepository) BatchLikeStatus(userID uint, articleIDs []uint) (map[uint]bool, error) {
-	if len(articleIDs) == 0 {
-		return make(map[uint]bool), nil
-	}
-
-	var likes []entity.Like
-	if err := r.db.Where("user_id = ? AND article_id IN ?", userID, articleIDs).Find(&likes).Error; err != nil {
-		return nil, err
-	}
-
-	likedMap := make(map[uint]bool, len(articleIDs))
-	for _, id := range articleIDs {
-		likedMap[id] = false
-	}
-	for _, l := range likes {
-		likedMap[l.ArticleID] = true
-	}
-	return likedMap, nil
+// DeleteLike 取消点赞
+func (r *articleRepository) DeleteLike(articleID, userID uint) error {
+	return r.db.Where("article_id = ? AND user_id = ?", articleID, userID).
+		Delete(&entity.Like{}).Error
 }
 
-// GetLikeCounts 批量获取点赞数
-func (r *articleRepository) GetLikeCounts(articleIDs []uint) (map[uint]uint, error) {
-	if len(articleIDs) == 0 {
-		return make(map[uint]uint), nil
-	}
-
-	type countResult struct {
-		ArticleID uint
-		Count     uint
-	}
-
-	var results []countResult
-	sql := "SELECT article_id, COUNT(*) AS count FROM likes WHERE article_id IN ? GROUP BY article_id"
-	if err := r.db.Raw(sql, articleIDs).Scan(&results).Error; err != nil {
-		return nil, err
-	}
-
-	countMap := make(map[uint]uint, len(articleIDs))
-	for _, id := range articleIDs {
-		countMap[id] = 0
-	}
-	for _, r := range results {
-		countMap[r.ArticleID] = r.Count
-	}
-	return countMap, nil
+// IncrementLikeCount 增加点赞计数
+func (r *articleRepository) IncrementLikeCount(articleID uint) error {
+	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
+		UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
 }
 
-// GetCommentCounts 批量获取评论数
-func (r *articleRepository) GetCommentCounts(articleIDs []uint) (map[uint]uint, error) {
-	if len(articleIDs) == 0 {
-		return make(map[uint]uint), nil
-	}
-
-	type countResult struct {
-		ArticleID uint
-		Count     uint
-	}
-
-	var results []countResult
-	sql := "SELECT article_id, COUNT(*) AS count FROM comments WHERE article_id IN ? AND deleted_at IS NULL GROUP BY article_id"
-	if err := r.db.Raw(sql, articleIDs).Scan(&results).Error; err != nil {
-		return nil, err
-	}
-
-	countMap := make(map[uint]uint, len(articleIDs))
-	for _, id := range articleIDs {
-		countMap[id] = 0
-	}
-	for _, r := range results {
-		countMap[r.ArticleID] = r.Count
-	}
-	return countMap, nil
-}
-
-// ListCategories 获取所有分类
-func (r *articleRepository) ListCategories() ([]entity.Category, error) {
-	var categories []entity.Category
-	err := r.db.Where("status = 1").Find(&categories).Error
-	return categories, err
-}
-
-// ListTags 获取所有标签
-func (r *articleRepository) ListTags() ([]entity.Tag, error) {
-	var tags []entity.Tag
-	err := r.db.Where("status = 1").Find(&tags).Error
-	return tags, err
-}
-
-// parseNumericIDs 解析逗号分隔的ID字符串
-func parseNumericIDs(s string) []uint {
-	if strings.TrimSpace(s) == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	ids := make([]uint, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		var id uint
-		if _, err := fmt.Sscanf(p, "%d", &id); err == nil && id > 0 {
-			ids = append(ids, id)
-		}
-	}
-	return ids
+// DecrementLikeCount 减少点赞计数
+func (r *articleRepository) DecrementLikeCount(articleID uint) error {
+	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
+		UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
 }

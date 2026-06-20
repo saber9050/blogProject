@@ -1,17 +1,34 @@
 package article
 
 import (
+	"blog/internal/constant"
+	"blog/internal/model/dto/request"
 	"blog/internal/model/dto/response"
+	"blog/internal/model/entity"
 	repo "blog/internal/repository/article"
 	"blog/pkg/errors"
-	"blog/pkg/logger"
+	minioPkg "blog/pkg/minio"
+	"context"
 	"fmt"
-
-	"go.uber.org/zap"
+	"mime/multipart"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
+// articleService 文章服务实现
 type articleService struct {
 	articleRepo repo.ArticleRepository
+	userRepo    interface {
+		FindByID(id uint) (*entity.User, error)
+	}
+	categoryRepo interface {
+		FindByID(id uint) (*entity.Category, error)
+	}
+	tagRepo interface {
+		FindByIDs(ids []uint) ([]*entity.Tag, error)
+	}
+	minio *minioPkg.Client
 }
 
 // NewArticleService 创建文章服务实例
@@ -19,191 +36,333 @@ func NewArticleService(articleRepo repo.ArticleRepository) ArticleService {
 	return &articleService{articleRepo: articleRepo}
 }
 
-// ListArticles 文章列表
-func (s *articleService) ListArticles(params *repo.ArticleListParams) (*response.ArticleListResponse, error) {
-	articles, total, err := s.articleRepo.ListArticles(params)
-	if err != nil {
-		return nil, fmt.Errorf("查询文章列表失败: %w", err)
-	}
+// SetDeps 设置依赖（避免循环依赖）
+func (s *articleService) SetDeps(userRepo interface {
+	FindByID(id uint) (*entity.User, error)
+}, categoryRepo interface {
+	FindByID(id uint) (*entity.Category, error)
+}, tagRepo interface {
+	FindByIDs(ids []uint) ([]*entity.Tag, error)
+}, minio *minioPkg.Client) {
+	s.userRepo = userRepo
+	s.categoryRepo = categoryRepo
+	s.tagRepo = tagRepo
+	s.minio = minio
+}
 
-	if len(articles) == 0 {
-		return &response.ArticleListResponse{
-			List:     []response.ArticleListItem{},
-			Total:    total,
-			Page:     params.Page,
-			PageSize: params.PageSize,
-		}, nil
-	}
-
-	// 提取文章ID列表
-	articleIDs := make([]uint, len(articles))
-	for i, a := range articles {
-		articleIDs[i] = a.ID
-	}
-
-	// 批量获取点赞数、评论数
-	likeCounts, _ := s.articleRepo.GetLikeCounts(articleIDs)
-	commentCounts, _ := s.articleRepo.GetCommentCounts(articleIDs)
-
-	// 批量获取用户点赞状态（仅登录用户）
-	var likedMap map[uint]bool
-	if params.UserID != 0 {
-		likedMap, _ = s.articleRepo.BatchLikeStatus(params.UserID, articleIDs)
-	}
-	if likedMap == nil {
-		likedMap = make(map[uint]bool)
-	}
-
-	// 组装列表项
-	list := make([]response.ArticleListItem, len(articles))
-	for i, a := range articles {
-		isLiked := false
-		if v, ok := likedMap[a.ID]; ok {
-			isLiked = v
-		}
-		list[i] = response.ArticleListItem{
-			ID:           a.ID,
-			Title:        a.Title,
-			Summary:      a.Summary,
-			CoverURL:     a.CoverURL,
-			AuthorID:     a.UserID,
-			AuthorName:   "",                      // 需 JOIN 用户表，这里留空，实际使用时可在 repository 层 JOIN
-			Category:     response.CategoryInfo{}, // 同上
-			Tags:         []response.TagInfo{},
-			ViewCount:    a.Views,
-			LikeCount:    likeCounts[a.ID],
-			CommentCount: commentCounts[a.ID],
-			IsLiked:      isLiked,
-			CreatedAt:    a.CreatedAt,
+// buildArticleResponse 构建文章响应对象
+func (s *articleService) buildArticleResponse(article *entity.Article, userID uint) (*response.ArticleItem, error) {
+	// 获取作者信息
+	authorName := ""
+	if s.userRepo != nil {
+		user, err := s.userRepo.FindByID(article.UserID)
+		if err == nil && user != nil {
+			authorName = user.UserName
 		}
 	}
 
-	return &response.ArticleListResponse{
-		List:     list,
-		Total:    total,
-		Page:     params.Page,
-		PageSize: params.PageSize,
+	// 获取分类信息
+	var cat *response.CategoryInfo
+	if s.categoryRepo != nil {
+		category, err := s.categoryRepo.FindByID(article.TypeID)
+		if err == nil && category != nil {
+			cat = &response.CategoryInfo{
+				ID:   category.ID,
+				Name: category.CategoryName,
+			}
+		}
+	}
+
+	// 获取标签信息
+	var tags []*response.TagInfo
+	if s.tagRepo != nil {
+		tagList, err := s.articleRepo.GetTagsByArticleID(article.ID)
+		if err == nil {
+			for _, t := range tagList {
+				tags = append(tags, &response.TagInfo{
+					ID:   t.ID,
+					Name: t.TagName,
+				})
+			}
+		}
+	}
+
+	// 获取点赞状态
+	isLiked := false
+	if userID > 0 {
+		liked, err := s.articleRepo.FindLiked(article.ID, userID)
+		if err == nil {
+			isLiked = liked
+		}
+	}
+
+	return &response.ArticleItem{
+		ID:           article.ID,
+		Title:        article.Title,
+		Summary:      article.Summary,
+		CoverURL:     article.CoverURL,
+		Status:       article.Status,
+		Views:        article.Views,
+		LikeCount:    article.LikeCount,
+		CommentCount: article.CommentCount,
+		IsLiked:      isLiked,
+		AuthorName:   authorName,
+		Category:     cat,
+		Tags:         tags,
+		CreatedAt:    article.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	}, nil
 }
 
-// GetArticleDetail 文章详情（访问时自动增加浏览量）
-func (s *articleService) GetArticleDetail(articleID, userID uint) (*response.ArticleDetail, error) {
-	// 先增加浏览量，再查询文章，确保返回最新数据
-	if err := s.articleRepo.IncrementViewCount(articleID); err != nil {
-		logger.Warn("浏览量+1失败", zap.Uint("articleID", articleID), zap.Error(err))
-	}
-
-	article, err := s.articleRepo.FindByID(articleID)
+// ListPublic 前台获取文章列表
+func (s *articleService) ListPublic(page, pageSize int, sort string, categoryID uint, tagIDs []uint, keyword string, userID uint) (*response.ArticleListResponse, error) {
+	list, total, err := s.articleRepo.ListPublic(page, pageSize, sort, categoryID, tagIDs, keyword)
 	if err != nil {
-		return nil, fmt.Errorf("查询文章详情失败: %w", err)
-	}
-	if article == nil {
-		return nil, errors.ErrResourceNotFound
+		return nil, fmt.Errorf("获取文章列表失败: %w", err)
 	}
 
-	// 获取点赞数、评论数
-	likeCounts, _ := s.articleRepo.GetLikeCounts([]uint{articleID})
-	commentCounts, _ := s.articleRepo.GetCommentCounts([]uint{articleID})
-
-	// 获取用户点赞状态
-	isLiked := false
-	if userID != 0 {
-		likedMap, _ := s.articleRepo.BatchLikeStatus(userID, []uint{articleID})
-		isLiked = likedMap[articleID]
+	var items []*response.ArticleItem
+	for _, article := range list {
+		item, err := s.buildArticleResponse(article, userID)
+		if err != nil {
+			continue
+		}
+		items = append(items, item)
 	}
 
-	detail := &response.ArticleDetail{
-		ArticleListItem: response.ArticleListItem{
-			ID:           article.ID,
-			Title:        article.Title,
-			Summary:      article.Summary,
-			CoverURL:     article.CoverURL,
-			AuthorID:     article.UserID,
-			AuthorName:   "",
-			Category:     response.CategoryInfo{},
-			Tags:         []response.TagInfo{},
-			ViewCount:    article.Views,
-			LikeCount:    likeCounts[articleID],
-			CommentCount: commentCounts[articleID],
-			IsLiked:      isLiked,
-			CreatedAt:    article.CreatedAt,
-		},
-		Content: article.Content,
-	}
-
-	return detail, nil
+	return &response.ArticleListResponse{
+		List:     items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
 }
 
-// LikeArticle 点赞
-func (s *articleService) LikeArticle(articleID, userID uint) error {
-	// 先检查文章是否存在
-	article, err := s.articleRepo.FindByID(articleID)
+// GetDetail 获取文章详情
+func (s *articleService) GetDetail(id uint, userID uint) (*response.ArticleDetailResponse, error) {
+	article, err := s.articleRepo.FindByID(id)
 	if err != nil {
-		return fmt.Errorf("查询文章失败: %w", err)
+		return nil, fmt.Errorf("查找文章失败: %w", err)
 	}
 	if article == nil {
-		return errors.ErrResourceNotFound
+		return nil, errors.New(errors.CodeNotFound, "文章不存在")
 	}
 
-	// 检查是否点赞过
-	ok, err := s.articleRepo.IsLike(articleID, userID)
+	// 增加浏览量
+	_ = s.articleRepo.IncrementViews(id)
+
+	item, err := s.buildArticleResponse(article, userID)
 	if err != nil {
-		return fmt.Errorf("检查是否点赞过失败: %w", err)
-	}
-	if ok {
-		return errors.ErrForbidden
+		return nil, err
 	}
 
-	if err := s.articleRepo.LikeArticle(articleID, userID); err != nil {
+	return &response.ArticleDetailResponse{
+		ArticleItem: *item,
+		Content:     article.Content,
+	}, nil
+}
+
+// LikeArticle 点赞文章
+func (s *articleService) LikeArticle(articleID, userID uint) error {
+	article, err := s.articleRepo.FindByID(articleID)
+	if err != nil {
+		return fmt.Errorf("查找文章失败: %w", err)
+	}
+	if article == nil {
+		return errors.New(errors.CodeNotFound, "文章不存在")
+	}
+
+	// 检查是否已点赞
+	liked, err := s.articleRepo.FindLiked(articleID, userID)
+	if err != nil {
+		return fmt.Errorf("检查点赞状态失败: %w", err)
+	}
+	if liked {
+		return errors.New(errors.CodeBadRequest, "您已经点赞过该文章")
+	}
+
+	// 创建点赞记录
+	if err := s.articleRepo.CreateLike(articleID, userID); err != nil {
 		return fmt.Errorf("点赞失败: %w", err)
 	}
-	return nil
+	// 增加点赞计数
+	return s.articleRepo.IncrementLikeCount(articleID)
 }
 
 // UnlikeArticle 取消点赞
 func (s *articleService) UnlikeArticle(articleID, userID uint) error {
-	if err := s.articleRepo.UnlikeArticle(articleID, userID); err != nil {
-		return errors.ErrResourceNotFound // 未点赞
+	article, err := s.articleRepo.FindByID(articleID)
+	if err != nil {
+		return fmt.Errorf("查找文章失败: %w", err)
 	}
+	if article == nil {
+		return errors.New(errors.CodeNotFound, "文章不存在")
+	}
+
+	// 检查是否已点赞
+	liked, err := s.articleRepo.FindLiked(articleID, userID)
+	if err != nil {
+		return fmt.Errorf("检查点赞状态失败: %w", err)
+	}
+	if !liked {
+		return errors.New(errors.CodeBadRequest, "您尚未点赞该文章")
+	}
+
+	// 删除点赞记录
+	if err := s.articleRepo.DeleteLike(articleID, userID); err != nil {
+		return fmt.Errorf("取消点赞失败: %w", err)
+	}
+	// 减少点赞计数
+	return s.articleRepo.DecrementLikeCount(articleID)
+}
+
+// AdminList 后台获取文章列表
+func (s *articleService) AdminList(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) (*response.ArticleListResponse, error) {
+	list, total, err := s.articleRepo.ListAdmin(page, pageSize, status, categoryID, tagIDs, keyword)
+	if err != nil {
+		return nil, fmt.Errorf("获取文章列表失败: %w", err)
+	}
+
+	var items []*response.ArticleItem
+	for _, article := range list {
+		item, err := s.buildArticleResponse(article, 0)
+		if err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+
+	return &response.ArticleListResponse{
+		List:     items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
+}
+
+// AdminCreate 后台创建文章
+func (s *articleService) AdminCreate(req *request.CreateArticleRequest, userID uint) (*response.CreateArticleResponse, error) {
+	// 验证分类是否存在
+	if s.categoryRepo != nil {
+		category, err := s.categoryRepo.FindByID(req.TypeID)
+		if err != nil {
+			return nil, fmt.Errorf("查找分类失败: %w", err)
+		}
+		if category == nil {
+			return nil, errors.New(errors.CodeBadRequest, "分类不存在")
+		}
+	}
+
+	article := &entity.Article{
+		UserID:   userID,
+		Title:    req.Title,
+		Content:  req.Content,
+		CoverURL: req.CoverURL,
+		Summary:  req.Summary,
+		TypeID:   req.TypeID,
+		Status:   req.Status,
+	}
+
+	if err := s.articleRepo.Create(article); err != nil {
+		return nil, fmt.Errorf("创建文章失败: %w", err)
+	}
+
+	// 关联标签
+	if len(req.TagIDs) > 0 {
+		if err := s.articleRepo.SetArticleTags(article.ID, req.TagIDs); err != nil {
+			return nil, fmt.Errorf("关联标签失败: %w", err)
+		}
+	}
+
+	return &response.CreateArticleResponse{ID: article.ID}, nil
+}
+
+// AdminUpdate 后台更新文章
+func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest) error {
+	article, err := s.articleRepo.FindByID(id)
+	if err != nil {
+		return fmt.Errorf("查找文章失败: %w", err)
+	}
+	if article == nil {
+		return errors.New(errors.CodeNotFound, "文章不存在")
+	}
+
+	// 验证分类是否存在
+	if s.categoryRepo != nil {
+		category, err := s.categoryRepo.FindByID(req.TypeID)
+		if err != nil {
+			return fmt.Errorf("查找分类失败: %w", err)
+		}
+		if category == nil {
+			return errors.New(errors.CodeBadRequest, "分类不存在")
+		}
+	}
+
+	article.Title = req.Title
+	article.Content = req.Content
+	article.CoverURL = req.CoverURL
+	article.Summary = req.Summary
+	article.TypeID = req.TypeID
+	article.Status = req.Status
+
+	if err := s.articleRepo.Update(article); err != nil {
+		return fmt.Errorf("更新文章失败: %w", err)
+	}
+
+	// 更新标签关联
+	if req.TagIDs != nil {
+		if err := s.articleRepo.SetArticleTags(id, req.TagIDs); err != nil {
+			return fmt.Errorf("关联标签失败: %w", err)
+		}
+	}
+
 	return nil
 }
 
-// BatchLikeStatus 批量查询点赞状态
-func (s *articleService) BatchLikeStatus(userID uint, articleIDs []uint) (*response.LikeStatusMap, error) {
-	likedMap, err := s.articleRepo.BatchLikeStatus(userID, articleIDs)
+// AdminDelete 后台删除文章
+func (s *articleService) AdminDelete(id uint) error {
+	article, err := s.articleRepo.FindByID(id)
 	if err != nil {
-		return nil, fmt.Errorf("批量查询点赞状态失败: %w", err)
+		return fmt.Errorf("查找文章失败: %w", err)
 	}
-	return &response.LikeStatusMap{LikedMap: likedMap}, nil
+	if article == nil {
+		return errors.New(errors.CodeNotFound, "文章不存在")
+	}
+	return s.articleRepo.Delete(id)
 }
 
-// IncrementViewCount 增加文章浏览量（直接更新MySQL）
-func (s *articleService) IncrementViewCount(articleID uint) error {
-	return s.articleRepo.IncrementViewCount(articleID)
-}
+// UploadImage 上传图片
+func (s *articleService) UploadImage(fileHeader *multipart.FileHeader) (string, error) {
+	if s.minio == nil {
+		return "", errors.New(errors.CodeInternalError, "图片服务未配置")
+	}
 
-// ListCategories 获取所有分类
-func (s *articleService) ListCategories() ([]response.CategoryInfo, error) {
-	categories, err := s.articleRepo.ListCategories()
-	if err != nil {
-		return nil, fmt.Errorf("获取分类列表失败: %w", err)
+	if fileHeader.Size > constant.ImageMaxLength {
+		str := fmt.Sprintf("图片大小不能超过 %dMB", constant.ImageMaxLength>>20)
+		return "", errors.New(errors.CodeBadRequest, str)
 	}
-	result := make([]response.CategoryInfo, len(categories))
-	for i, c := range categories {
-		result[i] = response.CategoryInfo{ID: c.ID, Name: c.CategoryName}
-	}
-	return result, nil
-}
 
-// ListTags 获取所有标签
-func (s *articleService) ListTags() ([]response.TagInfo, error) {
-	tags, err := s.articleRepo.ListTags()
+	src, err := fileHeader.Open()
 	if err != nil {
-		return nil, fmt.Errorf("获取标签列表失败: %w", err)
+		return "", fmt.Errorf("打开上传文件失败: %w", err)
 	}
-	result := make([]response.TagInfo, len(tags))
-	for i, t := range tags {
-		result[i] = response.TagInfo{ID: t.ID, Name: t.TagName}
+	defer src.Close()
+
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if _, ok := constant.AllowedImageExt[ext]; !ok {
+		return "", errors.New(errors.CodeBadRequest, "不支持的文件格式")
 	}
-	return result, nil
+
+	objectName := fmt.Sprintf("articles/%s/%s%s",
+		time.Now().Format("20060102"),
+		fmt.Sprintf("%d", time.Now().UnixNano()),
+		ext)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	fileKey, err := s.minio.Upload(ctx, objectName, src, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
+	if err != nil {
+		return "", fmt.Errorf("上传图片失败: %w", err)
+	}
+	return s.minio.GetFileURL(fileKey), nil
 }

@@ -3,7 +3,6 @@ package article
 import (
 	"blog/internal/middleware"
 	"blog/internal/model/dto/request"
-	articleRepo "blog/internal/repository/article"
 	articleSvc "blog/internal/service/article"
 	"blog/pkg/response"
 	"strconv"
@@ -12,188 +11,106 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Controller 文章控制器
-type Controller struct {
+// ArticleController 文章控制器
+type ArticleController struct {
 	articleService articleSvc.ArticleService
 }
 
-// NewController 创建文章控制器
-func NewController(articleService articleSvc.ArticleService) *Controller {
-	return &Controller{
-		articleService: articleService,
-	}
+// NewArticleController 创建文章控制器
+func NewArticleController(articleService articleSvc.ArticleService) *ArticleController {
+	return &ArticleController{articleService: articleService}
 }
 
-// ListArticles 文章列表
-func (c *Controller) ListArticles(ctx *gin.Context) {
-	var req request.ListArticlesReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "请求参数错误")
+// ListArticles 获取文章列表
+func (ctrl *ArticleController) ListArticles(c *gin.Context) {
+	var query request.ArticleListQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		response.BadRequest(c, "请求参数错误")
 		return
 	}
-
-	// 默认值
-	if req.Page <= 0 {
-		req.Page = 1
+	if query.Page <= 0 {
+		query.Page = 1
 	}
-	if req.PageSize <= 0 {
-		req.PageSize = 10
+	if query.PageSize <= 0 {
+		query.PageSize = 10
 	}
-	if req.PageSize > 20 {
-		req.PageSize = 20
-	}
-	if req.Sort == "" {
-		req.Sort = "latest"
+	if query.Sort == "" {
+		query.Sort = "latest"
 	}
 
-	// 获取登录用户ID（可选）
-	userID := middleware.GetUserID(ctx)
-
-	// 解析标签ID
+	// 解析 tag_ids
 	var tagIDs []uint
-	if req.TagIDs != "" {
-		for _, s := range strings.Split(req.TagIDs, ",") {
-			s = strings.TrimSpace(s)
-			if id, err := strconv.ParseUint(s, 10, 64); err == nil && id > 0 {
+	if query.TagIDs != "" {
+		parts := strings.Split(query.TagIDs, ",")
+		for _, p := range parts {
+			id, err := strconv.ParseUint(strings.TrimSpace(p), 10, 32)
+			if err == nil {
 				tagIDs = append(tagIDs, uint(id))
 			}
 		}
 	}
 
-	params := &articleRepo.ArticleListParams{
-		Page:       req.Page,
-		PageSize:   req.PageSize,
-		Sort:       req.Sort,
-		CategoryID: req.CategoryID,
-		TagIDs:     tagIDs,
-		Keyword:    req.Keyword,
-		UserID:     userID,
-	}
-
-	result, err := c.articleService.ListArticles(params)
+	userID := middleware.GetUserID(c)
+	result, err := ctrl.articleService.ListPublic(query.Page, query.PageSize, query.Sort, query.CategoryID, tagIDs, query.Keyword, userID)
 	if err != nil {
-		response.BizError(ctx, err)
+		response.BizError(c, err)
 		return
 	}
 
-	response.Success(ctx, result)
+	response.Success(c, result)
 }
 
-// GetArticleDetail 文章详情
-func (c *Controller) GetArticleDetail(ctx *gin.Context) {
-	idStr := ctx.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil || id == 0 {
-		response.BadRequest(ctx, "文章ID无效")
-		return
-	}
-
-	// 获取登录用户ID（可选）
-	userID := middleware.GetUserID(ctx)
-
-	detail, err := c.articleService.GetArticleDetail(uint(id), userID)
+// GetArticleDetail 获取文章详情
+func (ctrl *ArticleController) GetArticleDetail(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		response.BizError(ctx, err)
+		response.BadRequest(c, "无效的文章ID")
 		return
 	}
 
-	response.Success(ctx, detail)
+	userID := middleware.GetUserID(c)
+	result, err := ctrl.articleService.GetDetail(uint(id), userID)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+
+	response.Success(c, result)
 }
 
 // LikeArticle 点赞文章
-func (c *Controller) LikeArticle(ctx *gin.Context) {
-	userID := middleware.GetUserID(ctx)
-	if userID == 0 {
-		response.Unauthorized(ctx, "请先登录")
+func (ctrl *ArticleController) LikeArticle(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "无效的文章ID")
 		return
 	}
 
-	idStr := ctx.Param("id")
-	articleID, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil || articleID == 0 {
-		response.BadRequest(ctx, "文章ID无效")
+	userID := middleware.GetUserID(c)
+	if err := ctrl.articleService.LikeArticle(uint(id), userID); err != nil {
+		response.BizError(c, err)
 		return
 	}
 
-	if err := c.articleService.LikeArticle(uint(articleID), userID); err != nil {
-		response.BizError(ctx, err)
-		return
-	}
-
-	response.Success(ctx, "点赞成功")
+	response.Success(c, nil)
 }
 
 // UnlikeArticle 取消点赞
-func (c *Controller) UnlikeArticle(ctx *gin.Context) {
-	userID := middleware.GetUserID(ctx)
-	if userID == 0 {
-		response.Unauthorized(ctx, "请先登录")
-		return
-	}
-
-	idStr := ctx.Param("id")
-	articleID, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil || articleID == 0 {
-		response.BadRequest(ctx, "文章ID无效")
-		return
-	}
-
-	if err := c.articleService.UnlikeArticle(uint(articleID), userID); err != nil {
-		response.BizError(ctx, err)
-		return
-	}
-
-	response.Success(ctx, "取消点赞成功")
-}
-
-// BatchLikeStatus 批量查询点赞状态
-func (c *Controller) BatchLikeStatus(ctx *gin.Context) {
-	userID := middleware.GetUserID(ctx)
-	if userID == 0 {
-		response.Unauthorized(ctx, "请先登录")
-		return
-	}
-
-	idsStr := ctx.Query("ids")
-	if idsStr == "" {
-		response.Success(ctx, map[string]interface{}{"liked_map": map[uint]bool{}})
-		return
-	}
-
-	// 解析ID列表
-	var articleIDs []uint
-	for _, s := range strings.Split(idsStr, ",") {
-		s = strings.TrimSpace(s)
-		if id, err := strconv.ParseUint(s, 10, 64); err == nil && id > 0 {
-			articleIDs = append(articleIDs, uint(id))
-		}
-	}
-
-	result, err := c.articleService.BatchLikeStatus(userID, articleIDs)
+func (ctrl *ArticleController) UnlikeArticle(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		response.BizError(ctx, err)
+		response.BadRequest(c, "无效的文章ID")
 		return
 	}
 
-	response.Success(ctx, result)
-}
-
-// ListCategories 获取分类列表
-func (c *Controller) ListCategories(ctx *gin.Context) {
-	categories, err := c.articleService.ListCategories()
-	if err != nil {
-		response.BizError(ctx, err)
+	userID := middleware.GetUserID(c)
+	if err := ctrl.articleService.UnlikeArticle(uint(id), userID); err != nil {
+		response.BizError(c, err)
 		return
 	}
-	response.Success(ctx, categories)
-}
 
-// ListTags 获取标签列表
-func (c *Controller) ListTags(ctx *gin.Context) {
-	tags, err := c.articleService.ListTags()
-	if err != nil {
-		response.BizError(ctx, err)
-		return
-	}
-	response.Success(ctx, tags)
+	response.Success(c, nil)
 }

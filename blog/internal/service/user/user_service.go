@@ -287,3 +287,83 @@ func randomName() string {
 	}
 	return fmt.Sprintf("%d_%s", time.Now().Unix(), hex.EncodeToString(buf))
 }
+
+// ListNormalUsers 获取普通用户列表（后台）
+func (s *userService) ListNormalUsers(page, pageSize int) ([]*response.AdminUserResponse, int64, error) {
+	list, total, err := s.userRepo.ListByRole(0, page, pageSize)
+	if err != nil {
+		return nil, 0, fmt.Errorf("获取用户列表失败: %w", err)
+	}
+
+	var result []*response.AdminUserResponse
+	for _, u := range list {
+		result = append(result, &response.AdminUserResponse{
+			ID:        u.ID,
+			UserName:  u.UserName,
+			AvatarURL: u.AvatarURL,
+			Status:    u.Status,
+			CreatedAt: u.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		})
+	}
+	return result, total, nil
+}
+
+// AdminCreateUser 后台创建用户
+func (s *userService) AdminCreateUser(req *request.AdminCreateUserRequest) (uint, error) {
+	// 检查昵称是否已存在
+	exists, err := s.authSvc.IsExistsName(req.UserName)
+	if err != nil {
+		return 0, fmt.Errorf("检查昵称失败: %w", err)
+	}
+	if exists {
+		return 0, errors.New(errors.CodeBadRequest, "昵称已存在")
+	}
+
+	// 检查账号是否已存在
+	exists, err = s.authSvc.IsExistsAccount(req.Account)
+	if err != nil {
+		return 0, fmt.Errorf("检查账号失败: %w", err)
+	}
+	if exists {
+		return 0, errors.New(errors.CodeBadRequest, "账号已存在")
+	}
+
+	// 加密密码
+	hash, err := utils.HashPassword(req.Password)
+	if err != nil {
+		return 0, fmt.Errorf("密码加密失败: %w", err)
+	}
+
+	// 创建用户（role_id = 0）
+	if err := s.userRepo.Create(req.UserName, req.Account, hash, req.Status); err != nil {
+		return 0, fmt.Errorf("创建用户失败: %w", err)
+	}
+
+	return 0, nil
+}
+
+// AdminUpdateStatus 后台更新用户状态
+func (s *userService) AdminUpdateStatus(id uint, status int8) error {
+	user, err := s.userRepo.FindByID(id)
+	if err != nil {
+		return fmt.Errorf("查找用户失败: %w", err)
+	}
+	if user == nil {
+		return errors.New(errors.CodeNotFound, "用户不存在")
+	}
+
+	return s.userRepo.UpdateProfile(id, map[string]interface{}{"status": status})
+}
+
+// AdminDeleteUser 后台删除用户
+func (s *userService) AdminDeleteUser(id uint) error {
+	user, err := s.userRepo.FindByID(id)
+	if err != nil {
+		return fmt.Errorf("查找用户失败: %w", err)
+	}
+	if user == nil {
+		return errors.New(errors.CodeNotFound, "用户不存在")
+	}
+
+	return s.userRepo.Delete(id)
+}

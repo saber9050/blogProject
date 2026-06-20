@@ -3,13 +3,18 @@ package app
 import (
 	"blog/internal/api"
 	auth3 "blog/internal/cache/auth"
+	"blog/internal/model/entity"
 	"blog/internal/repository/article"
 	"blog/internal/repository/auth"
+	"blog/internal/repository/category"
 	commentRepo "blog/internal/repository/comment"
+	"blog/internal/repository/tag"
 	userRepo "blog/internal/repository/user"
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
+	categorySvc "blog/internal/service/category"
 	commentSvc "blog/internal/service/comment"
+	tagSvc "blog/internal/service/tag"
 	userSvc "blog/internal/service/user"
 	"blog/pkg/config"
 	"blog/pkg/database"
@@ -120,17 +125,16 @@ func (a *App) initDatabase() error {
 	//自动迁移数据库表
 	//logger.Info("开始数据库迁移...")
 	if err := a.mysqlDB.AutoMigrate(
-	// 用户相关
-	//&entity.User{},
+		// 用户相关
+		&entity.User{},
 
-	// 文章相关
-	//&entity.Article{},
-	//&entity.Tag{},
-	//&entity.TagArticle{},
-	//&entity.Category{},
-	//&entity.Comment{},
-	//&entity.Like{},
-
+		// 文章相关
+		&entity.Article{},
+		&entity.Tag{},
+		&entity.TagArticle{},
+		&entity.Category{},
+		&entity.Comment{},
+		&entity.Like{},
 	); err != nil {
 		logger.Warn("数据库迁移警告", zap.Error(err))
 	} else {
@@ -167,15 +171,22 @@ func (a *App) initDependencies() {
 	uRepo := userRepo.NewUserRepository(a.mysqlDB)
 	aRepo := article.NewArticleRepository(a.mysqlDB)
 	cRepo := commentRepo.NewCommentRepository(a.mysqlDB)
+	catRepo := category.NewCategoryRepository(a.mysqlDB)
+	tRepo := tag.NewTagRepository(a.mysqlDB)
 
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
 	uSvc := userSvc.NewUserService(uRepo, a.minioClient, authSvc, authCache)
 	aSvc := articleSvc.NewArticleService(aRepo)
 	cSvc := commentSvc.NewCommentService(cRepo)
+	catSvc := categorySvc.NewCategoryService(catRepo)
+	tSvc := tagSvc.NewTagService(tRepo)
+
+	// 设置文章服务的额外依赖（用户、分类、标签仓库和 MinIO）
+	aSvc.SetDeps(uRepo, catRepo, tRepo, a.minioClient)
 
 	// 创建 Router
-	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc)
+	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc)
 }
 
 // initRouter 初始化路由

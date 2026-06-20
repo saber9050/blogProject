@@ -25,4 +25,12 @@ type UserService interface {
 	// UpLoadImage 上传图片文件
 	// 返回 fileKey , error
 	UpLoadImage(fileHeader *multipart.FileHeader) (string, error)
+	// ListNormalUsers 获取普通用户列表（后台）
+	ListNormalUsers(page, pageSize int) ([]*response.AdminUserResponse, int64, error)
+	// AdminCreateUser 后台创建用户
+	AdminCreateUser(req *request.AdminCreateUserRequest) (uint, error)
+	// AdminUpdateStatus 后台更新用户状态
+	AdminUpdateStatus(id uint, status int8) error
+	// AdminDeleteUser 后台删除用户
+	AdminDeleteUser(id uint) error
 }

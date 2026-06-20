@@ -1,6 +1,7 @@
 package api
 
 import (
+	"blog/internal/api/v1/admin"
 	"blog/internal/api/v1/article"
 	"blog/internal/api/v1/auth"
 	"blog/internal/api/v1/comment"
@@ -8,7 +9,9 @@ import (
 	"blog/internal/middleware"
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
+	categorySvc "blog/internal/service/category"
 	commentSvc "blog/internal/service/comment"
+	tagSvc "blog/internal/service/tag"
 	user2 "blog/internal/service/user"
 
 	"github.com/gin-gonic/gin"
@@ -16,32 +19,36 @@ import (
 
 // Router 路由
 type Router struct {
-	authCtrl    *auth.Controller
-	userCtrl    *user.Controller
-	articleCtrl *article.Controller
-	commentCtrl *comment.Controller
-	articleSvc  articleSvc.ArticleService
+	authCtrl       *auth.Controller
+	userCtrl       *user.Controller
+	articleCtrl    *article.ArticleController
+	adminCtrl      *admin.AdminController
+	commentCtrl    *comment.Controller
+	articleService articleSvc.ArticleService
 }
 
 // NewRouter 创建路由
 func NewRouter(
 	authSvc auth2.AuthService,
 	userSvc user2.UserService,
-	articleSvc articleSvc.ArticleService,
+	articleService articleSvc.ArticleService,
 	commentSvc commentSvc.CommentService,
+	categoryService categorySvc.CategoryService,
+	tagService tagSvc.TagService,
 ) *Router {
 	return &Router{
-		authCtrl:    auth.NewController(authSvc),
-		userCtrl:    user.NewController(userSvc),
-		articleCtrl: article.NewController(articleSvc),
-		commentCtrl: comment.NewController(commentSvc),
-		articleSvc:  articleSvc,
+		authCtrl:       auth.NewController(authSvc),
+		userCtrl:       user.NewController(userSvc),
+		articleCtrl:    article.NewArticleController(articleService),
+		adminCtrl:      admin.NewAdminController(userSvc, articleService, categoryService, tagService),
+		commentCtrl:    comment.NewController(commentSvc),
+		articleService: articleService,
 	}
 }
 
 // ArticleSvc 获取文章服务（供 worker 使用）
 func (r *Router) ArticleSvc() articleSvc.ArticleService {
-	return r.articleSvc
+	return r.articleService
 }
 
 // Setup 设置路由
@@ -62,15 +69,24 @@ func (r *Router) Setup(engine *gin.Engine) {
 	// API v1 路由组
 	v1 := engine.Group("/api/v1")
 	{
-		// 认证路由组
+		// 认证路由组（无需认证或登录认证）
 		r.authCtrl.RegisterRouter(v1)
-		// 用户路由组
+
+		// 用户路由组（需登录）
 		r.userCtrl.RegisterRouter(v1)
 		r.userCtrl.RegisterRouterPublic(v1)
-		// 文章路由组
-		r.articleCtrl.RegisterRouter(v1)
-		r.articleCtrl.RegisterPublicRouter(v1)
+
+		// 前台文章路由（部分接口可选认证）
+		r.articleCtrl.RegisterRoutes(v1)
+
 		// 评论路由组（挂载在 /articles 路径下）
 		r.commentCtrl.RegisterRouter(v1.Group("/articles"))
+
+		// 后台管理路由组（需管理员认证，role_id = 1）
+		adminGroup := v1.Group("/admin")
+		adminGroup.Use(middleware.Auth(1))
+		{
+			r.adminCtrl.RegisterRoutes(adminGroup)
+		}
 	}
 }

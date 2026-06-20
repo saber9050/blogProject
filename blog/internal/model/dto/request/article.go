@@ -1,26 +1,34 @@
 package request
 
-// ListArticlesReq 文章列表请求
-type ListArticlesReq struct {
-	Page       int    `form:"page" json:"page"`               // 页码，默认1
-	PageSize   int    `form:"page_size" json:"page_size"`     // 每页条数，默认10，最大20
-	Sort       string `form:"sort" json:"sort"`               // 排序：latest / popular
-	CategoryID *uint  `form:"category_id" json:"category_id"` // 分类筛选
-	TagIDs     string `form:"tag_ids" json:"tag_ids"`         // 标签筛选，逗号分隔 "1,2,3"
-	Keyword    string `form:"keyword" json:"keyword"`         // 标题搜索关键字
+// CreateArticleRequest 创建文章请求
+type CreateArticleRequest struct {
+	Title    string `json:"title" binding:"required,max=200"`
+	TypeID   uint   `json:"type_id" binding:"required"`
+	TagIDs   []uint `json:"tag_ids"`
+	CoverURL string `json:"cover_url"`
+	Summary  string `json:"summary" binding:"max=500"`
+	Content  string `json:"content" binding:"required"`
+	Status   int8   `json:"status" binding:"oneof=0 1"`
 }
 
-// GetArticleDetailReq 文章详情请求（可选登录态）
-type GetArticleDetailReq struct {
-	ID uint `uri:"id" json:"id"`
+// UpdateArticleRequest 更新文章请求
+type UpdateArticleRequest struct {
+	Title    string `json:"title" binding:"required,max=200"`
+	TypeID   uint   `json:"type_id" binding:"required"`
+	TagIDs   []uint `json:"tag_ids"`
+	CoverURL string `json:"cover_url"`
+	Summary  string `json:"summary" binding:"max=500"`
+	Content  string `json:"content" binding:"required"`
+	Status   int8   `json:"status" binding:"oneof=0 1"`
 }
 
-// LikeArticleReq 点赞/取消点赞（参数从路径获取）
-type LikeArticleReq struct {
-	ArticleID uint `uri:"id" json:"article_id"`
-}
-
-// BatchLikeStatusReq 批量查询点赞状态
-type BatchLikeStatusReq struct {
-	IDs string `form:"ids" json:"ids"` // 逗号分隔的文章ID列表
+// ArticleListQuery 文章列表查询参数
+type ArticleListQuery struct {
+	Page       int    `form:"page"`
+	PageSize   int    `form:"page_size"`
+	Sort       string `form:"sort"`
+	CategoryID uint   `form:"category_id"`
+	TagIDs     string `form:"tag_ids"`
+	Keyword    string `form:"keyword"`
+	Status     int    `form:"status"`
 }
