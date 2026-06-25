@@ -17,6 +17,12 @@ type commentService struct {
 		IncrementCommentCount(articleID uint) error
 		DecrementCommentCount(articleID uint) error
 	}
+	minioClient interface {
+		GetFileURL(fileKey string) string
+	}
+	userRepo interface {
+		FindByID(id uint) (*entity.User, error)
+	}
 }
 
 // NewCommentService 创建评论服务实例
@@ -30,6 +36,20 @@ func (s *commentService) SetArticleRepo(articleRepo interface {
 	DecrementCommentCount(articleID uint) error
 }) {
 	s.articleRepo = articleRepo
+}
+
+// SetMinioClient 设置MinIO客户端依赖（用于生成完整头像URL）
+func (s *commentService) SetMinioClient(minioClient interface {
+	GetFileURL(fileKey string) string
+}) {
+	s.minioClient = minioClient
+}
+
+// SetUserRepo 设置用户仓库依赖（用于获取用户信息）
+func (s *commentService) SetUserRepo(userRepo interface {
+	FindByID(id uint) (*entity.User, error)
+}) {
+	s.userRepo = userRepo
 }
 
 // ListComments 获取一级评论列表
@@ -157,11 +177,28 @@ func (s *commentService) CreateComment(articleID, userID uint, req *request.Crea
 		}
 	}
 
+	// 查询用户信息（用于返回用户名和头像）
+	userName := ""
+	avatarURL := ""
+	if s.userRepo != nil {
+		user, err := s.userRepo.FindByID(userID)
+		if err == nil && user != nil {
+			userName = user.UserName
+			avatarURL = user.AvatarURL
+			// 转换头像URL为完整URL
+			if s.minioClient != nil && avatarURL != "" {
+				avatarURL = s.minioClient.GetFileURL(avatarURL)
+			}
+		}
+	}
+
 	// 构建返回项（使用 GORM 自动填充的 ID 和 CreatedAt）
 	item := &response.CommentItem{
 		ID:          comment.ID,
 		Content:     comment.Content,
 		UserID:      userID,
+		UserName:    userName,
+		AvatarURL:   avatarURL,
 		ParentID:    comment.ParentID,
 		ReplyToName: comment.ReplyToName,
 		CreatedAt:   comment.CreatedAt,
@@ -202,12 +239,17 @@ func (s *commentService) DeleteComment(commentID, userID uint, roleID int8) erro
 // entityToItem 将实体转为响应DTO
 func (s *commentService) entityToItem(c *entity.Comment, childrenTotal int) response.CommentItem {
 	isDeleted := c.DeletedAt.Valid
+	avatarURL := c.AvatarURL
+	// 如果MinIO客户端存在且头像URL不为空，则转换为完整URL
+	if s.minioClient != nil && avatarURL != "" {
+		avatarURL = s.minioClient.GetFileURL(avatarURL)
+	}
 	item := response.CommentItem{
 		ID:            c.ID,
 		Content:       c.Content,
 		UserID:        c.UserID,
 		UserName:      c.UserName,
-		AvatarURL:     c.AvatarURL,
+		AvatarURL:     avatarURL,
 		ParentID:      c.ParentID,
 		ReplyToName:   c.ReplyToName,
 		IsDeleted:     isDeleted,
