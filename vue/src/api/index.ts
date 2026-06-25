@@ -18,11 +18,19 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
+      // 清除token，但保留用户数据以便显示
       localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      if (window.location.pathname !== '/login') {
+      
+      const currentPath = window.location.pathname
+      // 需要认证的页面路径
+      const protectedPaths = ['/admin', '/profile']
+      const isProtectedPath = protectedPaths.some(path => currentPath.startsWith(path))
+      
+      // 如果当前在需要认证的页面，则重定向到登录页
+      if (isProtectedPath && currentPath !== '/login') {
         window.location.href = '/login'
       }
+      // 对于公开页面（如首页），不清除用户数据，让页面以未登录状态显示
     }
     return Promise.reject(err)
   }

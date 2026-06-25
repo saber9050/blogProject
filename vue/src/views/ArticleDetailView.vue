@@ -80,7 +80,7 @@
               </div>
 
               <!-- 二级评论 -->
-              <div v-if="c._childrenTotal > 0 || c._childrenLoaded" class="comment-children">
+              <div v-if="c._childrenLoaded" class="comment-children">
                 <div
                   v-for="sub in c._children"
                   :key="sub.id"
@@ -127,7 +127,7 @@
               </div>
 
               <!-- 展开二级评论 -->
-              <div v-if="c._childrenTotal > 0 && !c._childrenLoaded" class="comment-load-more">
+              <div v-if="!c._childrenLoaded && c._childrenTotal > 0" class="comment-load-more">
                 <button class="comment-btn" @click="toggleChildren(c)">
                   展开 {{ c._childrenTotal }} 条回复
                 </button>

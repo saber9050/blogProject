@@ -50,6 +50,11 @@ const router = createRouter({
       path: '/profile',
       name: 'profile',
       component: ProfileView
+    },
+    // 重定向所有未匹配的路由到首页
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/'
     }
   ]
 })

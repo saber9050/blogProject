@@ -184,6 +184,9 @@ func (a *App) initDependencies() {
 	// 设置文章服务的额外依赖（用户、分类、标签仓库和 MinIO）
 	aSvc.SetDeps(uRepo, catRepo, tRepo, a.minioClient)
 
+	// 设置评论服务的文章仓库依赖（用于更新评论计数）
+	cSvc.SetArticleRepo(aRepo)
+
 	// 创建 Router
 	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc)
 }

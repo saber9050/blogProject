@@ -273,13 +273,15 @@ const loadArticles = async () => {
   try {
     const res = await api.get('/articles', { params: buildParams() })
     const data = res.data.data || res.data
-    const list = (data.list || data || []).map((item: any) => ({
-      ...item,
-      // 兼容旧字段名
-      views: item.view_count ?? item.views ?? 0,
-      likes: item.like_count ?? item.likes ?? 0,
-      author: item.author_name ?? item.author ?? ''
-    }))
+    const list = (data.list || data || []).map((item: any) => {
+      // 保留原始数据，只添加兼容字段
+      return {
+        ...item,
+        views: item.view_count ?? item.views ?? 0,
+        likes: item.like_count ?? item.likes ?? 0,
+        author: item.author_name ?? item.author ?? ''
+      }
+    })
 
     if (currentPage.value === 1) {
       articles.value = list
@@ -314,13 +316,17 @@ const toggleLike = async (item: Article) => {
     return
   }
 
-  const wasLiked = item.is_liked
+  const wasLiked = !!item.is_liked
   const oldLikeCount = item.like_count || item.likes || 0
 
   // 乐观更新 UI
   item.is_liked = !wasLiked
-  if (item.like_count !== undefined) item.like_count += wasLiked ? -1 : 1
-  if (item.likes !== undefined) item.likes += wasLiked ? -1 : 1
+  if (item.like_count !== undefined) {
+    item.like_count = wasLiked ? oldLikeCount - 1 : oldLikeCount + 1
+  }
+  if (item.likes !== undefined) {
+    item.likes = wasLiked ? oldLikeCount - 1 : oldLikeCount + 1
+  }
 
   try {
     if (wasLiked) {
@@ -328,11 +334,16 @@ const toggleLike = async (item: Article) => {
     } else {
       await api.post(`/articles/${item.id}/like`)
     }
-  } catch {
+  } catch (error) {
+    console.error('点赞操作失败:', error)
     // 失败回滚
     item.is_liked = wasLiked
-    if (item.like_count !== undefined) item.like_count = oldLikeCount
-    if (item.likes !== undefined) item.likes = oldLikeCount
+    if (item.like_count !== undefined) {
+      item.like_count = oldLikeCount
+    }
+    if (item.likes !== undefined) {
+      item.likes = oldLikeCount
+    }
   }
 }
 

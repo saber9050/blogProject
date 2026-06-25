@@ -1,7 +1,6 @@
 package tag
 
 import (
-	"blog/internal/model/dto/response"
 	tagSvc "blog/internal/service/tag"
 	"blog/pkg/response"
 

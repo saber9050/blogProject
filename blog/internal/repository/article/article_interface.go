@@ -34,4 +34,8 @@ type ArticleRepository interface {
 	IncrementLikeCount(articleID uint) error
 	// DecrementLikeCount 减少点赞计数
 	DecrementLikeCount(articleID uint) error
+	// IncrementCommentCount 增加评论计数
+	IncrementCommentCount(articleID uint) error
+	// DecrementCommentCount 减少评论计数
+	DecrementCommentCount(articleID uint) error
 }

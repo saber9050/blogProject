@@ -13,11 +13,23 @@ import (
 
 type commentService struct {
 	commentRepo commentRepo.CommentRepository
+	articleRepo interface {
+		IncrementCommentCount(articleID uint) error
+		DecrementCommentCount(articleID uint) error
+	}
 }
 
 // NewCommentService 创建评论服务实例
 func NewCommentService(repo commentRepo.CommentRepository) CommentService {
 	return &commentService{commentRepo: repo}
+}
+
+// SetArticleRepo 设置文章仓库依赖（避免循环依赖）
+func (s *commentService) SetArticleRepo(articleRepo interface {
+	IncrementCommentCount(articleID uint) error
+	DecrementCommentCount(articleID uint) error
+}) {
+	s.articleRepo = articleRepo
 }
 
 // ListComments 获取一级评论列表
@@ -138,6 +150,13 @@ func (s *commentService) CreateComment(articleID, userID uint, req *request.Crea
 		return nil, fmt.Errorf("发表评论失败: %w", err)
 	}
 
+	// 增加文章评论计数
+	if s.articleRepo != nil {
+		if err := s.articleRepo.IncrementCommentCount(articleID); err != nil {
+			fmt.Printf("增加文章评论计数失败: %v\n", err)
+		}
+	}
+
 	// 构建返回项（使用 GORM 自动填充的 ID 和 CreatedAt）
 	item := &response.CommentItem{
 		ID:          comment.ID,
@@ -168,6 +187,13 @@ func (s *commentService) DeleteComment(commentID, userID uint, roleID int8) erro
 
 	if err := s.commentRepo.DeleteComment(commentID); err != nil {
 		return fmt.Errorf("删除评论失败: %w", err)
+	}
+
+	// 减少文章评论计数
+	if s.articleRepo != nil {
+		if err := s.articleRepo.DecrementCommentCount(comment.ArticleID); err != nil {
+			fmt.Printf("减少文章评论计数失败: %v\n", err)
+		}
 	}
 
 	return nil

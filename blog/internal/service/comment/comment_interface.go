@@ -15,4 +15,9 @@ type CommentService interface {
 	CreateComment(articleID, userID uint, req *request.CreateCommentReq) (*response.CommentItem, error)
 	// DeleteComment 删除评论
 	DeleteComment(commentID, userID uint, roleID int8) error
+	// SetArticleRepo 设置文章仓库依赖（避免循环依赖）
+	SetArticleRepo(articleRepo interface {
+		IncrementCommentCount(articleID uint) error
+		DecrementCommentCount(articleID uint) error
+	})
 }

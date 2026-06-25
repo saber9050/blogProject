@@ -1,7 +1,6 @@
 package category
 
 import (
-	"blog/internal/model/dto/response"
 	categorySvc "blog/internal/service/category"
 	"blog/pkg/response"
 

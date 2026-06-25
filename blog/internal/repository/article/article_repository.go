@@ -208,3 +208,15 @@ func (r *articleRepository) DecrementLikeCount(articleID uint) error {
 	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
 		UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
 }
+
+// IncrementCommentCount 增加评论计数
+func (r *articleRepository) IncrementCommentCount(articleID uint) error {
+	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
+		UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
+}
+
+// DecrementCommentCount 减少评论计数
+func (r *articleRepository) DecrementCommentCount(articleID uint) error {
+	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
+		UpdateColumn("comment_count", gorm.Expr("comment_count - 1")).Error
+}

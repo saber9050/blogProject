@@ -4,7 +4,9 @@ import (
 	"blog/internal/api/v1/admin"
 	"blog/internal/api/v1/article"
 	"blog/internal/api/v1/auth"
+	"blog/internal/api/v1/category"
 	"blog/internal/api/v1/comment"
+	"blog/internal/api/v1/tag"
 	"blog/internal/api/v1/user"
 	"blog/internal/middleware"
 	articleSvc "blog/internal/service/article"
@@ -24,6 +26,8 @@ type Router struct {
 	articleCtrl    *article.ArticleController
 	adminCtrl      *admin.AdminController
 	commentCtrl    *comment.Controller
+	categoryCtrl   *category.CategoryController
+	tagCtrl        *tag.TagController
 	articleService articleSvc.ArticleService
 }
 
@@ -42,6 +46,8 @@ func NewRouter(
 		articleCtrl:    article.NewArticleController(articleService),
 		adminCtrl:      admin.NewAdminController(userSvc, articleService, categoryService, tagService),
 		commentCtrl:    comment.NewController(commentSvc),
+		categoryCtrl:   category.NewCategoryController(categoryService),
+		tagCtrl:        tag.NewTagController(tagService),
 		articleService: articleService,
 	}
 }
@@ -74,10 +80,15 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 用户路由组（需登录）
 		r.userCtrl.RegisterRouter(v1)
-		r.userCtrl.RegisterRouterPublic(v1)
 
 		// 前台文章路由（部分接口可选认证）
 		r.articleCtrl.RegisterRoutes(v1)
+
+		// 前台分类路由（无需认证）
+		r.categoryCtrl.RegisterRoutes(v1)
+
+		// 前台标签路由（无需认证）
+		r.tagCtrl.RegisterRoutes(v1)
 
 		// 评论路由组（挂载在 /articles 路径下）
 		r.commentCtrl.RegisterRouter(v1.Group("/articles"))
