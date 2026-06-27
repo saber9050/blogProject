@@ -14,7 +14,6 @@
             <span v-else class="hero-avatar__placeholder">&#128100;</span>
           </div>
           <h1 class="hero-name">{{ author.user_name}}</h1>
-          <p class="hero-title">Backend Developer · Go Developer</p>
           <p class="hero-quote">"热爱构建高性能、高可维护性的系统"</p>
           <div class="hero-tags">
             <span class="hero-tag">Go</span>
@@ -22,6 +21,7 @@
             <span class="hero-tag">AI</span>
             <span class="hero-tag">Docker</span>
             <span class="hero-tag">Redis</span>
+            <span class="hero-tag">MySQL</span>
           </div>
           <div class="hero-social">
             <a href="https://github.com/yourusername" class="hero-social-btn" target="_blank">
