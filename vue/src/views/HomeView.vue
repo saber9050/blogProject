@@ -107,28 +107,61 @@
         </div>
 
         <aside class="home-sidebar">
-          <div class="author-card">
-            <img
-              v-if="author.avatar_url"
-              :src="author.avatar_url"
-              class="author-card__avatar"
-            />
-            <span v-else class="author-card__avatar author-card__avatar--placeholder">&#128100;</span>
-            <h3 class="author-card__name">{{ author.nickname || '博主' }}</h3>
-            <p class="author-card__bio">{{ author.bio || '这个人很懒，什么都没写~' }}</p>
-            <div class="author-card__stats">
-              <div class="author-card__stat">
-                <span class="author-card__stat-num">{{ author.article_count }}</span>
-                <span class="author-card__stat-label">文章</span>
+          <div class="sidebar-card">
+            <div class="sidebar-avatar">
+              <img
+                v-if="author.avatar_url"
+                :src="author.avatar_url"
+                class="sidebar-avatar__img"
+              />
+              <span v-else class="sidebar-avatar__placeholder">&#128100;</span>
+            </div>
+            <h3 class="sidebar-name">{{ author.nickname || '邹鑫鹏' }}</h3>
+            <p class="sidebar-title">Backend Developer</p>
+            
+            <div class="sidebar-location">
+              <span class="sidebar-location__icon">&#128205;</span>
+              <span class="sidebar-location__text">中国</span>
+            </div>
+            
+            <div class="sidebar-tags">
+              <span class="sidebar-tag">Go</span>
+              <span class="sidebar-tag">AI</span>
+              <span class="sidebar-tag">Vue</span>
+            </div>
+            
+            <div class="sidebar-stats">
+              <div class="sidebar-stat">
+                <span class="sidebar-stat__value">{{ author.article_count || 32 }}</span>
+                <span class="sidebar-stat__label">文章</span>
               </div>
-              <div class="author-card__stat">
-                <span class="author-card__stat-num">{{ author.total_views }}</span>
-                <span class="author-card__stat-label">总浏览</span>
+              <div class="sidebar-stat">
+                <span class="sidebar-stat__value">{{ formatNumber(author.total_views || 102000) }}</span>
+                <span class="sidebar-stat__label">阅读</span>
               </div>
-              <div class="author-card__stat">
-                <span class="author-card__stat-num">{{ author.total_likes }}</span>
-                <span class="author-card__stat-label">总点赞</span>
+              <div class="sidebar-stat">
+                <span class="sidebar-stat__value">{{ author.total_likes || 580 }}</span>
+                <span class="sidebar-stat__label">点赞</span>
               </div>
+            </div>
+            
+            <div class="sidebar-section">
+              <h4 class="sidebar-section__title">最近文章</h4>
+              <div class="sidebar-articles">
+                <div class="sidebar-article">Go Runtime</div>
+                <div class="sidebar-article">Redis</div>
+                <div class="sidebar-article">AI Agent</div>
+              </div>
+            </div>
+            
+            <div class="sidebar-section">
+              <h4 class="sidebar-section__title">最近更新</h4>
+              <p class="sidebar-update">2026.06</p>
+            </div>
+            
+            <div class="sidebar-motto">
+              <p class="sidebar-motto__text">Stay Hungry.</p>
+              <p class="sidebar-motto__text">Stay Foolish.</p>
             </div>
           </div>
         </aside>
@@ -207,6 +240,13 @@ const author = ref<Author>({
   total_views: 0,
   total_likes: 0
 })
+
+const formatNumber = (num: number) => {
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1) + 'K'
+  }
+  return num.toString()
+}
 
 // 获取当前登录用户信息
 const getCurrentUser = () => {
@@ -552,6 +592,173 @@ onMounted(async () => {
   font-size: 0.74rem;
   color: var(--text-faint);
   margin-top: 2px;
+}
+
+/* ========== Sidebar ========== */
+.home-sidebar { position: sticky; top: 76px; }
+
+.sidebar-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius-lg);
+  padding: 24px 20px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.sidebar-avatar {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  border: 3px solid rgba(16, 185, 129, 0.3);
+  overflow: hidden;
+}
+
+.sidebar-avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sidebar-avatar__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 2rem;
+  background: linear-gradient(135deg, var(--primary-100), var(--primary-200));
+  color: var(--primary-600);
+}
+
+.sidebar-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+.sidebar-title {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.sidebar-location {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.sidebar-location__icon {
+  font-size: 1rem;
+}
+
+.sidebar-location__text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.sidebar-tags {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.sidebar-tag {
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--primary-700);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.sidebar-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.sidebar-stat {
+  text-align: center;
+  padding: 12px 8px;
+  background: rgba(248, 250, 252, 0.7);
+  border-radius: 10px;
+}
+
+.sidebar-stat__value {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--primary-700);
+  margin-bottom: 2px;
+}
+
+.sidebar-stat__label {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.sidebar-section {
+  margin-bottom: 20px;
+}
+
+.sidebar-section__title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  margin: 0 0 10px;
+}
+
+.sidebar-articles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-article {
+  padding: 8px 12px;
+  background: rgba(248, 250, 252, 0.6);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.sidebar-article:hover {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--primary-700);
+}
+
+.sidebar-update {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.sidebar-motto {
+  text-align: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-motto__text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 4px;
+  font-style: italic;
 }
 
 @media (max-width: 768px) {

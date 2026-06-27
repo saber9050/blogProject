@@ -418,66 +418,7 @@
           </div>
         </div>
 
-        <!-- 侧边栏 -->
-        <aside class="about-sidebar">
-          <div class="sidebar-card">
-            <div class="sidebar-avatar">
-              <img
-                v-if="author.avatar_url"
-                :src="author.avatar_url"
-                class="sidebar-avatar__img"
-              />
-              <span v-else class="sidebar-avatar__placeholder">&#128100;</span>
-            </div>
-            <h3 class="sidebar-name">{{ author.user_name || '邹鑫鹏' }}</h3>
-            <p class="sidebar-title">Backend Developer</p>
-            
-            <div class="sidebar-location">
-              <span class="sidebar-location__icon">&#128205;</span>
-              <span class="sidebar-location__text">中国</span>
-            </div>
-            
-            <div class="sidebar-tags">
-              <span class="sidebar-tag">Go</span>
-              <span class="sidebar-tag">AI</span>
-              <span class="sidebar-tag">Vue</span>
-            </div>
-            
-            <div class="sidebar-stats">
-              <div class="sidebar-stat">
-                <span class="sidebar-stat__value">{{ author.article_count || 32 }}</span>
-                <span class="sidebar-stat__label">文章</span>
-              </div>
-              <div class="sidebar-stat">
-                <span class="sidebar-stat__value">{{ formatNumber(author.total_views || 102000) }}</span>
-                <span class="sidebar-stat__label">阅读</span>
-              </div>
-              <div class="sidebar-stat">
-                <span class="sidebar-stat__value">{{ author.total_likes || 580 }}</span>
-                <span class="sidebar-stat__label">点赞</span>
-              </div>
-            </div>
-            
-            <div class="sidebar-section">
-              <h4 class="sidebar-section__title">最近文章</h4>
-              <div class="sidebar-articles">
-                <div class="sidebar-article">Go Runtime</div>
-                <div class="sidebar-article">Redis</div>
-                <div class="sidebar-article">AI Agent</div>
-              </div>
-            </div>
-            
-            <div class="sidebar-section">
-              <h4 class="sidebar-section__title">最近更新</h4>
-              <p class="sidebar-update">2026.06</p>
-            </div>
-            
-            <div class="sidebar-motto">
-              <p class="sidebar-motto__text">Stay Hungry.</p>
-              <p class="sidebar-motto__text">Stay Foolish.</p>
-            </div>
-          </div>
-        </aside>
+
       </div>
     </main>
   </div>
