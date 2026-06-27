@@ -231,7 +231,7 @@ const commentTotal = ref(0)
 const commentHasMore = ref(false)
 
 // 当前登录用户信息
-const currentUser = ref<{ id: number; user_name: string; role_id: number } | null>(null)
+const currentUser = ref<{ id: number; user_name: string; role_id: number; avatar_url?: string } | null>(null)
 
 const loadCurrentUser = () => {
   try {
@@ -308,7 +308,7 @@ const submitComment = async () => {
       id: data.id,
       content: newComment.value,
       user_name: currentUser.value.user_name,
-      avatar_url: '',
+      avatar_url: currentUser.value.avatar_url || '',
       user_id: currentUser.value.id,
       parent_id: null,
       reply_to_name: '',

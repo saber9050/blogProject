@@ -14,11 +14,6 @@ type ImageCaptchaResponse struct {
 	Base64    string `json:"base_64"`
 }
 
-// RefreshJWTTokenResponse 刷新 JWT TOKEN 响应
-type RefreshJWTTokenResponse struct {
-	Token string `json:"token"`
-}
-
 // IsExistsResponse 检测是否存在响应
 type IsExistsResponse struct {
 	IsExists bool `json:"is_exists"` // false 不存在

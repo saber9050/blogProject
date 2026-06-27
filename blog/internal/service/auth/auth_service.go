@@ -198,16 +198,6 @@ func (s *authService) SendEmailCaptcha(req *request.SendEmailCaptchaRequest) err
 	return nil
 }
 
-// RefreshJWTToken 刷新 JWT Token
-func (s *authService) RefreshJWTToken(req *request.RefreshJWTTokenRequest) (*response.RefreshJWTTokenResponse, error) {
-	// 刷新token
-	newToken, err := jwt.RefreshToken(req.Token)
-	if err != nil {
-		return nil, fmt.Errorf("刷新token失败:%s", err)
-	}
-	return &response.RefreshJWTTokenResponse{Token: newToken}, nil
-}
-
 // ReSetPassword 重设密码
 func (s *authService) ReSetPassword(req *request.ResetPasswordRequest) error {
 	// 找到用户

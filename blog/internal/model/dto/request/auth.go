@@ -29,11 +29,6 @@ type SendEmailCaptchaRequest struct {
 	Purpose string `json:"purpose" binding:"required,oneof=login reset_password reset_email add_email"` // 目的：登录，重设密码，重设邮箱
 }
 
-// RefreshJWTTokenRequest 刷新 JWT TOKEN 请求
-type RefreshJWTTokenRequest struct {
-	Token string `json:"token" binding:"required"`
-}
-
 // ResetPasswordRequest 重设密码请求
 type ResetPasswordRequest struct {
 	Email       string `json:"email" binding:"required"`         // 邮箱

@@ -17,8 +17,6 @@ type AuthService interface {
 	SendImageCaptcha() (*response.ImageCaptchaResponse, error)
 	// SendEmailCaptcha 发送邮箱验证码
 	SendEmailCaptcha(req *request.SendEmailCaptchaRequest) error
-	// RefreshJWTToken 刷新 JWT Token
-	RefreshJWTToken(req *request.RefreshJWTTokenRequest) (*response.RefreshJWTTokenResponse, error)
 	// ReSetPassword 重设密码
 	ReSetPassword(req *request.ResetPasswordRequest) error
 	// Logout 登出服务

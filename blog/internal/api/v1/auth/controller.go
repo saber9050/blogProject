@@ -99,23 +99,6 @@ func (c *Controller) SendEmailCaptcha(ctx *gin.Context) {
 	})
 }
 
-// RefreshToken 刷新token
-func (c *Controller) RefreshToken(ctx *gin.Context) {
-	var req request.RefreshJWTTokenRequest
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(ctx, "请求参数错误")
-		return
-	}
-
-	authResponse, err := c.authService.RefreshJWTToken(&req)
-	if err != nil {
-		response.BizError(ctx, err)
-		return
-	}
-	response.Success(ctx, authResponse)
-}
-
 // ResetPassword 修改密码接口
 func (c *Controller) ResetPassword(ctx *gin.Context) {
 	var req request.ResetPasswordRequest
