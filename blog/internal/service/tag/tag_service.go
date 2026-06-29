@@ -93,9 +93,14 @@ func (s *tagService) Update(id uint, req *request.UpdateTagRequest) error {
 	if exists {
 		return errors.New(errors.CodeBadRequest, "标签名称已存在")
 	}
-	tag.TagName = req.Name
-	tag.Status = req.Status
-	return s.tagRepo.Update(tag)
+
+	// 构建需要更新的字段
+	fields := map[string]interface{}{
+		"name":   req.Name,
+		"status": req.Status,
+	}
+
+	return s.tagRepo.UpdateFields(id, fields)
 }
 
 // Delete 删除标签

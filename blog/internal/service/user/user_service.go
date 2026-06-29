@@ -125,7 +125,7 @@ func (s *userService) UpdateAvatar(userID uint, fileHeader *multipart.FileHeader
 func (s *userService) UpLoadImage(fileHeader *multipart.FileHeader) (string, error) {
 	// 验证文件大小
 	if fileHeader.Size > constant.ImageMaxLength {
-		str := fmt.Sprintf("头像大小不能超过 %dMB", constant.ImageMaxLength>>20)
+		str := fmt.Sprintf("图片大小不能超过 %dMB", constant.ImageMaxLength>>20)
 		return "", errors.New(errors.CodeBadRequest, str)
 	}
 
@@ -156,7 +156,7 @@ func (s *userService) UpLoadImage(fileHeader *multipart.FileHeader) (string, err
 
 	fileKey, err := s.minio.Upload(ctx, objectName, src, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
 	if err != nil {
-		return "", fmt.Errorf("上传头像失败: %w", err)
+		return "", fmt.Errorf("上传图片失败: %w", err)
 	}
 	return fileKey, nil
 }

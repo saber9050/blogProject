@@ -3,8 +3,6 @@ package article
 import (
 	"blog/internal/model/dto/request"
 	"blog/internal/model/dto/response"
-	"blog/internal/model/entity"
-	minioPkg "blog/pkg/minio"
 	"mime/multipart"
 )
 
@@ -26,14 +24,6 @@ type ArticleService interface {
 	AdminUpdate(id uint, req *request.UpdateArticleRequest) error
 	// AdminDelete 后台删除文章
 	AdminDelete(id uint) error
-	// UploadImage 上传图片（返回 URL）
+	// UploadImage 上传图片（返回完整路径）
 	UploadImage(fileHeader *multipart.FileHeader) (string, error)
-	// SetDeps 设置依赖（用户、分类、标签仓库和 MinIO）
-	SetDeps(userRepo interface {
-		FindByID(id uint) (*entity.User, error)
-	}, categoryRepo interface {
-		FindByID(id uint) (*entity.Category, error)
-	}, tagRepo interface {
-		FindByIDs(ids []uint) ([]*entity.Tag, error)
-	}, minio *minioPkg.Client)
 }

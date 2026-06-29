@@ -14,8 +14,8 @@ type TagRepository interface {
 	List(page, pageSize int, status *int, keyword string) ([]*entity.Tag, int64, error)
 	// Create 创建标签
 	Create(tag *entity.Tag) error
-	// Update 更新标签
-	Update(tag *entity.Tag) error
+	// UpdateFields 更新标签的指定字段
+	UpdateFields(id uint, fields map[string]interface{}) error
 	// Delete 删除标签（软删除）
 	Delete(id uint) error
 	// IsExistsByName 判断标签名称是否存在（排除指定ID）

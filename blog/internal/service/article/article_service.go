@@ -1,53 +1,47 @@
 package article
 
 import (
-	"blog/internal/constant"
 	"blog/internal/model/dto/request"
 	"blog/internal/model/dto/response"
 	"blog/internal/model/entity"
 	repo "blog/internal/repository/article"
+	"blog/internal/repository/category"
+	"blog/internal/repository/tag"
+	"blog/internal/repository/user"
+	user2 "blog/internal/service/user"
 	"blog/pkg/errors"
 	minioPkg "blog/pkg/minio"
-	"context"
 	"fmt"
 	"mime/multipart"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
 // articleService 文章服务实现
 type articleService struct {
-	articleRepo repo.ArticleRepository
-	userRepo    interface {
-		FindByID(id uint) (*entity.User, error)
-	}
-	categoryRepo interface {
-		FindByID(id uint) (*entity.Category, error)
-	}
-	tagRepo interface {
-		FindByIDs(ids []uint) ([]*entity.Tag, error)
-	}
-	minio *minioPkg.Client
+	articleRepo  repo.ArticleRepository
+	userRepo     user.UserRepository
+	categoryRepo category.CategoryRepository
+	tagRepo      tag.TagRepository
+	userSvc      user2.UserService
+	minio        *minioPkg.Client
 }
 
 // NewArticleService 创建文章服务实例
-func NewArticleService(articleRepo repo.ArticleRepository) ArticleService {
-	return &articleService{articleRepo: articleRepo}
-}
-
-// SetDeps 设置依赖（避免循环依赖）
-func (s *articleService) SetDeps(userRepo interface {
-	FindByID(id uint) (*entity.User, error)
-}, categoryRepo interface {
-	FindByID(id uint) (*entity.Category, error)
-}, tagRepo interface {
-	FindByIDs(ids []uint) ([]*entity.Tag, error)
-}, minio *minioPkg.Client) {
-	s.userRepo = userRepo
-	s.categoryRepo = categoryRepo
-	s.tagRepo = tagRepo
-	s.minio = minio
+func NewArticleService(
+	articleRepo repo.ArticleRepository,
+	userRepo user.UserRepository,
+	categoryRepo category.CategoryRepository,
+	tagRepo tag.TagRepository,
+	userSvc user2.UserService,
+	minio *minioPkg.Client,
+) ArticleService {
+	return &articleService{
+		articleRepo:  articleRepo,
+		userRepo:     userRepo,
+		categoryRepo: categoryRepo,
+		tagRepo:      tagRepo,
+		userSvc:      userSvc,
+		minio:        minio,
+	}
 }
 
 // buildArticleResponse 构建文章响应对象
@@ -55,20 +49,20 @@ func (s *articleService) buildArticleResponse(article *entity.Article, userID ui
 	// 获取作者信息
 	authorName := ""
 	if s.userRepo != nil {
-		user, err := s.userRepo.FindByID(article.UserID)
-		if err == nil && user != nil {
-			authorName = user.UserName
+		curuser, err := s.userRepo.FindByID(article.UserID)
+		if err == nil && curuser != nil {
+			authorName = curuser.UserName
 		}
 	}
 
 	// 获取分类信息
 	var cat *response.CategoryInfo
 	if s.categoryRepo != nil {
-		category, err := s.categoryRepo.FindByID(article.TypeID)
-		if err == nil && category != nil {
+		curcategory, err := s.categoryRepo.FindByID(article.TypeID)
+		if err == nil && curcategory != nil {
 			cat = &response.CategoryInfo{
-				ID:   category.ID,
-				Name: category.CategoryName,
+				ID:   curcategory.ID,
+				Name: curcategory.CategoryName,
 			}
 		}
 	}
@@ -100,7 +94,7 @@ func (s *articleService) buildArticleResponse(article *entity.Article, userID ui
 		ID:           article.ID,
 		Title:        article.Title,
 		Summary:      article.Summary,
-		CoverURL:     article.CoverURL,
+		CoverURL:     s.minio.GetFileURL(article.CoverURL),
 		Status:       article.Status,
 		Views:        article.Views,
 		LikeCount:    article.LikeCount,
@@ -243,20 +237,23 @@ func (s *articleService) AdminList(page, pageSize int, status *int, categoryID u
 func (s *articleService) AdminCreate(req *request.CreateArticleRequest, userID uint) (*response.CreateArticleResponse, error) {
 	// 验证分类是否存在
 	if s.categoryRepo != nil {
-		category, err := s.categoryRepo.FindByID(req.TypeID)
+		curcategory, err := s.categoryRepo.FindByID(req.TypeID)
 		if err != nil {
 			return nil, fmt.Errorf("查找分类失败: %w", err)
 		}
-		if category == nil {
+		if curcategory == nil {
 			return nil, errors.New(errors.CodeBadRequest, "分类不存在")
 		}
 	}
-
+	url, err := s.minio.ParseFileKey(req.CoverURL)
+	if err != nil {
+		return nil, errors.New(errors.CodeInternalError, "解析url失败")
+	}
 	article := &entity.Article{
 		UserID:   userID,
 		Title:    req.Title,
 		Content:  req.Content,
-		CoverURL: req.CoverURL,
+		CoverURL: url,
 		Summary:  req.Summary,
 		TypeID:   req.TypeID,
 		Status:   req.Status,
@@ -287,24 +284,29 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 	}
 
 	// 验证分类是否存在
-	if s.categoryRepo != nil {
-		category, err := s.categoryRepo.FindByID(req.TypeID)
+	if s.categoryRepo != nil && req.TypeID != 0 {
+		curcategory, err := s.categoryRepo.FindByID(req.TypeID)
 		if err != nil {
 			return fmt.Errorf("查找分类失败: %w", err)
 		}
-		if category == nil {
+		if curcategory == nil {
 			return errors.New(errors.CodeBadRequest, "分类不存在")
 		}
 	}
+	url, err := s.minio.ParseFileKey(req.CoverURL)
+	if err != nil {
+		return errors.New(errors.CodeInternalError, "解析url失败")
+	}
+	// 构建需要更新的字段
+	fields := make(map[string]interface{})
+	fields["title"] = req.Title
+	fields["content"] = req.Content
+	fields["cover_url"] = url
+	fields["summary"] = req.Summary
+	fields["type_id"] = req.TypeID
+	fields["status"] = req.Status
 
-	article.Title = req.Title
-	article.Content = req.Content
-	article.CoverURL = req.CoverURL
-	article.Summary = req.Summary
-	article.TypeID = req.TypeID
-	article.Status = req.Status
-
-	if err := s.articleRepo.Update(article); err != nil {
+	if err := s.articleRepo.UpdateFields(id, fields); err != nil {
 		return fmt.Errorf("更新文章失败: %w", err)
 	}
 
@@ -330,39 +332,11 @@ func (s *articleService) AdminDelete(id uint) error {
 	return s.articleRepo.Delete(id)
 }
 
-// UploadImage 上传图片
+// UploadImage 上传图片,返回完整路径
 func (s *articleService) UploadImage(fileHeader *multipart.FileHeader) (string, error) {
-	if s.minio == nil {
-		return "", errors.New(errors.CodeInternalError, "图片服务未配置")
-	}
-
-	if fileHeader.Size > constant.ImageMaxLength {
-		str := fmt.Sprintf("图片大小不能超过 %dMB", constant.ImageMaxLength>>20)
-		return "", errors.New(errors.CodeBadRequest, str)
-	}
-
-	src, err := fileHeader.Open()
+	str, err := s.userSvc.UpLoadImage(fileHeader)
 	if err != nil {
-		return "", fmt.Errorf("打开上传文件失败: %w", err)
+		return "", err
 	}
-	defer src.Close()
-
-	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
-	if _, ok := constant.AllowedImageExt[ext]; !ok {
-		return "", errors.New(errors.CodeBadRequest, "不支持的文件格式")
-	}
-
-	objectName := fmt.Sprintf("articles/%s/%s%s",
-		time.Now().Format("20060102"),
-		fmt.Sprintf("%d", time.Now().UnixNano()),
-		ext)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	fileKey, err := s.minio.Upload(ctx, objectName, src, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
-	if err != nil {
-		return "", fmt.Errorf("上传图片失败: %w", err)
-	}
-	return s.minio.GetFileURL(fileKey), nil
+	return s.minio.GetFileURL(str), nil
 }

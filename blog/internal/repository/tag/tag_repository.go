@@ -85,9 +85,9 @@ func (r *tagRepository) Create(tag *entity.Tag) error {
 	return r.db.Create(tag).Error
 }
 
-// Update 更新标签
-func (r *tagRepository) Update(tag *entity.Tag) error {
-	return r.db.Save(tag).Error
+// UpdateFields 更新标签的指定字段
+func (r *tagRepository) UpdateFields(id uint, fields map[string]interface{}) error {
+	return r.db.Model(&entity.Tag{}).Where("id = ?", id).Updates(fields).Error
 }
 
 // Delete 删除标签（软删除）

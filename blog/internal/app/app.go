@@ -176,13 +176,10 @@ func (a *App) initDependencies() {
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
 	uSvc := userSvc.NewUserService(uRepo, a.minioClient, authSvc, authCache)
-	aSvc := articleSvc.NewArticleService(aRepo)
+	aSvc := articleSvc.NewArticleService(aRepo, uRepo, catRepo, tRepo, uSvc, a.minioClient)
 	cSvc := commentSvc.NewCommentService(cRepo)
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
-
-	// 设置文章服务的额外依赖（用户、分类、标签仓库和 MinIO）
-	aSvc.SetDeps(uRepo, catRepo, tRepo, a.minioClient)
 
 	// 设置评论服务的文章仓库依赖（用于更新评论计数）
 	cSvc.SetArticleRepo(aRepo)

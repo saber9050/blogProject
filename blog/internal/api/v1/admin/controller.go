@@ -204,6 +204,25 @@ func (ctrl *AdminController) DeleteArticle(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// UploadImage 上传文章图片,返回完整路径
+func (ctrl *AdminController) UploadImage(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		response.BadRequest(c, "请上传头像文件")
+		return
+	}
+
+	url, err := ctrl.articleService.UploadImage(file)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"url": url,
+	})
+}
+
 // ========== 分类管理 ==========
 
 // ListCategories 获取后台分类列表

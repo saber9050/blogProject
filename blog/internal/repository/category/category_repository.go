@@ -53,7 +53,7 @@ func (r *categoryRepository) List(page, pageSize int, status *int, keyword strin
 		query = query.Where("status = ?", *status)
 	}
 	if keyword != "" {
-		query = query.Where("name LIKE ?", "%"+keyword+"%")
+		query = query.Where("category_name LIKE ?", "%"+keyword+"%")
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -75,9 +75,9 @@ func (r *categoryRepository) Create(category *entity.Category) error {
 	return r.db.Create(category).Error
 }
 
-// Update 更新分类
-func (r *categoryRepository) Update(category *entity.Category) error {
-	return r.db.Save(category).Error
+// UpdateFields 更新分类的指定字段
+func (r *categoryRepository) UpdateFields(id uint, fields map[string]interface{}) error {
+	return r.db.Model(&entity.Category{}).Where("id = ?", id).Updates(fields).Error
 }
 
 // Delete 删除分类（软删除）
@@ -88,7 +88,7 @@ func (r *categoryRepository) Delete(id uint) error {
 // IsExistsByName 判断分类名称是否存在（排除指定ID）
 func (r *categoryRepository) IsExistsByName(name string, excludeID uint) (bool, error) {
 	var count int64
-	query := r.db.Model(&entity.Category{}).Where("name = ?", name)
+	query := r.db.Model(&entity.Category{}).Where("category_name = ?", name)
 	if excludeID > 0 {
 		query = query.Where("id != ?", excludeID)
 	}

@@ -12,8 +12,8 @@ type CategoryRepository interface {
 	List(page, pageSize int, status *int, keyword string) ([]*entity.Category, int64, error)
 	// Create 创建分类
 	Create(category *entity.Category) error
-	// Update 更新分类
-	Update(category *entity.Category) error
+	// UpdateFields 更新分类的指定字段
+	UpdateFields(id uint, fields map[string]interface{}) error
 	// Delete 删除分类（软删除）
 	Delete(id uint) error
 	// IsExistsByName 判断分类名称是否存在（排除指定ID）

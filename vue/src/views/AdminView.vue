@@ -84,7 +84,7 @@
                 <td>{{ a.id }}</td>
                 <td>{{ a.title }}</td>
                 <td>
-                  <span class="cat-tag-badge">{{ a.category_name || '-' }}</span>
+                  <span class="cat-tag-badge">{{ a.category?.name || '-' }}</span>
                 </td>
                 <td>
                   <template v-if="a.tags && a.tags.length">
@@ -276,7 +276,7 @@
                 <button class="btn-sm" @click="selectCover">
                   {{ modalForm.cover_url ? '更换封面' : '选择封面' }}
                 </button>
-                <img v-if="modalForm.cover_url" :src="modalForm.cover_url" class="cover-preview" />
+                <img v-if="coverPreviewUrl || modalForm.cover_url" :src="coverPreviewUrl || modalForm.cover_url" class="cover-preview" />
               </div>
             </div>
             <div class="modal__field">
@@ -339,7 +339,7 @@ interface ArticleItem {
   id: number
   title: string
   type_id: number
-  category_name?: string
+  category?: { id: number; name: string }
   tags?: { id: number; name: string }[]
   summary: string
   content: string
@@ -398,6 +398,7 @@ let editorInstance: any = null
 
 // 封面文件上传
 const coverInputRef = ref<HTMLInputElement | null>(null)
+const coverPreviewUrl = ref('')  // 本地预览或原始URL，用于 img src 显示
 
 // 唯一性校验状态
 const nameCheckLoading = ref(false)
@@ -484,11 +485,28 @@ const selectCover = () => {
   coverInputRef.value?.click()
 }
 
-const onCoverChange = (e: Event) => {
+const onCoverChange = async (e: Event) => {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
-  // 读取本地预览 URL
-  modalForm.cover_url = URL.createObjectURL(file)
+  // 立即显示本地预览
+  coverPreviewUrl.value = URL.createObjectURL(file)
+  // 上传到服务器
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await api.post('/admin/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    modalForm.cover_url = res.data?.data?.url || res.data?.url || ''
+    // 上传成功后，预览也切换到服务器URL（避免本地blob URL过期）
+    coverPreviewUrl.value = modalForm.cover_url
+  } catch (err) {
+    console.error('封面上传失败:', err)
+    alert('封面图片上传失败，请重试')
+    coverPreviewUrl.value = ''
+    // 重置 file input，允许重新选择同一文件
+    if (coverInputRef.value) coverInputRef.value.value = ''
+  }
 }
 
 const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: any) => {
@@ -517,6 +535,7 @@ const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: a
   modalForm.cover_url = ''
   modalForm.name = ''
   selectedTags.value = []
+  coverPreviewUrl.value = ''
 
   if (item) {
     modalTitle.value = type === 'user' ? '编辑用户' : type === 'article' ? '编辑文章' : type === 'category' ? '编辑分类' : '编辑标签'
@@ -528,6 +547,7 @@ const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: a
       modalForm.summary = item.summary || ''
       modalForm.content = item.content || ''
       modalForm.cover_url = item.cover_url || ''
+      coverPreviewUrl.value = item.cover_url || ''
       modalForm.status = item.status ?? 0
       if (item.tags) {
         selectedTags.value = item.tags.map((t: any) => t.id)
@@ -590,17 +610,104 @@ const destroyEditor = () => {
   }
 }
 
-const handleSave = () => {
-  // mock: 直接关闭
-  modalVisible.value = false
-  destroyEditor()
+const handleSave = async () => {
+  try {
+    if (modalType.value === 'user') {
+      if (editingId.value) {
+        // 更新用户状态
+        await api.put(`/admin/users/${editingId.value}`, { status: modalForm.status })
+      } else {
+        // 创建用户
+        await api.post('/admin/users', {
+          user_name: modalForm.user_name,
+          account: modalForm.account,
+          password: modalForm.password,
+          status: modalForm.status
+        })
+      }
+      // 重新加载用户列表
+      const uRes = await api.get('/admin/users')
+      users.value = uRes.data.data?.list || uRes.data.data || uRes.data || []
+    } else if (modalType.value === 'article') {
+      const articleData = {
+        title: modalForm.title,
+        type_id: modalForm.type_id,
+        tag_ids: selectedTags.value,
+        cover_url: modalForm.cover_url,
+        summary: modalForm.summary,
+        content: modalForm.content,
+        status: modalForm.status
+      }
+      
+      if (editingId.value) {
+        // 更新文章
+        await api.put(`/admin/articles/${editingId.value}`, articleData)
+      } else {
+        // 创建文章
+        await api.post('/admin/articles', articleData)
+      }
+      // 重新加载文章列表
+      const aRes = await api.get('/admin/articles')
+      adminArticles.value = aRes.data.data?.list || aRes.data.data || aRes.data || []
+    } else if (modalType.value === 'category') {
+      const categoryData = {
+        name: modalForm.name,
+        status: modalForm.status
+      }
+      
+      if (editingId.value) {
+        await api.put(`/admin/categories/${editingId.value}`, categoryData)
+      } else {
+        await api.post('/admin/categories', categoryData)
+      }
+      // 重新加载分类列表
+      const cRes = await api.get('/admin/categories')
+      adminCategories.value = cRes.data.data?.list || cRes.data.data || cRes.data || []
+    } else if (modalType.value === 'tag') {
+      const tagData = {
+        name: modalForm.name,
+        status: modalForm.status
+      }
+      
+      if (editingId.value) {
+        await api.put(`/admin/tags/${editingId.value}`, tagData)
+      } else {
+        await api.post('/admin/tags', tagData)
+      }
+      // 重新加载标签列表
+      const tRes = await api.get('/admin/tags')
+      adminTags.value = tRes.data.data?.list || tRes.data.data || tRes.data || []
+    }
+    
+    modalVisible.value = false
+    destroyEditor()
+  } catch (error) {
+    console.error('保存失败:', error)
+    alert('保存失败，请重试')
+  }
 }
 
-const handleDelete = (type: string, id: number) => {
-  if (type === 'user') users.value = users.value.filter((u) => u.id !== id)
-  else if (type === 'article') adminArticles.value = adminArticles.value.filter((a) => a.id !== id)
-  else if (type === 'category') adminCategories.value = adminCategories.value.filter((c) => c.id !== id)
-  else adminTags.value = adminTags.value.filter((t) => t.id !== id)
+const handleDelete = async (type: string, id: number) => {
+  if (!confirm('确定要删除吗？')) return
+  
+  try {
+    if (type === 'user') {
+      await api.delete(`/admin/users/${id}`)
+      users.value = users.value.filter((u) => u.id !== id)
+    } else if (type === 'article') {
+      await api.delete(`/admin/articles/${id}`)
+      adminArticles.value = adminArticles.value.filter((a) => a.id !== id)
+    } else if (type === 'category') {
+      await api.delete(`/admin/categories/${id}`)
+      adminCategories.value = adminCategories.value.filter((c) => c.id !== id)
+    } else if (type === 'tag') {
+      await api.delete(`/admin/tags/${id}`)
+      adminTags.value = adminTags.value.filter((t) => t.id !== id)
+    }
+  } catch (error) {
+    console.error('删除失败:', error)
+    alert('删除失败，请重试')
+  }
 }
 
 onMounted(async () => {
@@ -611,32 +718,13 @@ onMounted(async () => {
       api.get('/admin/categories'),
       api.get('/admin/tags')
     ])
-    users.value = uRes.data.data || uRes.data || []
-    adminArticles.value = aRes.data.data || aRes.data || []
-    adminCategories.value = cRes.data.data || cRes.data || []
-    adminTags.value = tRes.data.data || tRes.data || []
-  } catch {
-    // mock data
-    users.value = [
-      { id: 1, user_name: '张三', avatar_url: '', role_id: 1, status: 1, created_at: '2026-05-01T08:00:00Z' },
-      { id: 2, user_name: '李四', avatar_url: '', role_id: 0, status: 1, created_at: '2026-05-10T10:30:00Z' },
-      { id: 3, user_name: '王五', avatar_url: '', role_id: 0, status: 0, created_at: '2026-05-15T14:00:00Z' }
-    ]
-    adminArticles.value = [
-      { id: 1, title: 'Go 语言并发编程深入解析', type_id: 1, category_name: '后端', tags: [{ id: 1, name: 'Go' }], summary: '深入理解 goroutine', content: '<p>...</p>', cover_url: '', status: 1 },
-      { id: 2, title: 'Vue 3 Composition API 实战指南', type_id: 2, category_name: '前端', tags: [{ id: 2, name: 'Vue' }], summary: 'setup 到响应式', content: '<p>...</p>', cover_url: '', status: 1 },
-      { id: 3, title: '构建高性能 RESTful API', type_id: 1, category_name: '后端', tags: [], summary: '路由设计', content: '<p>...</p>', cover_url: '', status: 0 }
-    ]
-    adminCategories.value = [
-      { id: 1, name: 'Go语言', status: 1, created_at: '2026-04-01T08:00:00Z' },
-      { id: 2, name: '前端', status: 1, created_at: '2026-04-02T08:00:00Z' },
-      { id: 3, name: '后端', status: 0, created_at: '2026-04-03T08:00:00Z' }
-    ]
-    adminTags.value = [
-      { id: 1, name: 'Go', status: 1, created_at: '2026-04-01T08:00:00Z' },
-      { id: 2, name: 'Vue', status: 1, created_at: '2026-04-02T08:00:00Z' },
-      { id: 3, name: 'Docker', status: 1, created_at: '2026-04-03T08:00:00Z' }
-    ]
+    users.value = uRes.data.data?.list || uRes.data.data || uRes.data || []
+    adminArticles.value = aRes.data.data?.list || aRes.data.data || aRes.data || []
+    adminCategories.value = cRes.data.data?.list || cRes.data.data || cRes.data || []
+    adminTags.value = tRes.data.data?.list || tRes.data.data || tRes.data || []
+  } catch (error) {
+    console.error('加载数据失败:', error)
+    alert('加载数据失败，请刷新页面重试')
   }
 })
 </script>

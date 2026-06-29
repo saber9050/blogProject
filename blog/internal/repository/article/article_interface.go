@@ -14,8 +14,8 @@ type ArticleRepository interface {
 	ListAdmin(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error)
 	// Create 创建文章
 	Create(article *entity.Article) error
-	// Update 更新文章
-	Update(article *entity.Article) error
+	// UpdateFields 更新文章的指定字段
+	UpdateFields(id uint, fields map[string]interface{}) error
 	// Delete 删除文章（软删除）
 	Delete(id uint) error
 	// IncrementViews 增加浏览量

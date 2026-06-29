@@ -13,12 +13,12 @@ type CreateArticleRequest struct {
 
 // UpdateArticleRequest 更新文章请求
 type UpdateArticleRequest struct {
-	Title    string `json:"title" binding:"required,max=200"`
-	TypeID   uint   `json:"type_id" binding:"required"`
+	Title    string `json:"title" binding:"max=200"`
+	TypeID   uint   `json:"type_id"`
 	TagIDs   []uint `json:"tag_ids"`
 	CoverURL string `json:"cover_url"`
 	Summary  string `json:"summary" binding:"max=500"`
-	Content  string `json:"content" binding:"required"`
+	Content  string `json:"content"`
 	Status   int8   `json:"status" binding:"oneof=0 1"`
 }
 

@@ -93,9 +93,14 @@ func (s *categoryService) Update(id uint, req *request.UpdateCategoryRequest) er
 	if exists {
 		return errors.New(errors.CodeBadRequest, "分类名称已存在")
 	}
-	category.CategoryName = req.Name
-	category.Status = req.Status
-	return s.categoryRepo.Update(category)
+
+	// 构建需要更新的字段
+	fields := map[string]interface{}{
+		"category_name": req.Name,
+		"status":        req.Status,
+	}
+
+	return s.categoryRepo.UpdateFields(id, fields)
 }
 
 // Delete 删除分类

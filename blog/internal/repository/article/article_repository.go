@@ -120,9 +120,9 @@ func (r *articleRepository) Create(article *entity.Article) error {
 	return r.db.Create(article).Error
 }
 
-// Update 更新文章
-func (r *articleRepository) Update(article *entity.Article) error {
-	return r.db.Save(article).Error
+// UpdateFields 更新文章的指定字段
+func (r *articleRepository) UpdateFields(id uint, fields map[string]interface{}) error {
+	return r.db.Model(&entity.Article{}).Where("id = ?", id).Updates(fields).Error
 }
 
 // Delete 删除文章（软删除）
