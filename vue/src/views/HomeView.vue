@@ -149,15 +149,11 @@
             <div class="sidebar-section">
               <h4 class="sidebar-section__title">最近文章</h4>
               <div class="sidebar-articles">
-                <div class="sidebar-article">Go Runtime</div>
-                <div class="sidebar-article">Redis</div>
-                <div class="sidebar-article">AI Agent</div>
+                <div v-for="article in sidebarArticles" :key="article.id" class="sidebar-article">
+                  {{ article.title }}
+                </div>
+                <div v-if="!sidebarArticles.length" class="sidebar-article">暂无文章</div>
               </div>
-            </div>
-            
-            <div class="sidebar-section">
-              <h4 class="sidebar-section__title">最近更新</h4>
-              <p class="sidebar-update">2026.06</p>
             </div>
             
             <div class="sidebar-motto">
@@ -219,6 +215,7 @@ interface Author {
 
 const router = useRouter()
 const articles = ref<Article[]>([])
+const sidebarArticles = ref<Article[]>([])  // 侧边栏最近文章
 const categories = ref<Category[]>([])
 const tags = ref<Tag[]>([])
 const currentPage = ref(1)
@@ -403,6 +400,33 @@ const onSearch = (q: string) => {
   resetAndLoad()
 }
 
+// 加载侧边栏最近文章（按时间排序，最新的在前面）
+const loadSidebarArticles = async () => {
+  try {
+    const res = await api.get('/articles', {
+      params: {
+        page: 1,
+        page_size: 5,
+        sort: 'latest'
+      }
+    })
+    const data = res.data.data || res.data
+    const list = (data.list || data || []).map((item: any) => {
+      return {
+        ...item,
+        views: item.view_count ?? item.views ?? 0,
+        likes: item.like_count ?? item.likes ?? 0,
+        author: item.author_name ?? item.author ?? '',
+        cover_url: item.cover_url && item.cover_url.trim() ? item.cover_url : null
+      }
+    })
+    sidebarArticles.value = list
+  } catch (error) {
+    console.error('加载侧边栏文章失败:', error)
+    sidebarArticles.value = []
+  }
+}
+
 onMounted(async () => {
   // 独立加载分类、标签、作者信息（互不影响）
   try {
@@ -429,7 +453,9 @@ onMounted(async () => {
     console.log('用户未登录或获取作者信息失败，使用默认值')
   }
 
-  // // 加载文章列表
+  // 加载侧边栏最近文章
+  loadSidebarArticles()
+  // 加载文章列表
   loadArticles()
 })
 </script>
