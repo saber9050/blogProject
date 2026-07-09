@@ -96,8 +96,8 @@ func (s *tagService) Update(id uint, req *request.UpdateTagRequest) error {
 
 	// 构建需要更新的字段
 	fields := map[string]interface{}{
-		"name":   req.Name,
-		"status": req.Status,
+		"tag_name": req.Name,
+		"status":   req.Status,
 	}
 
 	return s.tagRepo.UpdateFields(id, fields)

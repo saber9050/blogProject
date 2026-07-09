@@ -300,7 +300,7 @@ func (s *userService) ListNormalUsers(page, pageSize int) ([]*response.AdminUser
 		result = append(result, &response.AdminUserResponse{
 			ID:        u.ID,
 			UserName:  u.UserName,
-			AvatarURL: u.AvatarURL,
+			AvatarURL: s.minio.GetFileURL(u.AvatarURL),
 			Status:    u.Status,
 			CreatedAt: u.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		})

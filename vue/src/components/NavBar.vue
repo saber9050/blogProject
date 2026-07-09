@@ -27,12 +27,7 @@
       <!-- 右侧操作区 -->
       <div class="navbar__right">
         <template v-if="user">
-          <div class="navbar__bell-wrap">
-            <button class="navbar__bell" @click="handleBell">&#128276;</button>
-            <span v-if="notificationCount > 0" class="navbar__bell-badge">
-              {{ notificationCount > 99 ? '99+' : notificationCount }}
-            </span>
-          </div>
+  
 
           <div
             class="navbar__user-area"
@@ -90,7 +85,6 @@ interface UserInfo {
 const router = useRouter()
 const user = ref<UserInfo | null>(null)
 const searchText = ref('')
-const notificationCount = ref(0)
 const dropdownOpen = ref(false)
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -119,9 +113,7 @@ watch(searchText, (val) => {
   emit('search', val.trim())
 })
 
-const handleBell = () => {
-  notificationCount.value = 0
-}
+
 
 const goProfile = () => {
   dropdownOpen.value = false
@@ -154,7 +146,6 @@ onMounted(async () => {
       try { user.value = JSON.parse(stored) } catch { user.value = null }
     }
   }
-  notificationCount.value = 3
 
   // 监听用户信息更新事件（来自 ProfileView）
   const handleUserInfoUpdated = (event: CustomEvent) => {
@@ -297,35 +288,7 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.navbar__bell-wrap { position: relative; }
 
-.navbar__bell {
-  width: 36px; height: 36px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  font-size: 1.1rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center; justify-content: center;
-  transition: background 0.2s ease;
-}
-.navbar__bell:hover { background: rgba(148,163,184,0.1); }
-
-.navbar__bell-badge {
-  position: absolute;
-  top: -2px; right: -2px;
-  min-width: 18px; height: 18px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: var(--danger);
-  color: #fff;
-  font-size: 0.68rem;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center; justify-content: center;
-  line-height: 1;
-}
 
 .navbar__user-area {
   display: flex;

@@ -252,14 +252,14 @@
               <label class="modal__label">分类</label>
               <select v-model.number="modalForm.type_id" class="modal__input">
                 <option :value="0" disabled>请选择分类</option>
-                <option v-for="c in adminCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                <option v-for="c in enabledCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
               </select>
             </div>
             <div class="modal__field">
               <label class="modal__label">标签</label>
               <div class="tag-selector">
                 <span
-                  v-for="t in adminTags"
+                  v-for="t in enabledTags"
                   :key="t.id"
                   class="tag-option"
                   :class="{ 'tag-option--selected': selectedTags.includes(t.id) }"
@@ -292,6 +292,7 @@
             </div>
             <div class="modal__field">
               <label class="modal__label">内容</label>
+              <div ref="toolbarContainer" class="toolbar-container"></div>
               <div ref="editorContainer" class="editor-container"></div>
             </div>
           </template>
@@ -389,10 +390,17 @@ const modalForm = reactive<Record<string, any>>({
   name: ''
 })
 
-// 文章标签多选
+// 仅启用的分类和标签（用于文章表单）
+const enabledCategories = computed(() => adminCategories.value.filter(c => c.status === 1))
+const enabledTags = computed(() => adminTags.value.filter(t => t.status === 1))
+
+// 标签
 const selectedTags = ref<number[]>([])
+// 文章原始数据（用于比较修改）
+const originalArticleData = ref<Record<string, any> | null>(null)
 
 // 编辑器
+const toolbarContainer = ref<HTMLDivElement | null>(null)
 const editorContainer = ref<HTMLDivElement | null>(null)
 let editorInstance: any = null
 
@@ -536,6 +544,7 @@ const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: a
   modalForm.name = ''
   selectedTags.value = []
   coverPreviewUrl.value = ''
+  originalArticleData.value = null
 
   if (item) {
     modalTitle.value = type === 'user' ? '编辑用户' : type === 'article' ? '编辑文章' : type === 'category' ? '编辑分类' : '编辑标签'
@@ -551,6 +560,16 @@ const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: a
       modalForm.status = item.status ?? 0
       if (item.tags) {
         selectedTags.value = item.tags.map((t: any) => t.id)
+      }
+      // 保存原始数据用于比较修改
+      originalArticleData.value = {
+        title: item.title || '',
+        type_id: item.type_id || 0,
+        summary: item.summary || '',
+        content: item.content || '',
+        cover_url: item.cover_url || '',
+        status: item.status ?? 0,
+        tag_ids: item.tags ? item.tags.map((t: any) => t.id) : []
       }
     } else {
       modalForm.name = item.name || ''
@@ -573,7 +592,7 @@ const closeModal = () => {
 }
 
 const initEditor = async (content: string) => {
-  if (!editorContainer.value) return
+  if (!toolbarContainer.value || !editorContainer.value) return
   // 动态导入 wangEditor
   const wangEditor = await import('@wangeditor/editor')
   const editorConfig: wangEditor.IEditorConfig = {
@@ -596,7 +615,7 @@ const initEditor = async (content: string) => {
   })
   wangEditor.createToolbar({
     editor,
-    selector: editorContainer.value
+    selector: toolbarContainer.value
   })
   editorInstance = editor
 }
@@ -629,14 +648,39 @@ const handleSave = async () => {
       const uRes = await api.get('/admin/users')
       users.value = uRes.data.data?.list || uRes.data.data || uRes.data || []
     } else if (modalType.value === 'article') {
-      const articleData = {
-        title: modalForm.title,
-        type_id: modalForm.type_id,
-        tag_ids: selectedTags.value,
-        cover_url: modalForm.cover_url,
-        summary: modalForm.summary,
-        content: modalForm.content,
-        status: modalForm.status
+      let articleData: Record<string, any> = {}
+      
+      if (editingId.value && originalArticleData.value) {
+        // 编辑模式：只发送修改的字段
+        const original = originalArticleData.value
+        const currentTags = selectedTags.value.slice().sort()
+        const originalTags = (original.tag_ids || []).slice().sort()
+        
+        if (modalForm.title !== original.title) articleData.title = modalForm.title
+        if (modalForm.type_id !== original.type_id) articleData.type_id = modalForm.type_id
+        if (JSON.stringify(currentTags) !== JSON.stringify(originalTags)) articleData.tag_ids = selectedTags.value
+        if (modalForm.cover_url !== original.cover_url) articleData.cover_url = modalForm.cover_url
+        if (modalForm.summary !== original.summary) articleData.summary = modalForm.summary
+        if (modalForm.content !== original.content) articleData.content = modalForm.content
+        if (modalForm.status !== original.status) articleData.status = modalForm.status
+        
+        // 如果没有修改任何字段，直接关闭模态框
+        if (Object.keys(articleData).length === 0) {
+          modalVisible.value = false
+          destroyEditor()
+          return
+        }
+      } else {
+        // 新增模式：发送所有字段
+        articleData = {
+          title: modalForm.title,
+          type_id: modalForm.type_id,
+          tag_ids: selectedTags.value,
+          cover_url: modalForm.cover_url,
+          summary: modalForm.summary,
+          content: modalForm.content,
+          status: modalForm.status
+        }
       }
       
       if (editingId.value) {

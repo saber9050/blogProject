@@ -90,11 +90,16 @@ func (s *articleService) buildArticleResponse(article *entity.Article, userID ui
 		}
 	}
 
+	url := ""
+	if article.CoverURL != "" {
+		url = s.minio.GetFileURL(article.CoverURL)
+	}
+
 	return &response.ArticleItem{
 		ID:           article.ID,
 		Title:        article.Title,
 		Summary:      article.Summary,
-		CoverURL:     s.minio.GetFileURL(article.CoverURL),
+		CoverURL:     url,
 		Status:       article.Status,
 		Views:        article.Views,
 		LikeCount:    article.LikeCount,
@@ -293,17 +298,36 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 			return errors.New(errors.CodeBadRequest, "分类不存在")
 		}
 	}
-	url, err := s.minio.ParseFileKey(req.CoverURL)
-	if err != nil {
-		return errors.New(errors.CodeInternalError, "解析url失败")
-	}
+
 	// 构建需要更新的字段
 	fields := make(map[string]interface{})
-	fields["title"] = req.Title
-	fields["content"] = req.Content
-	fields["cover_url"] = url
-	fields["summary"] = req.Summary
-	fields["type_id"] = req.TypeID
+
+	if req.CoverURL != "" {
+		url, err := s.minio.ParseFileKey(req.CoverURL)
+		if err != nil {
+			return errors.New(errors.CodeInternalError, "解析url失败")
+		}
+		fields["cover_url"] = url
+	}
+
+	if req.Title != "" {
+		fields["title"] = req.Title
+	}
+
+	if req.Content != "" {
+		fields["content"] = req.Content
+
+	}
+
+	if req.Summary != "" {
+		fields["summary"] = req.Summary
+
+	}
+
+	if req.TypeID != 0 {
+		fields["type_id"] = req.TypeID
+	}
+
 	fields["status"] = req.Status
 
 	if err := s.articleRepo.UpdateFields(id, fields); err != nil {

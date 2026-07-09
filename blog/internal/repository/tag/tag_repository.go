@@ -63,7 +63,7 @@ func (r *tagRepository) List(page, pageSize int, status *int, keyword string) ([
 		query = query.Where("status = ?", *status)
 	}
 	if keyword != "" {
-		query = query.Where("name LIKE ?", "%"+keyword+"%")
+		query = query.Where("tag_name LIKE ?", "%"+keyword+"%")
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -98,7 +98,7 @@ func (r *tagRepository) Delete(id uint) error {
 // IsExistsByName 判断标签名称是否存在（排除指定ID）
 func (r *tagRepository) IsExistsByName(name string, excludeID uint) (bool, error) {
 	var count int64
-	query := r.db.Model(&entity.Tag{}).Where("name = ?", name)
+	query := r.db.Model(&entity.Tag{}).Where("tag_name = ?", name)
 	if excludeID > 0 {
 		query = query.Where("id != ?", excludeID)
 	}

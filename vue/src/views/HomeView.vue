@@ -88,6 +88,7 @@
                 :src="item.cover_url"
                 :alt="item.title"
                 class="article-card__cover"
+                @error="$event.target.style.display='none'"
               />
             </article>
 
@@ -319,7 +320,8 @@ const loadArticles = async () => {
         ...item,
         views: item.view_count ?? item.views ?? 0,
         likes: item.like_count ?? item.likes ?? 0,
-        author: item.author_name ?? item.author ?? ''
+        author: item.author_name ?? item.author ?? '',
+        cover_url: item.cover_url && item.cover_url.trim() ? item.cover_url : null
       }
     })
 
