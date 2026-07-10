@@ -173,6 +173,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import AuthShell from '../components/AuthShell.vue'
+import { showToast } from '../utils/toast'
 
 interface AccountForm {
   account: string
@@ -318,13 +319,13 @@ const sendEmailCaptcha = async () => {
       }
     }, 1000)
 
-    alert('验证码已发送到您的邮箱，请注意查收')
+    showToast('验证码已发送到您的邮箱，请注意查收', 'success')
   } catch (error: any) {
     console.error('发送验证码失败:', error)
     if (error.response?.data?.message) {
-      alert(error.response.data.message)
+      showToast(error.response.data.message, 'error')
     } else {
-      alert('发送验证码失败，请稍后重试')
+      showToast('发送验证码失败，请稍后重试', 'error')
     }
   } finally {
     isSending.value = false
@@ -353,9 +354,9 @@ const handleAccountLogin = async () => {
   } catch (error: any) {
     console.error('登录失败:', error)
     if (error.response?.data?.message) {
-      alert(error.response.data.message)
+      showToast(error.response.data.message, 'error')
     } else {
-      alert('登录失败，请检查账号密码和验证码')
+      showToast('登录失败，请检查账号密码和验证码', 'error')
     }
     refreshCaptcha()
   } finally {
@@ -389,9 +390,9 @@ const handleEmailLogin = async () => {
   } catch (error: any) {
     console.error('邮箱登录失败:', error)
     if (error.response?.data?.message) {
-      alert(error.response.data.message)
+      showToast(error.response.data.message, 'error')
     } else {
-      alert('登录失败，请检查邮箱和验证码')
+      showToast('登录失败，请检查邮箱和验证码', 'error')
     }
   } finally {
     loading.value = false

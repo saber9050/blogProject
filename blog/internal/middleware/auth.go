@@ -100,8 +100,8 @@ func GetUsername(c *gin.Context) string {
 // GetRoleID 从上下文获取角色ID
 func GetRoleID(c *gin.Context) int64 {
 	if roleID, exists := c.Get(ContextRoleID); exists {
-		if id, ok := roleID.(int64); ok {
-			return id
+		if id, ok := roleID.(uint); ok {
+			return int64(id)
 		}
 	}
 	return 0

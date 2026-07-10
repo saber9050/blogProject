@@ -362,6 +362,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
+import { showToast } from '../utils/toast'
 
 interface UserInfo {
   user_id: number
@@ -472,7 +473,7 @@ const handleAvatarChange = async (e: Event) => {
     }
   } catch (error: any) {
     const msg = error.response?.data?.message || '头像上传失败'
-    alert(msg)
+    showToast(msg, 'error')
     avatarPreview.value = ''
   } finally {
     avatarUploading.value = false
@@ -501,10 +502,10 @@ const handleSaveProfile = async () => {
         emitUserInfoUpdated()
       } catch { /* ignore */ }
     }
-    alert('保存成功')
+    showToast('保存成功', 'success')
   } catch (error: any) {
     const msg = error.response?.data?.message || '保存失败，请稍后重试'
-    alert(msg)
+    showToast(msg, 'error')
   } finally {
     saving.value = false
   }
@@ -543,10 +544,10 @@ const sendEmailCaptcha = async (purpose: string) => {
       }
     }, 1000)
 
-    alert('验证码已发送到您的邮箱，请注意查收')
+    showToast('验证码已发送到您的邮箱，请注意查收', 'success')
   } catch (error: any) {
     const msg = error.response?.data?.message || '发送验证码失败，请稍后重试'
-    alert(msg)
+    showToast(msg, 'error')
   } finally {
     emailSending.value = false
   }
@@ -613,11 +614,11 @@ const handleChangeEmail = async () => {
       password: emailForm.value.password,
       new_email: emailForm.value.newEmail
     })
-    alert('修改邮箱请求已提交，请前往新邮箱查收确认邮件完成修改')
+    showToast('修改邮箱请求已提交，请前往新邮箱查收确认邮件完成修改', 'success')
     closeEmailModal()
   } catch (error: any) {
     const msg = error.response?.data?.message || '修改邮箱失败，请稍后重试'
-    alert(msg)
+    showToast(msg, 'error')
   } finally {
     emailLoading.value = false
   }
@@ -669,10 +670,10 @@ const sendAddEmailCaptcha = async () => {
       }
     }, 1000)
 
-    alert('验证码已发送到您的邮箱，请注意查收')
+    showToast('验证码已发送到您的邮箱，请注意查收', 'success')
   } catch (error: any) {
     const msg = error.response?.data?.message || '发送验证码失败，请稍后重试'
-    alert(msg)
+    showToast(msg, 'error')
   } finally {
     addEmailSending.value = false
   }
@@ -734,11 +735,11 @@ const handleAddEmail = async () => {
       captcha: addEmailForm.value.captcha
     })
     userInfo.value.email = addEmailForm.value.newEmail
-    alert('邮箱添加成功')
+    showToast('邮箱添加成功', 'success')
     closeAddEmailModal()
   } catch (error: any) {
     const msg = error.response?.data?.message || '添加邮箱失败，请稍后重试'
-    alert(msg)
+    showToast(msg, 'error')
   } finally {
     addEmailLoading.value = false
   }
@@ -784,10 +785,10 @@ const sendPasswordCaptcha = async () => {
       }
     }, 1000)
 
-    alert('验证码已发送到您的邮箱，请注意查收')
+    showToast('验证码已发送到您的邮箱，请注意查收', 'success')
   } catch (error: any) {
     const msg = error.response?.data?.message || '发送验证码失败，请稍后重试'
-    alert(msg)
+    showToast(msg, 'error')
   } finally {
     passwordSending.value = false
   }
@@ -834,12 +835,12 @@ const handleChangePassword = async () => {
       new_password: passwordForm.value.newPassword,
       ack: passwordForm.value.ack
     })
-    alert('密码修改成功')
+    showToast('密码修改成功', 'success')
     closePasswordModal()
     router.push('/login')
   } catch (error: any) {
     const msg = error.response?.data?.message || '修改密码失败，请稍后重试'
-    alert(msg)
+    showToast(msg, 'error')
   } finally {
     passwordLoading.value = false
   }

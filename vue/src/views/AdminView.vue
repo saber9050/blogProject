@@ -318,6 +318,20 @@
         </div>
       </div>
     </div>
+
+    <!-- ========== 删除确认模态框 ========== -->
+    <div v-if="deleteModalVisible" class="modal-overlay" @click.self="deleteModalVisible = false">
+      <div class="modal modal--delete">
+        <h3 class="modal__title">确认删除</h3>
+        <div class="modal__body">
+          <p class="delete-confirm-text">确定要删除该{{ deleteTarget?.type === 'user' ? '用户' : deleteTarget?.type === 'article' ? '文章' : deleteTarget?.type === 'category' ? '分类' : '标签' }}吗？此操作不可恢复。</p>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--cancel" @click="deleteModalVisible = false">取消</button>
+          <button class="btn btn--danger" @click="confirmDelete">确认删除</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -325,6 +339,7 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
+import { showToast } from '../utils/toast'
 
 // ---------- 类型 ----------
 interface UserItem {
@@ -376,6 +391,10 @@ const modalVisible = ref(false)
 const modalType = ref<'user' | 'article' | 'category' | 'tag'>('user')
 const editingId = ref<number | null>(null)
 const editingUser = ref<UserItem | null>(null)
+
+// 删除确认模态框
+const deleteModalVisible = ref(false)
+const deleteTarget = ref<{ type: string; id: number } | null>(null)
 const modalTitle = ref('')
 const modalForm = reactive<Record<string, any>>({
   user_name: '',
@@ -510,7 +529,7 @@ const onCoverChange = async (e: Event) => {
     coverPreviewUrl.value = modalForm.cover_url
   } catch (err) {
     console.error('封面上传失败:', err)
-    alert('封面图片上传失败，请重试')
+    showToast('封面图片上传失败，请重试', 'error')
     coverPreviewUrl.value = ''
     // 重置 file input，允许重新选择同一文件
     if (coverInputRef.value) coverInputRef.value.value = ''
@@ -646,7 +665,7 @@ const handleSave = async () => {
       }
       // 重新加载用户列表
       const uRes = await api.get('/admin/users')
-      users.value = uRes.data.data?.list || uRes.data.data || uRes.data || []
+      users.value = uRes.data.data?.list || []
     } else if (modalType.value === 'article') {
       let articleData: Record<string, any> = {}
       
@@ -692,7 +711,7 @@ const handleSave = async () => {
       }
       // 重新加载文章列表
       const aRes = await api.get('/admin/articles')
-      adminArticles.value = aRes.data.data?.list || aRes.data.data || aRes.data || []
+      adminArticles.value = aRes.data.data?.list || []
     } else if (modalType.value === 'category') {
       const categoryData = {
         name: modalForm.name,
@@ -706,7 +725,7 @@ const handleSave = async () => {
       }
       // 重新加载分类列表
       const cRes = await api.get('/admin/categories')
-      adminCategories.value = cRes.data.data?.list || cRes.data.data || cRes.data || []
+      adminCategories.value = cRes.data.data?.list || []
     } else if (modalType.value === 'tag') {
       const tagData = {
         name: modalForm.name,
@@ -720,20 +739,28 @@ const handleSave = async () => {
       }
       // 重新加载标签列表
       const tRes = await api.get('/admin/tags')
-      adminTags.value = tRes.data.data?.list || tRes.data.data || tRes.data || []
+      adminTags.value = tRes.data.data?.list || []
     }
     
     modalVisible.value = false
     destroyEditor()
   } catch (error) {
     console.error('保存失败:', error)
-    alert('保存失败，请重试')
+    showToast('保存失败，请重试', 'error')
   }
 }
 
-const handleDelete = async (type: string, id: number) => {
-  if (!confirm('确定要删除吗？')) return
-  
+const handleDelete = (type: string, id: number) => {
+  deleteTarget.value = { type, id }
+  deleteModalVisible.value = true
+}
+
+const confirmDelete = async () => {
+  if (!deleteTarget.value) return
+  const { type, id } = deleteTarget.value
+  deleteModalVisible.value = false
+  deleteTarget.value = null
+
   try {
     if (type === 'user') {
       await api.delete(`/admin/users/${id}`)
@@ -748,9 +775,10 @@ const handleDelete = async (type: string, id: number) => {
       await api.delete(`/admin/tags/${id}`)
       adminTags.value = adminTags.value.filter((t) => t.id !== id)
     }
+    showToast('删除成功', 'success')
   } catch (error) {
     console.error('删除失败:', error)
-    alert('删除失败，请重试')
+    showToast('删除失败，请重试', 'error')
   }
 }
 
@@ -762,13 +790,13 @@ onMounted(async () => {
       api.get('/admin/categories'),
       api.get('/admin/tags')
     ])
-    users.value = uRes.data.data?.list || uRes.data.data || uRes.data || []
-    adminArticles.value = aRes.data.data?.list || aRes.data.data || aRes.data || []
-    adminCategories.value = cRes.data.data?.list || cRes.data.data || cRes.data || []
-    adminTags.value = tRes.data.data?.list || tRes.data.data || tRes.data || []
+    users.value = uRes.data.data?.list || []
+    adminArticles.value = aRes.data.data?.list || []
+    adminCategories.value = cRes.data.data?.list || []
+    adminTags.value = tRes.data.data?.list || []
   } catch (error) {
     console.error('加载数据失败:', error)
-    alert('加载数据失败，请刷新页面重试')
+    showToast('加载数据失败，请刷新页面重试', 'error')
   }
 })
 </script>
@@ -1011,6 +1039,12 @@ select.modal__input { appearance: auto; }
 .btn--primary:hover { background: #4096ff; }
 .btn--cancel { background: #fff; }
 .btn--cancel:hover { border-color: #1677ff; color: #1677ff; }
+.btn--danger { background: #ff4d4f; color: #fff; border-color: #ff4d4f; }
+.btn--danger:hover { background: #ff7875; border-color: #ff7875; }
+
+.modal--delete { width: 380px; }
+
+.delete-confirm-text { font-size: 14px; color: #333; line-height: 1.6; margin: 8px 0; }
 
 /* ---------- 标签选择器 ---------- */
 .tag-selector {

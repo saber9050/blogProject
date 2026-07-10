@@ -170,6 +170,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
+import { showToast } from '../utils/toast'
 
 interface Article {
   id: number
@@ -231,7 +232,7 @@ const commentTotal = ref(0)
 const commentHasMore = ref(false)
 
 // 当前登录用户信息
-const currentUser = ref<{ id: number; user_name: string; role_id: number; avatar_url?: string } | null>(null)
+const currentUser = ref<{ user_id: number; user_name: string; role_id: number; avatar_url?: string } | null>(null)
 
 const loadCurrentUser = () => {
   try {
@@ -249,7 +250,7 @@ const canDelete = (commentUserId: number) => {
   // 管理员可以删除任何人的评论
   if (currentUser.value.role_id === 1) return true
   // 普通用户只能删除自己的
-  return currentUser.value.id === commentUserId
+  return currentUser.value.user_id === commentUserId
 }
 
 const fmt = (d: string) => {
@@ -260,7 +261,7 @@ const fmt = (d: string) => {
 // 详情页点赞/取消点赞（乐观更新）
 const toggleDetailLike = async () => {
   if (!currentUser.value) {
-    alert('请先登录')
+    showToast('请先登录', 'info')
     return
   }
 
@@ -294,7 +295,7 @@ const CHILD_INITIAL = 2
 const submitComment = async () => {
   if (!newComment.value.trim()) return
   if (!currentUser.value) {
-    alert('请先登录')
+    showToast('请先登录', 'info')
     return
   }
   try {
@@ -309,7 +310,7 @@ const submitComment = async () => {
       content: newComment.value,
       user_name: currentUser.value.user_name,
       avatar_url: currentUser.value.avatar_url || '',
-      user_id: currentUser.value.id,
+      user_id: currentUser.value.user_id,
       parent_id: null,
       reply_to_name: '',
       is_deleted: false,
@@ -324,7 +325,7 @@ const submitComment = async () => {
     commentTotal.value++
     newComment.value = ''
   } catch {
-    alert('发表评论失败，请稍后重试')
+    showToast('发表评论失败，请稍后重试', 'error')
   }
 }
 
@@ -343,7 +344,7 @@ const cancelReply = () => {
 const submitReply = async (rootCommentId: number) => {
   if (!replyText.value.trim() || !replyingTo.value) return
   if (!currentUser.value) {
-    alert('请先登录')
+    showToast('请先登录', 'info')
     return
   }
 
@@ -359,7 +360,7 @@ const submitReply = async (rootCommentId: number) => {
     const parent = comments.value.find((c) => c.id === rootCommentId)
     if (parent) refreshChildren(parent)
   } catch {
-    alert('回复失败，请稍后重试')
+    showToast('回复失败，请稍后重试', 'error')
   }
 }
 
@@ -368,7 +369,7 @@ const doDelete = async (commentId: number, parentId: number | null) => {
   try {
     await api.delete(`/articles/${route.params.id}/comments/${commentId}`)
   } catch {
-    alert('删除失败，请稍后重试')
+    showToast('删除失败，请稍后重试', 'error')
     return
   }
 

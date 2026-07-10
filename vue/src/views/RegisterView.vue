@@ -130,6 +130,7 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import AuthShell from '../components/AuthShell.vue'
+import { showToast } from '../utils/toast'
 
 interface RegisterForm {
   nickname: string
@@ -354,14 +355,14 @@ const handleRegister = async () => {
       password: form.value.password,
       ack: form.value.passwordAck
     })
-    alert('注册成功，请登录')
+    showToast('注册成功，请登录', 'success')
     router.push('/login')
   } catch (error: any) {
     console.error('注册失败:', error)
     if (error.response?.data?.message) {
-      alert(error.response.data.message)
+      showToast(error.response.data.message, 'error')
     } else {
-      alert('注册失败，请稍后重试')
+      showToast('注册失败，请稍后重试', 'error')
     }
   } finally {
     loading.value = false

@@ -108,6 +108,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import AuthShell from '../components/AuthShell.vue'
+import { showToast } from '../utils/toast'
 
 interface ResetPasswordForm {
   email: string
@@ -169,13 +170,13 @@ const sendCaptcha = async () => {
       }
     }, 1000)
 
-    alert('验证码已发送到您的邮箱，请注意查收')
+    showToast('验证码已发送到您的邮箱，请注意查收', 'success')
   } catch (error: any) {
     console.error('发送验证码失败:', error)
     if (error.response?.data?.message) {
-      alert(error.response.data.message)
+      showToast(error.response.data.message, 'error')
     } else {
-      alert('发送验证码失败，请稍后重试')
+      showToast('发送验证码失败，请稍后重试', 'error')
     }
   } finally {
     isSending.value = false
@@ -232,14 +233,14 @@ const handleResetPassword = async () => {
       new_password: form.value.newPassword,
       ack: form.value.ack
     })
-    alert('密码重置成功，请使用新密码登录')
+    showToast('密码重置成功，请使用新密码登录', 'success')
     router.push('/login')
   } catch (error: any) {
     console.error('重置密码失败:', error)
     if (error.response?.data?.message) {
-      alert(error.response.data.message)
+      showToast(error.response.data.message, 'error')
     } else {
-      alert('重置密码失败，请稍后重试')
+      showToast('重置密码失败，请稍后重试', 'error')
     }
   } finally {
     loading.value = false

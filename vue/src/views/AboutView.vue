@@ -188,6 +188,7 @@
 import { ref, computed, onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
 import api from '../api'
+import { showToast } from '../utils/toast'
 
 interface AboutInfo {
   admin_name: string
@@ -305,9 +306,9 @@ const saveEdit = async () => {
     await api.put('/about', payload)
     aboutInfo.value = { ...aboutInfo.value, ...editForm.value }
     isEditing.value = false
-    alert('保存成功')
+    showToast('保存成功', 'success')
   } catch (err) {
-    alert('保存失败')
+    showToast('保存失败', 'error')
   } finally {
     isSaving.value = false
   }
