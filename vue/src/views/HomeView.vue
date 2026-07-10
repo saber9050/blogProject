@@ -117,18 +117,12 @@
               />
               <span v-else class="sidebar-avatar__placeholder">&#128100;</span>
             </div>
-            <h3 class="sidebar-name">{{ author.nickname || '邹鑫鹏' }}</h3>
-            <p class="sidebar-title">Backend Developer</p>
+            <h3 class="sidebar-name">{{ author.admin_name || '邹鑫鹏' }}</h3>
+            <p class="sidebar-title">{{ author.introduction || 'Backend Developer' }}</p>
             
-            <div class="sidebar-location">
-              <span class="sidebar-location__icon">&#128205;</span>
-              <span class="sidebar-location__text">中国</span>
-            </div>
             
-            <div class="sidebar-tags">
-              <span class="sidebar-tag">Go</span>
-              <span class="sidebar-tag">AI</span>
-              <span class="sidebar-tag">Vue</span>
+            <div v-if="author.tech_stack" class="sidebar-tags">
+              <span v-for="tech in author.tech_stack.split(',')" :key="tech" class="sidebar-tag">{{ tech.trim() }}</span>
             </div>
             
             <div class="sidebar-stats">
@@ -206,11 +200,9 @@ interface Tag {
 
 interface Author {
   avatar_url: string
-  nickname: string
-  bio: string
-  article_count: number
-  total_views: number
-  total_likes: number
+  admin_name: string
+  introduction: string
+  tech_stack: string
 }
 
 interface ArticleStats {
@@ -243,11 +235,9 @@ const PAGE_SIZE = 10
 
 const author = ref<Author>({
   avatar_url: '',
-  nickname: '博主',
-  bio: '',
-  article_count: 0,
-  total_views: 0,
-  total_likes: 0
+  admin_name: '博主',
+  introduction: '',
+  tech_stack: ''
 })
 
 const formatNumber = (num: number) => {
@@ -470,13 +460,23 @@ onMounted(async () => {
   }
 
   try {
-    const auRes = await api.get('/user/info')
+    const auRes = await api.get('/admin/info')
     if (auRes.data.data) {
       author.value = { ...author.value, ...auRes.data.data }
     }
   } catch (err) {
-    // 用户未登录或API失败，使用默认作者信息
-    console.log('用户未登录或获取作者信息失败，使用默认值')
+    // API失败，使用默认作者信息
+    console.log('获取管理员信息失败，使用默认值')
+  }
+
+  // 加载技术栈
+  try {
+    const aboutRes = await api.get('/about')
+    if (aboutRes.data.data && aboutRes.data.data.tech_stack) {
+      author.value.tech_stack = aboutRes.data.data.tech_stack
+    }
+  } catch (err) {
+    console.log('获取关于页面信息失败')
   }
 
   // 加载文章统计数据

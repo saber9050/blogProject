@@ -1,6 +1,7 @@
 package api
 
 import (
+	"blog/internal/api/v1/about"
 	"blog/internal/api/v1/admin"
 	"blog/internal/api/v1/article"
 	"blog/internal/api/v1/auth"
@@ -9,6 +10,7 @@ import (
 	"blog/internal/api/v1/tag"
 	"blog/internal/api/v1/user"
 	"blog/internal/middleware"
+	aboutSvc "blog/internal/service/about"
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
@@ -28,6 +30,7 @@ type Router struct {
 	commentCtrl    *comment.Controller
 	categoryCtrl   *category.CategoryController
 	tagCtrl        *tag.TagController
+	aboutCtrl      *about.AboutController
 	articleService articleSvc.ArticleService
 }
 
@@ -39,6 +42,7 @@ func NewRouter(
 	commentSvc commentSvc.CommentService,
 	categoryService categorySvc.CategoryService,
 	tagService tagSvc.TagService,
+	aboutService aboutSvc.AboutService,
 ) *Router {
 	return &Router{
 		authCtrl:       auth.NewController(authSvc),
@@ -48,6 +52,7 @@ func NewRouter(
 		commentCtrl:    comment.NewController(commentSvc),
 		categoryCtrl:   category.NewCategoryController(categoryService),
 		tagCtrl:        tag.NewTagController(tagService),
+		aboutCtrl:      about.NewAboutController(aboutService),
 		articleService: articleService,
 	}
 }
@@ -89,6 +94,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 前台标签路由（无需认证）
 		r.tagCtrl.RegisterRoutes(v1)
+
+		// 关于页面路由（部分接口需管理员认证）
+		r.aboutCtrl.RegisterRoutes(v1)
 
 		// 评论路由组（挂载在 /articles 路径下）
 		r.commentCtrl.RegisterRouter(v1.Group("/articles"))

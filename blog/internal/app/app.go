@@ -3,12 +3,14 @@ package app
 import (
 	"blog/internal/api"
 	auth3 "blog/internal/cache/auth"
+	"blog/internal/repository/about"
 	"blog/internal/repository/article"
 	"blog/internal/repository/auth"
 	"blog/internal/repository/category"
 	commentRepo "blog/internal/repository/comment"
 	"blog/internal/repository/tag"
 	userRepo "blog/internal/repository/user"
+	aboutSvc "blog/internal/service/about"
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
@@ -172,6 +174,7 @@ func (a *App) initDependencies() {
 	cRepo := commentRepo.NewCommentRepository(a.mysqlDB)
 	catRepo := category.NewCategoryRepository(a.mysqlDB)
 	tRepo := tag.NewTagRepository(a.mysqlDB)
+	aboutRepo := about.NewAboutRepository(a.mysqlDB)
 
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
@@ -180,6 +183,7 @@ func (a *App) initDependencies() {
 	cSvc := commentSvc.NewCommentService(cRepo)
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
+	aboutSvc := aboutSvc.NewAboutService(aboutRepo, uRepo)
 
 	// 设置评论服务的文章仓库依赖（用于更新评论计数）
 	cSvc.SetArticleRepo(aRepo)
@@ -189,7 +193,7 @@ func (a *App) initDependencies() {
 	cSvc.SetUserRepo(uRepo)
 
 	// 创建 Router
-	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc)
+	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc)
 }
 
 // initRouter 初始化路由

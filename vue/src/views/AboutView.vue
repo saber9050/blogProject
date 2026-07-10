@@ -30,6 +30,9 @@
             <a href="mailto:contact@example.com" class="hero-social-btn">
               <span>&#9993;</span> Email
             </a>
+            <a href="#" class="hero-social-btn" target="_blank">
+              <span>&#128187;</span> CSDN
+            </a>
           </div>
         </div>
       </div>
