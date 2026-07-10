@@ -7,43 +7,27 @@ import (
 	repoAbout "blog/internal/repository/about"
 	repoUser "blog/internal/repository/user"
 	"blog/pkg/errors"
+	minioPkg "blog/pkg/minio"
 )
 
 // aboutService 关于页面服务实现
 type aboutService struct {
 	aboutRepo repoAbout.AboutRepository
+	minio     *minioPkg.Client
 	userRepo  repoUser.UserRepository
 }
 
 // NewAboutService 创建关于页面服务实例
 func NewAboutService(
 	aboutRepo repoAbout.AboutRepository,
+	minio *minioPkg.Client,
 	userRepo repoUser.UserRepository,
 ) AboutService {
 	return &aboutService{
 		aboutRepo: aboutRepo,
+		minio:     minio,
 		userRepo:  userRepo,
 	}
-}
-
-// GetAdminInfo 获取管理员公开信息
-func (s *aboutService) GetAdminInfo() (*response.AdminInfoResponse, error) {
-	// 查询角色为管理员（role_id = 1）的用户
-	list, _, err := s.userRepo.ListByRole(1, 1, 1)
-	if err != nil {
-		return nil, err
-	}
-	if len(list) == 0 {
-		return nil, errors.ErrNotFound
-	}
-	admin := list[0]
-
-	return &response.AdminInfoResponse{
-		AdminName:    admin.UserName,
-		AvatarURL:    admin.AvatarURL,
-		Introduction: admin.Introduction,
-		Email:        admin.Email,
-	}, nil
 }
 
 // GetAboutInfo 获取关于页面完整信息
@@ -66,7 +50,7 @@ func (s *aboutService) GetAboutInfo() (*response.AboutInfoResponse, error) {
 
 	resp := &response.AboutInfoResponse{
 		AdminName:    admin.UserName,
-		AvatarURL:    admin.AvatarURL,
+		AvatarURL:    s.minio.GetFileURL(admin.AvatarURL),
 		Email:        admin.Email,
 		Introduction: admin.Introduction,
 	}

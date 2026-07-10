@@ -18,17 +18,6 @@ func NewAboutController(aboutService aboutSvc.AboutService) *AboutController {
 	return &AboutController{aboutService: aboutService}
 }
 
-// GetAdminInfo 获取管理员信息
-// GET /admin/info
-func (ctrl *AboutController) GetAdminInfo(c *gin.Context) {
-	info, err := ctrl.aboutService.GetAdminInfo()
-	if err != nil {
-		response.BizError(c, err)
-		return
-	}
-	response.Success(c, info)
-}
-
 // GetAboutInfo 获取关于页面完整信息
 // GET /about
 func (ctrl *AboutController) GetAboutInfo(c *gin.Context) {

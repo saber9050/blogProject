@@ -7,32 +7,37 @@
         <div class="hero-content">
           <div class="hero-avatar">
             <img
-              v-if="author.avatar_url"
-              :src="author.avatar_url"
+              v-if="aboutInfo.avatar_url"
+              :src="aboutInfo.avatar_url"
               class="hero-avatar__img"
             />
             <span v-else class="hero-avatar__placeholder">&#128100;</span>
           </div>
-          <h1 class="hero-name">{{ author.user_name}}</h1>
-          <p class="hero-quote">"热爱构建高性能、高可维护性的系统"</p>
-          <div class="hero-tags">
-            <span class="hero-tag">Go</span>
-            <span class="hero-tag">Vue</span>
-            <span class="hero-tag">AI</span>
-            <span class="hero-tag">Docker</span>
-            <span class="hero-tag">Redis</span>
-            <span class="hero-tag">MySQL</span>
+          <h1 class="hero-name">{{ aboutInfo.admin_name }}</h1>
+          <p v-if="aboutInfo.introduction" class="hero-quote">"{{ aboutInfo.introduction }}"</p>
+          <!-- Display: tech_stack tags -->
+          <div v-if="!isEditing && aboutInfo.tech_stack" class="hero-tags">
+            <span v-for="tech in aboutInfo.tech_stack.split(',')" :key="tech" class="hero-tag">{{ tech.trim() }}</span>
+          </div>
+          <!-- Edit: tech_stack input -->
+          <div v-if="isEditing" class="hero-field">
+            <label class="edit-label">技术栈</label>
+            <input v-model="editForm.tech_stack" class="edit-input" placeholder="多个用逗号隔开，如: Go,Vue,AI" />
           </div>
           <div class="hero-social">
-            <a href="https://github.com/yourusername" class="hero-social-btn" target="_blank">
+            <a v-if="!isEditing && aboutInfo.git_hub" :href="aboutInfo.git_hub" class="hero-social-btn" target="_blank">
               <span>&#128241;</span> GitHub
             </a>
-            <a href="mailto:contact@example.com" class="hero-social-btn">
+            <a v-if="!isEditing && aboutInfo.email" :href="'mailto:' + aboutInfo.email" class="hero-social-btn">
               <span>&#9993;</span> Email
             </a>
-            <a href="#" class="hero-social-btn" target="_blank">
+            <a v-if="!isEditing && aboutInfo.csdn" :href="aboutInfo.csdn" class="hero-social-btn" target="_blank">
               <span>&#128187;</span> CSDN
             </a>
+          </div>
+          <!-- Edit Button -->
+          <div v-if="isAdmin && !isEditing" class="hero-edit-area">
+            <button @click="enterEditMode" class="hero-edit-btn">&#9998; 编辑页面</button>
           </div>
         </div>
       </div>
@@ -42,89 +47,38 @@
           <!-- 我的故事 -->
           <div class="about-section">
             <h2 class="about-section__title"><span class="section-icon">&#128214;</span> 我的故事</h2>
-            <div class="about-section__content">
-              <p class="about-text">
-                大学开始接触编程，最初学习 Java。后来接触 Go，逐渐喜欢上它的简洁、高效以及优秀的并发模型。
-              </p>
-              <p class="about-text">
-                目前主要从事：Go 后端、微服务、Redis、Docker、AI Agent 开发。
-              </p>
-              <p class="about-text">
-                我喜欢把复杂问题拆解成简单模块，也喜欢研究系统架构背后的设计思想。
-              </p>
-              <p class="about-text">
-                这个博客记录我的成长，希望未来回头看时，仍然能够感谢现在坚持学习的自己。
-              </p>
+            <div v-if="!isEditing" class="about-section__content">
+              <div class="about-text" style="white-space: pre-wrap;">{{ aboutInfo.my_story }}</div>
             </div>
-          </div>
-
-          <!-- 当前研究方向 -->
-          <div class="about-section">
-            <h2 class="about-section__title"><span class="section-icon">&#128640;</span> 我目前正在研究</h2>
-            <div class="about-section__content">
-              <div class="focus-cards">
-                <div class="focus-card">
-                  <div class="focus-card__icon">&#129302;</div>
-                  <h3 class="focus-card__title">AI Agent</h3>
-                  <p class="focus-card__desc">智能代理开发与应用</p>
-                </div>
-                <div class="focus-card">
-                  <div class="focus-card__icon">&#128187;</div>
-                  <h3 class="focus-card__title">MCP</h3>
-                  <p class="focus-card__desc">模型上下文协议</p>
-                </div>
-                <div class="focus-card">
-                  <div class="focus-card__icon">&#9881;</div>
-                  <h3 class="focus-card__title">Vue3</h3>
-                  <p class="focus-card__desc">现代前端框架</p>
-                </div>
-              </div>
+            <div v-else class="about-section__content">
+              <textarea v-model="editForm.my_story" class="edit-textarea" rows="8" placeholder="输入我的故事（支持 Markdown 格式）"></textarea>
             </div>
           </div>
 
           <!-- 博客理念 -->
           <div class="about-section">
             <h2 class="about-section__title"><span class="section-icon">&#128196;</span> 为什么建立博客？</h2>
-            <div class="about-section__content">
+            <div v-if="!isEditing" class="about-section__content">
               <div class="philosophy-content">
-                <p class="philosophy-text">
-                  学习最大的敌人不是不会，<br>
-                  而是遗忘。
-                </p>
-                <p class="philosophy-text">
-                  因此，<br>
-                  我希望把每一次踩坑、<br>
-                  每一次成长、<br>
-                  每一次思考，<br>
-                  都记录下来。
-                </p>
-                <p class="philosophy-text">
-                  既帮助别人，<br>
-                  也帮助未来的自己。
-                </p>
+                <p class="philosophy-text" style="white-space: pre-wrap;">{{ aboutInfo.why }}</p>
               </div>
+            </div>
+            <div v-else class="about-section__content">
+              <textarea v-model="editForm.why" class="edit-textarea" rows="6" placeholder="输入为什么建立博客"></textarea>
             </div>
           </div>
 
           <!-- 兴趣领域 -->
           <div class="about-section">
             <h2 class="about-section__title"><span class="section-icon">&#10084;</span> 我感兴趣</h2>
-            <div class="about-section__content">
-              <div class="interest-tags">
-                <span class="interest-tag">Go</span>
-                <span class="interest-tag">Redis</span>
-                <span class="interest-tag">消息队列</span>
-                <span class="interest-tag">系统设计</span>
-                <span class="interest-tag">AI Agent</span>
-                <span class="interest-tag">Docker</span>
-                <span class="interest-tag">Linux</span>
-                <span class="interest-tag">MySQL</span>
-                <span class="interest-tag">Vue3</span>
-                <span class="interest-tag">TypeScript</span>
-                <span class="interest-tag">数据库优化</span>
-                <span class="interest-tag">高并发</span>
-                <span class="interest-tag">性能优化</span>
+            <div v-if="!isEditing" class="about-section__content">
+              <div v-if="aboutInfo.interest" class="interest-tags">
+                <span v-for="item in aboutInfo.interest.split(',')" :key="item" class="interest-tag">{{ item.trim() }}</span>
               </div>
+            </div>
+            <div v-else class="about-section__content">
+              <label class="edit-label">感兴趣的技术（多个用逗号隔开）</label>
+              <input v-model="editForm.interest" class="edit-input" placeholder="如: Go,Redis,消息队列,系统设计" />
             </div>
           </div>
 
@@ -165,42 +119,56 @@
           <!-- 联系我 -->
           <div class="about-section">
             <h2 class="about-section__title"><span class="section-icon">&#128236;</span> 联系我</h2>
-            <div class="about-section__content">
+            <div v-if="!isEditing" class="about-section__content">
               <div class="contact-cards">
-                <div class="contact-card">
+                <div v-if="aboutInfo.git_hub" class="contact-card">
                   <div class="contact-card__icon">&#128241;</div>
                   <h3 class="contact-card__title">GitHub</h3>
                   <p class="contact-card__desc">查看我的开源项目</p>
-                  <a href="https://github.com/yourusername" class="contact-card__link" target="_blank">
+                  <a :href="aboutInfo.git_hub" class="contact-card__link" target="_blank">
                     访问主页 &rarr;
                   </a>
                 </div>
-                <div class="contact-card">
+                <div v-if="aboutInfo.email" class="contact-card">
                   <div class="contact-card__icon">&#9993;</div>
                   <h3 class="contact-card__title">Email</h3>
                   <div class="contact-card__desc">欢迎交流技术</div>
-                  <a href="mailto:contact@example.com" class="contact-card__link">
+                  <a :href="'mailto:' + aboutInfo.email" class="contact-card__link">
                     发送邮件 &rarr;
                   </a>
                 </div>
-                <div class="contact-card">
+                <div v-if="aboutInfo.csdn" class="contact-card">
                   <div class="contact-card__icon">&#128187;</div>
                   <h3 class="contact-card__title">CSDN</h3>
                   <p class="contact-card__desc">查看更多文章</p>
-                  <a href="#" class="contact-card__link" target="_blank">
+                  <a :href="aboutInfo.csdn" class="contact-card__link" target="_blank">
                     访问主页 &rarr;
                   </a>
                 </div>
               </div>
             </div>
+            <div v-else class="about-section__content">
+              <div class="edit-social">
+                <label class="edit-label">GitHub 地址</label>
+                <input v-model="editForm.git_hub" class="edit-input" placeholder="https://github.com/yourusername" />
+                <label class="edit-label">CSDN 地址</label>
+                <input v-model="editForm.csdn" class="edit-input" placeholder="https://blog.csdn.net/yourusername" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 编辑操作栏 -->
+          <div v-if="isEditing" class="edit-actions">
+            <button @click="saveEdit" class="edit-btn edit-btn--save" :disabled="isSaving">
+              {{ isSaving ? '保存中...' : '保存修改' }}
+            </button>
+            <button @click="cancelEdit" class="edit-btn edit-btn--cancel">取消</button>
           </div>
 
           <!-- Footer -->
           <div class="about-footer">
             <p class="footer-text">
               感谢你的阅读。<br>
-              希望这里的内容，<br>
-              能够帮助到正在学习路上的你。
             </p>
             <p class="footer-motto">
               Keep Learning.<br>
@@ -217,23 +185,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
 import api from '../api'
 
-interface Author {
-  user_id: number
-  user_name: string
-  account: string
-  email: string
+interface AboutInfo {
+  admin_name: string
   avatar_url: string
+  email: string
   introduction: string
-  role_id: number
-  status: number
-  create_at: string
-  article_count?: number
-  total_views?: number
-  total_likes?: number
+  tech_stack: string
+  my_story: string
+  why: string
+  interest: string
+  git_hub: string
+  csdn: string
 }
 
 interface ArticleStats {
@@ -242,19 +208,17 @@ interface ArticleStats {
   total_likes: number
 }
 
-const author = ref<Author>({
-  user_id: 0,
-  user_name: '',
-  account: '',
-  email: '',
+const aboutInfo = ref<AboutInfo>({
+  admin_name: '',
   avatar_url: '',
+  email: '',
   introduction: '',
-  role_id: 0,
-  status: 0,
-  create_at: '',
-  article_count: 0,
-  total_views: 0,
-  total_likes: 0
+  tech_stack: '',
+  my_story: '',
+  why: '',
+  interest: '',
+  git_hub: '',
+  csdn: ''
 })
 
 const stats = ref<ArticleStats>({
@@ -264,6 +228,90 @@ const stats = ref<ArticleStats>({
 })
 const tagCount = ref(0)
 const categoryCount = ref(0)
+
+// 编辑模式
+const isEditing = ref(false)
+const isSaving = ref(false)
+
+interface EditForm {
+  tech_stack: string
+  my_story: string
+  why: string
+  interest: string
+  git_hub: string
+  csdn: string
+}
+
+const editForm = ref<EditForm>({
+  tech_stack: '',
+  my_story: '',
+  why: '',
+  interest: '',
+  git_hub: '',
+  csdn: ''
+})
+
+let originalData: EditForm = {
+  tech_stack: '',
+  my_story: '',
+  why: '',
+  interest: '',
+  git_hub: '',
+  csdn: ''
+}
+
+const isAdmin = computed(() => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}')
+    return user.role_id === 1
+  } catch {
+    return false
+  }
+})
+
+const enterEditMode = () => {
+  editForm.value = {
+    tech_stack: aboutInfo.value.tech_stack,
+    my_story: aboutInfo.value.my_story,
+    why: aboutInfo.value.why,
+    interest: aboutInfo.value.interest,
+    git_hub: aboutInfo.value.git_hub,
+    csdn: aboutInfo.value.csdn
+  }
+  originalData = { ...editForm.value }
+  isEditing.value = true
+}
+
+const cancelEdit = () => {
+  isEditing.value = false
+}
+
+const saveEdit = async () => {
+  const payload: Record<string, string> = {}
+  const fields = ['tech_stack', 'my_story', 'why', 'interest', 'git_hub', 'csdn'] as const
+  for (const field of fields) {
+    if (editForm.value[field] !== originalData[field]) {
+      payload[field] = editForm.value[field]
+    }
+  }
+
+  if (Object.keys(payload).length === 0) {
+    isEditing.value = false
+    return
+  }
+
+  isSaving.value = true
+  try {
+    await api.put('/about', payload)
+    aboutInfo.value = { ...aboutInfo.value, ...editForm.value }
+    isEditing.value = false
+    alert('保存成功')
+  } catch (err) {
+    alert('保存失败')
+  } finally {
+    isSaving.value = false
+  }
+}
 
 const formatNumber = (num: number) => {
   if (num >= 1000) {
@@ -306,12 +354,12 @@ const loadCategoryCount = async () => {
 
 onMounted(async () => {
   try {
-    const res = await api.get('/user/info')
+    const res = await api.get('/about')
     if (res.data.data) {
-      author.value = { ...author.value, ...res.data.data }
+      aboutInfo.value = { ...aboutInfo.value, ...res.data.data }
     }
   } catch (err) {
-    console.log('获取博主信息失败，使用默认值')
+    console.log('获取关于页面信息失败，使用默认值')
   }
 
   // 加载博客数据统计
@@ -516,46 +564,6 @@ onMounted(async () => {
   margin-bottom: 0;
 }
 
-/* ========== Focus Cards ========== */
-.focus-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 16px;
-}
-
-.focus-card {
-  background: rgba(248, 250, 252, 0.8);
-  border-radius: 16px;
-  padding: 20px 16px;
-  text-align: center;
-  transition: all 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-}
-
-.focus-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.15);
-  background: rgba(16, 185, 129, 0.05);
-}
-
-.focus-card__icon {
-  font-size: 2rem;
-  margin-bottom: 12px;
-}
-
-.focus-card__title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-strong);
-  margin: 0 0 6px;
-}
-
-.focus-card__desc {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin: 0;
-}
-
 /* ========== Philosophy ========== */
 .philosophy-content {
   text-align: center;
@@ -721,6 +729,137 @@ onMounted(async () => {
   font-size: 1.5rem;
 }
 
+/* ========== Edit Mode ========== */
+.hero-edit-area {
+  margin-top: 20px;
+}
+
+.hero-edit-btn {
+  padding: 10px 24px;
+  border-radius: 12px;
+  border: 1px solid var(--primary-300);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--primary-700);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.hero-edit-btn:hover {
+  background: var(--primary-600);
+  color: #fff;
+  border-color: var(--primary-600);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+}
+
+.hero-field {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.edit-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.edit-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.edit-input:focus {
+  border-color: var(--primary-400);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.edit-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.edit-textarea:focus {
+  border-color: var(--primary-400);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.edit-social {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+
+.edit-btn {
+  padding: 10px 28px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.edit-btn--save {
+  background: var(--primary-600);
+  color: #fff;
+  border-color: var(--primary-600);
+}
+
+.edit-btn--save:hover:not(:disabled) {
+  background: var(--primary-700);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+}
+
+.edit-btn--save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.edit-btn--cancel {
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+.edit-btn--cancel:hover {
+  background: var(--bg-muted);
+  color: var(--text-strong);
+}
+
 
 
 /* ========== Responsive ========== */
@@ -736,7 +875,6 @@ onMounted(async () => {
   .hero-social-btn { width: 100%; justify-content: center; }
   
   .about-section { padding: 20px 16px; }
-  .focus-cards { grid-template-columns: repeat(2, 1fr); }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .contact-cards { grid-template-columns: 1fr; }
 }

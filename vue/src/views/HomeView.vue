@@ -460,23 +460,12 @@ onMounted(async () => {
   }
 
   try {
-    const auRes = await api.get('/admin/info')
-    if (auRes.data.data) {
-      author.value = { ...author.value, ...auRes.data.data }
-    }
-  } catch (err) {
-    // API失败，使用默认作者信息
-    console.log('获取管理员信息失败，使用默认值')
-  }
-
-  // 加载技术栈
-  try {
     const aboutRes = await api.get('/about')
-    if (aboutRes.data.data && aboutRes.data.data.tech_stack) {
-      author.value.tech_stack = aboutRes.data.data.tech_stack
+    if (aboutRes.data.data) {
+      author.value = { ...author.value, ...aboutRes.data.data }
     }
   } catch (err) {
-    console.log('获取关于页面信息失败')
+    console.log('获取关于页面信息失败，使用默认值')
   }
 
   // 加载文章统计数据

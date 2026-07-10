@@ -8,9 +8,8 @@ import (
 
 // RegisterRoutes 注册关于页面路由
 func (ctrl *AboutController) RegisterRoutes(r *gin.RouterGroup) {
-	// 前台无需认证的接口
-	r.GET("/admin/info", ctrl.GetAdminInfo) // 获取管理员信息
-	r.GET("/about", ctrl.GetAboutInfo)      // 获取关于页面完整信息
+	// 获取关于页面完整信息（无需认证）
+	r.GET("/about", ctrl.GetAboutInfo)
 
 	// 后台需要管理员认证的接口
 	adminGroup := r.Group("")

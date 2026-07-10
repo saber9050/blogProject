@@ -234,18 +234,24 @@ func (s *authService) ReSetPassword(req *request.ResetPasswordRequest) error {
 
 // Logout 登出服务
 func (s *authService) Logout(token string) error {
+	parts := strings.SplitN(token, " ", 2)
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		fmt.Printf("令牌格式错误")
+		return nil
+	}
 	// 解析token，得到过期时间
-	claim, err := jwt.ParseToken(token)
+	claim, err := jwt.ParseToken(parts[1])
 	if err != nil {
-		return fmt.Errorf("解析token失败:%s", err)
+		fmt.Printf("登出解析token失败:%s\n", err)
+		return nil
 	}
 	now := time.Now()
 	// 得到剩余时间
 	seconds := claim.ExpiresAt.Sub(now).Seconds()
-	// 加入黑名单
+	// 加入黑名单（失败不阻断登出）
 	err = s.cache.BlacklistToken(token, int64(seconds))
 	if err != nil {
-		return fmt.Errorf("将token加入黑名单失败:%s", err)
+		fmt.Printf("将token加入黑名单失败:%s\n", err)
 	}
 	return nil
 }

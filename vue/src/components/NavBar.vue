@@ -4,7 +4,7 @@
       <!-- 品牌（不可点击） -->
       <div class="navbar__brand">
         <span class="navbar__brand-icon">&#9998;</span>
-        <strong>{{ user ? user.user_name + '的博客' : '我的博客' }}</strong>
+        <strong>{{ blogName ? blogName + '的博客' : '我的博客' }}</strong>
       </div>
 
       <!-- 导航按钮：首页 / 关于 -->
@@ -84,6 +84,7 @@ interface UserInfo {
 
 const router = useRouter()
 const user = ref<UserInfo | null>(null)
+const blogName = ref('')
 const searchText = ref('')
 const dropdownOpen = ref(false)
 let closeTimer: ReturnType<typeof setTimeout> | null = null
@@ -131,21 +132,29 @@ const handleLogout = async () => {
 
 onMounted(async () => {
   const token = localStorage.getItem('token')
-  if (!token) return
-
-  try {
-    const res = await api.get('/user/info')
-    if (res.data.data) {
-      user.value = res.data.data
-      localStorage.setItem('user', JSON.stringify(res.data.data))
-    }
-  } catch {
-    // API 失败时尝试从 localStorage 读取
-    const stored = localStorage.getItem('user')
-    if (stored) {
-      try { user.value = JSON.parse(stored) } catch { user.value = null }
+  if (token) {
+    try {
+      const res = await api.get('/user/info')
+      if (res.data.data) {
+        user.value = res.data.data
+        localStorage.setItem('user', JSON.stringify(res.data.data))
+      }
+    } catch {
+      // API 失败时尝试从 localStorage 读取
+      const stored = localStorage.getItem('user')
+      if (stored) {
+        try { user.value = JSON.parse(stored) } catch { user.value = null }
+      }
     }
   }
+
+  // 获取管理员名称用于品牌展示（无需登录）
+  try {
+    const aboutRes = await api.get('/about')
+    if (aboutRes.data.data?.admin_name) {
+      blogName.value = aboutRes.data.data.admin_name
+    }
+  } catch { /* 忽略 */ }
 
   // 监听用户信息更新事件（来自 ProfileView）
   const handleUserInfoUpdated = (event: CustomEvent) => {

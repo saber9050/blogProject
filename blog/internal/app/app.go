@@ -3,6 +3,7 @@ package app
 import (
 	"blog/internal/api"
 	auth3 "blog/internal/cache/auth"
+	"blog/internal/model/entity"
 	"blog/internal/repository/about"
 	"blog/internal/repository/article"
 	"blog/internal/repository/auth"
@@ -126,16 +127,19 @@ func (a *App) initDatabase() error {
 	//自动迁移数据库表
 	//logger.Info("开始数据库迁移...")
 	if err := a.mysqlDB.AutoMigrate(
-	// 用户相关
-	//&entity.User{},
+		// 用户相关
+		//&entity.User{},
 
-	// 文章相关
-	//&entity.Article{},
-	//&entity.Tag{},
-	//&entity.TagArticle{},
-	//&entity.Category{},
-	//&entity.Comment{},
-	//&entity.Like{},
+		// 文章相关
+		//&entity.Article{},
+		//&entity.Tag{},
+		//&entity.TagArticle{},
+		//&entity.Category{},
+		//&entity.Comment{},
+		//&entity.Like{},
+
+		// 关于页面
+		&entity.About{},
 	); err != nil {
 		logger.Warn("数据库迁移警告", zap.Error(err))
 	} else {
@@ -183,7 +187,7 @@ func (a *App) initDependencies() {
 	cSvc := commentSvc.NewCommentService(cRepo)
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
-	aboutSvc := aboutSvc.NewAboutService(aboutRepo, uRepo)
+	aboutSvc := aboutSvc.NewAboutService(aboutRepo, a.minioClient, uRepo)
 
 	// 设置评论服务的文章仓库依赖（用于更新评论计数）
 	cSvc.SetArticleRepo(aRepo)
