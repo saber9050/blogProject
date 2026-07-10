@@ -8,4 +8,5 @@ import (
 func (ctrl *CategoryController) RegisterRoutes(r *gin.RouterGroup) {
 	// 前台分类接口（无需认证）
 	r.GET("/categories", ctrl.ListCategories)
+	r.GET("/categories/count", ctrl.CountEnabledCategories) // 统计启用分类数量（无需认证）
 }

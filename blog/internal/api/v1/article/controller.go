@@ -114,3 +114,14 @@ func (ctrl *ArticleController) UnlikeArticle(c *gin.Context) {
 
 	response.Success(c, nil)
 }
+
+// GetArticleStats 获取文章统计数据
+func (ctrl *ArticleController) GetArticleStats(c *gin.Context) {
+	result, err := ctrl.articleService.GetStats()
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+
+	response.Success(c, result)
+}

@@ -44,3 +44,8 @@ type PaginatedResponse struct {
 	Page     int         `json:"page"`
 	PageSize int         `json:"page_size"`
 }
+
+// CountResponse 通用计数响应
+type CountResponse struct {
+	Count int64 `json:"count"`
+}

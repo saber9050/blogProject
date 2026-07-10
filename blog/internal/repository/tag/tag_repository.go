@@ -113,3 +113,13 @@ func (r *tagRepository) IsExistsByName(name string, excludeID uint) (bool, error
 func (r *tagRepository) DeleteTagArticles(tagID uint) error {
 	return r.db.Where("tag_id = ?", tagID).Delete(&entity.TagArticle{}).Error
 }
+
+// CountEnabled 统计启用状态的标签数量
+func (r *tagRepository) CountEnabled() (int64, error) {
+	var count int64
+	err := r.db.Model(&entity.Tag{}).Where("status = ?", 1).Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}

@@ -119,3 +119,12 @@ func (s *tagService) Delete(id uint) error {
 	}
 	return s.tagRepo.Delete(id)
 }
+
+// CountEnabled 统计启用状态的标签数量
+func (s *tagService) CountEnabled() (int64, error) {
+	count, err := s.tagRepo.CountEnabled()
+	if err != nil {
+		return 0, fmt.Errorf("统计启用标签失败: %w", err)
+	}
+	return count, nil
+}

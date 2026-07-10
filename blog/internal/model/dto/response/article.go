@@ -47,3 +47,10 @@ type ArticleDetailResponse struct {
 type CreateArticleResponse struct {
 	ID uint `json:"id"`
 }
+
+// ArticleStatsResponse 文章统计响应
+type ArticleStatsResponse struct {
+	ArticleCount int64 `json:"article_count"`
+	TotalViews   int64 `json:"total_views"`
+	TotalLikes   int64 `json:"total_likes"`
+}

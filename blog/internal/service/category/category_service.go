@@ -123,3 +123,12 @@ func (s *categoryService) Delete(id uint) error {
 	}
 	return s.categoryRepo.Delete(id)
 }
+
+// CountEnabled 统计启用状态的分类数量
+func (s *categoryService) CountEnabled() (int64, error) {
+	count, err := s.categoryRepo.CountEnabled()
+	if err != nil {
+		return 0, fmt.Errorf("统计启用分类失败: %w", err)
+	}
+	return count, nil
+}

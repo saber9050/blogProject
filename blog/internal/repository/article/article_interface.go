@@ -38,4 +38,6 @@ type ArticleRepository interface {
 	IncrementCommentCount(articleID uint) error
 	// DecrementCommentCount 减少评论计数
 	DecrementCommentCount(articleID uint) error
+	// GetStats 获取已发布文章的统计数据（文章数、总阅读量、总点赞量）
+	GetStats() (articleCount, totalViews, totalLikes int64, err error)
 }

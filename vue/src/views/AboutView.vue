@@ -132,27 +132,27 @@
               <div class="stats-grid">
                 <div class="stat-card">
                   <div class="stat-card__icon">&#128196;</div>
-                  <div class="stat-card__value">{{ author.article_count || 32 }}</div>
+                  <div class="stat-card__value">{{ stats.article_count }}</div>
                   <div class="stat-card__label">文章</div>
                 </div>
                 <div class="stat-card">
                   <div class="stat-card__icon">&#128065;</div>
-                  <div class="stat-card__value">{{ formatNumber(author.total_views || 102000) }}</div>
+                  <div class="stat-card__value">{{ formatNumber(stats.total_views) }}</div>
                   <div class="stat-card__label">阅读</div>
                 </div>
                 <div class="stat-card">
                   <div class="stat-card__icon">&#10084;</div>
-                  <div class="stat-card__value">{{ author.total_likes || 580 }}</div>
+                  <div class="stat-card__value">{{ stats.total_likes }}</div>
                   <div class="stat-card__label">点赞</div>
                 </div>
                 <div class="stat-card">
                   <div class="stat-card__icon">&#128483;</div>
-                  <div class="stat-card__value">25</div>
+                  <div class="stat-card__value">{{ tagCount }}</div>
                   <div class="stat-card__label">标签</div>
                 </div>
                 <div class="stat-card">
                   <div class="stat-card__icon">&#128193;</div>
-                  <div class="stat-card__value">8</div>
+                  <div class="stat-card__value">{{ categoryCount }}</div>
                   <div class="stat-card__label">分类</div>
                 </div>
               </div>
@@ -233,6 +233,12 @@ interface Author {
   total_likes?: number
 }
 
+interface ArticleStats {
+  article_count: number
+  total_views: number
+  total_likes: number
+}
+
 const author = ref<Author>({
   user_id: 0,
   user_name: '',
@@ -248,11 +254,51 @@ const author = ref<Author>({
   total_likes: 0
 })
 
+const stats = ref<ArticleStats>({
+  article_count: 0,
+  total_views: 0,
+  total_likes: 0
+})
+const tagCount = ref(0)
+const categoryCount = ref(0)
+
 const formatNumber = (num: number) => {
   if (num >= 1000) {
     return (num / 1000).toFixed(1) + 'K'
   }
   return num.toString()
+}
+
+const loadStats = async () => {
+  try {
+    const res = await api.get('/articles/stats')
+    const data = res.data.data || res.data
+    stats.value = {
+      article_count: data.article_count ?? 0,
+      total_views: data.total_views ?? 0,
+      total_likes: data.total_likes ?? 0
+    }
+  } catch (err) {
+    console.log('获取文章统计数据失败')
+  }
+}
+
+const loadTagCount = async () => {
+  try {
+    const res = await api.get('/tags/count')
+    tagCount.value = (res.data.data || res.data).count ?? 0
+  } catch (err) {
+    console.log('获取标签数量失败')
+  }
+}
+
+const loadCategoryCount = async () => {
+  try {
+    const res = await api.get('/categories/count')
+    categoryCount.value = (res.data.data || res.data).count ?? 0
+  } catch (err) {
+    console.log('获取分类数量失败')
+  }
 }
 
 onMounted(async () => {
@@ -264,6 +310,11 @@ onMounted(async () => {
   } catch (err) {
     console.log('获取博主信息失败，使用默认值')
   }
+
+  // 加载博客数据统计
+  loadStats()
+  loadTagCount()
+  loadCategoryCount()
 })
 </script>
 

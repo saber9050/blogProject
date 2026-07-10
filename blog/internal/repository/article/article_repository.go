@@ -220,3 +220,20 @@ func (r *articleRepository) DecrementCommentCount(articleID uint) error {
 	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
 		UpdateColumn("comment_count", gorm.Expr("comment_count - 1")).Error
 }
+
+// GetStats 获取已发布文章的统计数据（文章数、总阅读量、总点赞量）
+func (r *articleRepository) GetStats() (int64, int64, int64, error) {
+	var result struct {
+		ArticleCount int64 `gorm:"column:article_count"`
+		TotalViews   int64 `gorm:"column:total_views"`
+		TotalLikes   int64 `gorm:"column:total_likes"`
+	}
+	err := r.db.Model(&entity.Article{}).
+		Select("COUNT(*) as article_count, COALESCE(SUM(views), 0) as total_views, COALESCE(SUM(like_count), 0) as total_likes").
+		Where("status = ?", 1).
+		Scan(&result).Error
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return result.ArticleCount, result.TotalViews, result.TotalLikes, nil
+}

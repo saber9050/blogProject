@@ -1,8 +1,9 @@
 package tag
 
 import (
+	dtoResp "blog/internal/model/dto/response"
 	tagSvc "blog/internal/service/tag"
-	"blog/pkg/response"
+	resp "blog/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,9 +24,20 @@ func NewTagController(tagService tagSvc.TagService) *TagController {
 func (ctrl *TagController) ListTags(c *gin.Context) {
 	list, err := ctrl.tagService.ListPublic()
 	if err != nil {
-		response.BizError(c, err)
+		resp.BizError(c, err)
 		return
 	}
 
-	response.Success(c, list)
+	resp.Success(c, list)
+}
+
+// CountEnabledTags 统计启用标签数量（前台接口，无需认证）
+func (ctrl *TagController) CountEnabledTags(c *gin.Context) {
+	count, err := ctrl.tagService.CountEnabled()
+	if err != nil {
+		resp.BizError(c, err)
+		return
+	}
+
+	resp.Success(c, &dtoResp.CountResponse{Count: count})
 }

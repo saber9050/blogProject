@@ -108,3 +108,13 @@ func (r *categoryRepository) CountByCategoryID(categoryID uint) (int64, error) {
 	}
 	return count, nil
 }
+
+// CountEnabled 统计启用状态的分类数量
+func (r *categoryRepository) CountEnabled() (int64, error) {
+	var count int64
+	err := r.db.Model(&entity.Category{}).Where("status = ?", 1).Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}

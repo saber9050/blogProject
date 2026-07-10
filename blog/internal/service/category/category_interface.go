@@ -17,4 +17,6 @@ type CategoryService interface {
 	Update(id uint, req *request.UpdateCategoryRequest) error
 	// Delete 删除分类
 	Delete(id uint) error
+	// CountEnabled 统计启用状态的分类数量
+	CountEnabled() (int64, error)
 }

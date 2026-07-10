@@ -364,3 +364,16 @@ func (s *articleService) UploadImage(fileHeader *multipart.FileHeader) (string, 
 	}
 	return s.minio.GetFileURL(str), nil
 }
+
+// GetStats 获取已发布文章的统计数据
+func (s *articleService) GetStats() (*response.ArticleStatsResponse, error) {
+	count, views, likes, err := s.articleRepo.GetStats()
+	if err != nil {
+		return nil, fmt.Errorf("获取文章统计数据失败: %w", err)
+	}
+	return &response.ArticleStatsResponse{
+		ArticleCount: count,
+		TotalViews:   views,
+		TotalLikes:   likes,
+	}, nil
+}

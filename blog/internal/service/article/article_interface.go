@@ -26,4 +26,6 @@ type ArticleService interface {
 	AdminDelete(id uint) error
 	// UploadImage 上传图片（返回完整路径）
 	UploadImage(fileHeader *multipart.FileHeader) (string, error)
+	// GetStats 获取已发布文章的统计数据
+	GetStats() (*response.ArticleStatsResponse, error)
 }

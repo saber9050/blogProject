@@ -20,4 +20,6 @@ type CategoryRepository interface {
 	IsExistsByName(name string, excludeID uint) (bool, error)
 	// CountByCategoryID 统计分类下的文章数
 	CountByCategoryID(categoryID uint) (int64, error)
+	// CountEnabled 统计启用状态的分类数量
+	CountEnabled() (int64, error)
 }

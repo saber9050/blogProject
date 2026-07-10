@@ -22,4 +22,6 @@ type TagRepository interface {
 	IsExistsByName(name string, excludeID uint) (bool, error)
 	// DeleteTagArticles 删除标签与文章的关联关系
 	DeleteTagArticles(tagID uint) error
+	// CountEnabled 统计启用状态的标签数量
+	CountEnabled() (int64, error)
 }

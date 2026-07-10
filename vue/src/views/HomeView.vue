@@ -133,15 +133,15 @@
             
             <div class="sidebar-stats">
               <div class="sidebar-stat">
-                <span class="sidebar-stat__value">{{ author.article_count || 32 }}</span>
+                <span class="sidebar-stat__value">{{ stats.article_count }}</span>
                 <span class="sidebar-stat__label">文章</span>
               </div>
               <div class="sidebar-stat">
-                <span class="sidebar-stat__value">{{ formatNumber(author.total_views || 102000) }}</span>
+                <span class="sidebar-stat__value">{{ formatNumber(stats.total_views) }}</span>
                 <span class="sidebar-stat__label">阅读</span>
               </div>
               <div class="sidebar-stat">
-                <span class="sidebar-stat__value">{{ author.total_likes || 580 }}</span>
+                <span class="sidebar-stat__value">{{ stats.total_likes }}</span>
                 <span class="sidebar-stat__label">点赞</span>
               </div>
             </div>
@@ -213,9 +213,20 @@ interface Author {
   total_likes: number
 }
 
+interface ArticleStats {
+  article_count: number
+  total_views: number
+  total_likes: number
+}
+
 const router = useRouter()
 const articles = ref<Article[]>([])
 const sidebarArticles = ref<Article[]>([])  // 侧边栏最近文章
+const stats = ref<ArticleStats>({
+  article_count: 0,
+  total_views: 0,
+  total_likes: 0
+})
 const categories = ref<Category[]>([])
 const tags = ref<Tag[]>([])
 const currentPage = ref(1)
@@ -427,6 +438,21 @@ const loadSidebarArticles = async () => {
   }
 }
 
+// 加载统计数据（文章统计、标签数量、分类数量）
+const loadStats = async () => {
+  try {
+    const res = await api.get('/articles/stats')
+    const data = res.data.data || res.data
+    stats.value = {
+      article_count: data.article_count ?? 0,
+      total_views: data.total_views ?? 0,
+      total_likes: data.total_likes ?? 0
+    }
+  } catch (error) {
+    console.error('加载文章统计数据失败:', error)
+  }
+}
+
 onMounted(async () => {
   // 独立加载分类、标签、作者信息（互不影响）
   try {
@@ -453,6 +479,8 @@ onMounted(async () => {
     console.log('用户未登录或获取作者信息失败，使用默认值')
   }
 
+  // 加载文章统计数据
+  loadStats()
   // 加载侧边栏最近文章
   loadSidebarArticles()
   // 加载文章列表

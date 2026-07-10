@@ -17,4 +17,6 @@ type TagService interface {
 	Update(id uint, req *request.UpdateTagRequest) error
 	// Delete 删除标签
 	Delete(id uint) error
+	// CountEnabled 统计启用状态的标签数量
+	CountEnabled() (int64, error)
 }
