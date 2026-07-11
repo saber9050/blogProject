@@ -532,6 +532,40 @@ func (s *articleService) syncArticleImages(articleID uint, content string) {
 	}
 }
 
+// TransferCategory 将一个分类下的所有文章转移到另一个分类
+func (s *articleService) TransferCategory(fromTypeID, toTypeID uint) (int64, error) {
+	// 1. 验证源分类是否存在
+	srcCategory, err := s.categoryRepo.FindByID(fromTypeID)
+	if err != nil {
+		return 0, fmt.Errorf("查找源分类失败: %w", err)
+	}
+	if srcCategory == nil {
+		return 0, errors.New(errors.CodeBadRequest, "源分类不存在")
+	}
+
+	// 2. 验证目标分类是否存在
+	dstCategory, err := s.categoryRepo.FindByID(toTypeID)
+	if err != nil {
+		return 0, fmt.Errorf("查找目标分类失败: %w", err)
+	}
+	if dstCategory == nil {
+		return 0, errors.New(errors.CodeBadRequest, "目标分类不存在")
+	}
+
+	// 3. 验证源分类和目标分类不能相同
+	if fromTypeID == toTypeID {
+		return 0, errors.New(errors.CodeBadRequest, "源分类和目标分类不能相同")
+	}
+
+	// 4. 执行转移
+	affected, err := s.articleRepo.TransferCategory(fromTypeID, toTypeID)
+	if err != nil {
+		return 0, fmt.Errorf("转移分类失败: %w", err)
+	}
+
+	return affected, nil
+}
+
 // GetStats 获取已发布文章的统计数据
 func (s *articleService) GetStats() (*response.ArticleStatsResponse, error) {
 	count, views, likes, err := s.articleRepo.GetStats()

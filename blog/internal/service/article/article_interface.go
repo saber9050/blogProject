@@ -28,4 +28,6 @@ type ArticleService interface {
 	UploadImage(fileHeader *multipart.FileHeader) (string, error)
 	// GetStats 获取已发布文章的统计数据
 	GetStats() (*response.ArticleStatsResponse, error)
+	// TransferCategory 将一个分类下的所有文章转移到另一个分类
+	TransferCategory(fromTypeID, toTypeID uint) (int64, error)
 }

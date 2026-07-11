@@ -65,6 +65,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">文章管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="transferModalVisible = true">一键转移</button>
               <button class="btn-sm btn-sm--primary" @click="openModal('article')">+ 新增</button>
             </div>
           </div>
@@ -332,6 +333,34 @@
         </div>
       </div>
     </div>
+
+    <!-- ========== 一键转移分类模态框 ========== -->
+    <div v-if="transferModalVisible" class="modal-overlay" @click.self="transferModalVisible = false">
+      <div class="modal">
+        <h3 class="modal__title">一键转移分类</h3>
+        <div class="modal__body">
+          <div class="modal__field">
+            <label class="modal__label"><span class="required-mark">*</span>源分类</label>
+            <select v-model.number="transferFrom" class="modal__input" :class="{ 'modal__input--required-empty': !transferFrom }">
+              <option :value="0" disabled>请选择源分类</option>
+              <option v-for="c in adminCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </div>
+          <div class="modal__field">
+            <label class="modal__label"><span class="required-mark">*</span>目标分类</label>
+            <select v-model.number="transferTo" class="modal__input" :class="{ 'modal__input--required-empty': !transferTo }">
+              <option :value="0" disabled>请选择目标分类</option>
+              <option v-for="c in adminCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </div>
+          <p class="transfer-hint">将源分类下的所有文章转移到目标分类。</p>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--cancel" @click="transferModalVisible = false">取消</button>
+          <button class="btn btn--primary" :disabled="!transferFrom || !transferTo || transferFrom === transferTo" @click="handleTransfer">确认转移</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -395,6 +424,11 @@ const editingUser = ref<UserItem | null>(null)
 // 删除确认模态框
 const deleteModalVisible = ref(false)
 const deleteTarget = ref<{ type: string; id: number } | null>(null)
+
+// 一键转移分类
+const transferModalVisible = ref(false)
+const transferFrom = ref(0)
+const transferTo = ref(0)
 const modalTitle = ref('')
 const modalForm = reactive<Record<string, any>>({
   user_name: '',
@@ -842,6 +876,31 @@ const confirmDelete = async () => {
   }
 }
 
+const handleTransfer = async () => {
+  if (!transferFrom.value || !transferTo.value || transferFrom.value === transferTo.value) return
+  try {
+    await api.put('/admin/articles/transfer', {
+      from_type_id: transferFrom.value,
+      to_type_id: transferTo.value
+    })
+    showToast('转移成功', 'success')
+    transferModalVisible.value = false
+    transferFrom.value = 0
+    transferTo.value = 0
+    // 重新加载文章和分类列表
+    const [aRes, cRes] = await Promise.all([
+      api.get('/admin/articles'),
+      api.get('/admin/categories')
+    ])
+    adminArticles.value = aRes.data.data?.list || []
+    adminCategories.value = cRes.data.data?.list || []
+  } catch (error: any) {
+    console.error('转移失败:', error)
+    const msg = error?.response?.data?.message || '转移失败，请重试'
+    showToast(msg, 'error')
+  }
+}
+
 onMounted(async () => {
   try {
     const [uRes, aRes, cRes, tRes] = await Promise.all([
@@ -1156,5 +1215,11 @@ select.modal__input { appearance: auto; }
 
 .editor-container :deep(.w-e-text-container) {
   min-height: 260px;
+}
+
+.transfer-hint {
+  font-size: 12px;
+  color: #999;
+  margin: 8px 0 0;
 }
 </style>

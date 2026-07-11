@@ -204,6 +204,25 @@ func (ctrl *AdminController) DeleteArticle(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// TransferArticleCategory 一键转移分类
+func (ctrl *AdminController) TransferArticleCategory(c *gin.Context) {
+	var req request.TransferCategoryReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数错误")
+		return
+	}
+
+	affected, err := ctrl.articleService.TransferCategory(req.FromTypeID, req.ToTypeID)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+
+	response.SuccessWithMessage(c, "转移成功", gin.H{
+		"affected_count": affected,
+	})
+}
+
 // UploadImage 上传文章图片,返回完整路径
 func (ctrl *AdminController) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("file")

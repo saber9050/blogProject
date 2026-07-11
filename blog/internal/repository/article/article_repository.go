@@ -268,3 +268,9 @@ func (r *articleRepository) DeleteArticleImages(ids []uint) error {
 func (r *articleRepository) DeleteArticleImagesByArticleID(articleID uint) error {
 	return r.db.Where("article_id = ?", articleID).Delete(&entity.ArticleImage{}).Error
 }
+
+// TransferCategory 将一个分类下的所有文章转移到另一个分类，返回受影响行数
+func (r *articleRepository) TransferCategory(fromTypeID, toTypeID uint) (int64, error) {
+	result := r.db.Model(&entity.Article{}).Where("type_id = ?", fromTypeID).Update("type_id", toTypeID)
+	return result.RowsAffected, result.Error
+}

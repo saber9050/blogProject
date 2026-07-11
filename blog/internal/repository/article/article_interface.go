@@ -49,4 +49,6 @@ type ArticleRepository interface {
 	DeleteArticleImages(ids []uint) error
 	// DeleteArticleImagesByArticleID 删除文章的所有图片引用
 	DeleteArticleImagesByArticleID(articleID uint) error
+	// TransferCategory 将一个分类下的所有文章转移到另一个分类，返回受影响行数
+	TransferCategory(fromTypeID, toTypeID uint) (int64, error)
 }

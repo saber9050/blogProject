@@ -22,6 +22,12 @@ type UpdateArticleRequest struct {
 	Status   int8   `json:"status" binding:"oneof=0 1"`
 }
 
+// TransferCategoryReq 一键转移分类请求
+type TransferCategoryReq struct {
+	FromTypeID uint `json:"from_type_id" binding:"required"`
+	ToTypeID   uint `json:"to_type_id" binding:"required"`
+}
+
 // ArticleListQuery 文章列表查询参数
 type ArticleListQuery struct {
 	Page       int    `form:"page"`
