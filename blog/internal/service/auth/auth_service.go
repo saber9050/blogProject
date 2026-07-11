@@ -217,7 +217,7 @@ func (s *authService) ReSetPassword(req *request.ResetPasswordRequest) error {
 		return errors.New(errors.CodeBadRequest, "验证码错误")
 	}
 	// 核验密码
-	if req.NewPassword == req.ACK {
+	if req.NewPassword != req.ACK {
 		return errors.New(errors.CodeBadRequest, "两次密码不同")
 	}
 	// 更新密码
