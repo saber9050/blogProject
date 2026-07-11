@@ -60,10 +60,10 @@ func (s *authService) Register(req *request.RegisterRequest) error {
 	// 创建账号
 	hash, err := utils.HashPassword(req.Password)
 	if err != nil {
-		return fmt.Errorf("密码加密失败%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "密码加密失败", err)
 	}
 	if err := s.authRepo.CreateUser(req.UserName, req.Account, hash, 0); err != nil {
-		return fmt.Errorf("注册失败%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "注册失败", err)
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func (s *authService) Login(req *request.LoginRequest) (*response.LoginResponse,
 	//	验证账号
 	user, err := s.authRepo.FindUserByAccount(req.Account)
 	if err != nil {
-		return nil, fmt.Errorf("根据账号查找用户失败:%s", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "根据账号查找用户失败", err)
 	}
 	if user == nil {
 		return nil, errors.New(errors.CodeNotFound, "该账号不存在")
@@ -93,7 +93,7 @@ func (s *authService) Login(req *request.LoginRequest) (*response.LoginResponse,
 	roleID := uint(user.RoleID)
 	token, err := jwt.GenerateToken(user.ID, user.UserName, roleID)
 	if err != nil {
-		return nil, fmt.Errorf("生成 JWT TOKEN 失败:%s", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "生成 JWT TOKEN 失败", err)
 	}
 	res := &response.LoginResponse{
 		UserName:   user.UserName,
@@ -114,7 +114,7 @@ func (s *authService) EmailLogin(req *request.EmailLoginRequest) (*response.Logi
 	// 通过邮箱找用户
 	user, err := s.authRepo.FindUserByEmail(req.Email)
 	if err != nil {
-		return nil, fmt.Errorf("根据邮箱查找用户失败:%s", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "根据邮箱查找用户失败", err)
 	}
 	if user == nil {
 		return nil, errors.New(errors.CodeNotFound, "该邮箱不存在")
@@ -123,7 +123,7 @@ func (s *authService) EmailLogin(req *request.EmailLoginRequest) (*response.Logi
 	roleID := uint(user.RoleID)
 	token, err := jwt.GenerateToken(user.ID, user.UserName, roleID)
 	if err != nil {
-		return nil, fmt.Errorf("生成 JWT TOKEN 失败:%s", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "生成 JWT TOKEN 失败", err)
 	}
 	res := &response.LoginResponse{
 		UserName:   user.UserName,
@@ -171,17 +171,17 @@ func (s *authService) SendEmailCaptcha(req *request.SendEmailCaptchaRequest) err
 	// 创建验证码
 	captcha, err := utils.GenerateRandomString(constant.CaptchaLength)
 	if err != nil {
-		return fmt.Errorf("创建验证码失败:%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "创建验证码失败", err)
 	}
 	// 缓存验证码
 	err = s.cache.StoreEmailCaptcha(req.Email, captcha, req.Purpose, constant.CaptchaExpire)
 	if err != nil {
-		return fmt.Errorf("缓存验证码失败:%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "缓存验证码失败", err)
 	}
 	// 检查频率限制
 	ok, err := s.cache.CheckEmailSendLimit(req.Email)
 	if err != nil {
-		return fmt.Errorf("检查邮箱发送频率失败:%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "检查邮箱发送频率失败", err)
 	}
 	if !ok {
 		return errors.New(errors.CodeBadRequest, "请勿频繁发送验证码，请60秒后再试")
@@ -191,9 +191,9 @@ func (s *authService) SendEmailCaptcha(req *request.SendEmailCaptchaRequest) err
 	if err != nil {
 		// 删除频率限制
 		if err := s.cache.DeleteEmailSendLimit(req.Email); err != nil {
-			return fmt.Errorf("删除邮箱频率限制失败:%s", err)
+			return errors.NewWithErr(errors.CodeInternalError, "删除邮箱频率限制失败", err)
 		}
-		return fmt.Errorf("发送邮箱验证码失败:%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "发送邮箱验证码失败", err)
 	}
 	return nil
 }
@@ -203,7 +203,7 @@ func (s *authService) ReSetPassword(req *request.ResetPasswordRequest) error {
 	// 找到用户
 	user, err := s.authRepo.FindUserByEmail(req.Email)
 	if err != nil {
-		return fmt.Errorf("通过邮箱找到用户失败:%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "通过邮箱找到用户失败", err)
 	}
 	if user == nil {
 		return errors.New(errors.CodeNotFound, "没有绑定该邮箱的用户")
@@ -211,7 +211,7 @@ func (s *authService) ReSetPassword(req *request.ResetPasswordRequest) error {
 	// 核验验证码
 	res, err := s.cache.GetEmailCaptcha(req.Email, constant.CaptchaPurposeResetPassword)
 	if err != nil {
-		return fmt.Errorf("获取邮箱验证码失败:%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "获取邮箱验证码失败", err)
 	}
 	if res != req.Captcha {
 		return errors.New(errors.CodeBadRequest, "验证码错误")
@@ -223,11 +223,11 @@ func (s *authService) ReSetPassword(req *request.ResetPasswordRequest) error {
 	// 更新密码
 	hash, err := utils.HashPassword(req.NewPassword)
 	if err != nil {
-		return fmt.Errorf("密码加密失败:%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "密码加密失败", err)
 	}
 	err = s.authRepo.UpdateUserPassword(int(user.ID), hash)
 	if err != nil {
-		return fmt.Errorf("更新密码失败:%s", err)
+		return errors.NewWithErr(errors.CodeInternalError, "更新密码失败", err)
 	}
 	return nil
 }
@@ -260,7 +260,7 @@ func (s *authService) Logout(token string) error {
 func (s *authService) IsExistsName(name string) (bool, error) {
 	ok, err := s.authRepo.IsExistsByName(name)
 	if err != nil {
-		return false, fmt.Errorf("检测名称是否存在失败:%s", err)
+		return false, errors.NewWithErr(errors.CodeInternalError, "检测名称是否存在失败", err)
 	}
 	return ok, nil
 }
@@ -269,7 +269,7 @@ func (s *authService) IsExistsName(name string) (bool, error) {
 func (s *authService) IsExistsAccount(account string) (bool, error) {
 	ok, err := s.authRepo.IsExistsByAccount(account)
 	if err != nil {
-		return false, fmt.Errorf("检测账号是否存在失败:%s", err)
+		return false, errors.NewWithErr(errors.CodeInternalError, "检测账号是否存在失败", err)
 	}
 	return ok, nil
 }

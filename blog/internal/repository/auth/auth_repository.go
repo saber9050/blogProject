@@ -46,7 +46,7 @@ func (r *authRepository) FindUserByEmail(email string) (*entity.User, error) {
 // UpdateUserPassword 修改密码
 func (r *authRepository) UpdateUserPassword(id int, newPasswordHash string) error {
 	return r.db.Model(&entity.User{}).Where("id = ?", id).
-		Update("password_hash = ?", newPasswordHash).Error
+		Update("password_hash", newPasswordHash).Error
 }
 
 // IsExistsByName 验证该名字是否存在

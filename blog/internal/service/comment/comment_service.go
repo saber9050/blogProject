@@ -151,7 +151,7 @@ func (s *commentService) CreateComment(articleID, userID uint, req *request.Crea
 			if err == gorm.ErrRecordNotFound {
 				return nil, errors.NewDefault(errors.CodeNotFound)
 			}
-			return nil, fmt.Errorf("查询父评论失败: %w", err)
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询父评论失败", err)
 		}
 		if parent.ArticleID != articleID {
 			return nil, errors.New(errors.CodeBadRequest, "父评论不属于该文章")
@@ -214,7 +214,7 @@ func (s *commentService) DeleteComment(commentID, userID uint, roleID int8) erro
 		if err == gorm.ErrRecordNotFound {
 			return errors.NewDefault(errors.CodeNotFound)
 		}
-		return fmt.Errorf("查询评论失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
 	}
 
 	// 权限检查：只有评论作者或管理员可以删除

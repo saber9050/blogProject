@@ -6,7 +6,6 @@ import (
 	"blog/internal/model/entity"
 	repo "blog/internal/repository/tag"
 	"blog/pkg/errors"
-	"fmt"
 )
 
 // tagService 标签服务实现
@@ -23,7 +22,7 @@ func NewTagService(tagRepo repo.TagRepository) TagService {
 func (s *tagService) ListPublic() ([]*response.TagPublicResponse, error) {
 	list, err := s.tagRepo.ListPublic()
 	if err != nil {
-		return nil, fmt.Errorf("获取标签列表失败: %w", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取标签列表失败", err)
 	}
 	var result []*response.TagPublicResponse
 	for _, t := range list {
@@ -39,7 +38,7 @@ func (s *tagService) ListPublic() ([]*response.TagPublicResponse, error) {
 func (s *tagService) List(page, pageSize int, status *int, keyword string) (*response.PaginatedResponse, error) {
 	list, total, err := s.tagRepo.List(page, pageSize, status, keyword)
 	if err != nil {
-		return nil, fmt.Errorf("获取标签列表失败: %w", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取标签列表失败", err)
 	}
 	var items []*response.TagAdminResponse
 	for _, t := range list {
@@ -63,7 +62,7 @@ func (s *tagService) Create(req *request.CreateTagRequest) error {
 	// 检查标签名称是否已存在
 	exists, err := s.tagRepo.IsExistsByName(req.Name, 0)
 	if err != nil {
-		return fmt.Errorf("检查标签名称失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "检查标签名称失败", err)
 	}
 	if exists {
 		return errors.New(errors.CodeBadRequest, "标签名称已存在")
@@ -80,7 +79,7 @@ func (s *tagService) Update(id uint, req *request.UpdateTagRequest) error {
 	// 检查标签是否存在
 	tag, err := s.tagRepo.FindByID(id)
 	if err != nil {
-		return fmt.Errorf("查找标签失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "查找标签失败", err)
 	}
 	if tag == nil {
 		return errors.New(errors.CodeNotFound, "标签不存在")
@@ -88,7 +87,7 @@ func (s *tagService) Update(id uint, req *request.UpdateTagRequest) error {
 	// 检查标签名称是否重复
 	exists, err := s.tagRepo.IsExistsByName(req.Name, id)
 	if err != nil {
-		return fmt.Errorf("检查标签名称失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "检查标签名称失败", err)
 	}
 	if exists {
 		return errors.New(errors.CodeBadRequest, "标签名称已存在")
@@ -108,14 +107,14 @@ func (s *tagService) Delete(id uint) error {
 	// 检查标签是否存在
 	tag, err := s.tagRepo.FindByID(id)
 	if err != nil {
-		return fmt.Errorf("查找标签失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "查找标签失败", err)
 	}
 	if tag == nil {
 		return errors.New(errors.CodeNotFound, "标签不存在")
 	}
 	// 删除标签与文章的关联关系
 	if err := s.tagRepo.DeleteTagArticles(id); err != nil {
-		return fmt.Errorf("删除标签关联失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "删除标签关联失败", err)
 	}
 	return s.tagRepo.Delete(id)
 }
@@ -124,7 +123,7 @@ func (s *tagService) Delete(id uint) error {
 func (s *tagService) CountEnabled() (int64, error) {
 	count, err := s.tagRepo.CountEnabled()
 	if err != nil {
-		return 0, fmt.Errorf("统计启用标签失败: %w", err)
+		return 0, errors.NewWithErr(errors.CodeInternalError, "统计启用标签失败", err)
 	}
 	return count, nil
 }

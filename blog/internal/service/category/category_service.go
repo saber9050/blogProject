@@ -6,7 +6,6 @@ import (
 	"blog/internal/model/entity"
 	repo "blog/internal/repository/category"
 	"blog/pkg/errors"
-	"fmt"
 )
 
 // categoryService 分类服务实现
@@ -23,7 +22,7 @@ func NewCategoryService(categoryRepo repo.CategoryRepository) CategoryService {
 func (s *categoryService) ListPublic() ([]*response.CategoryPublicResponse, error) {
 	list, err := s.categoryRepo.ListPublic()
 	if err != nil {
-		return nil, fmt.Errorf("获取分类列表失败: %w", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取分类列表失败", err)
 	}
 	var result []*response.CategoryPublicResponse
 	for _, c := range list {
@@ -39,7 +38,7 @@ func (s *categoryService) ListPublic() ([]*response.CategoryPublicResponse, erro
 func (s *categoryService) List(page, pageSize int, status *int, keyword string) (*response.PaginatedResponse, error) {
 	list, total, err := s.categoryRepo.List(page, pageSize, status, keyword)
 	if err != nil {
-		return nil, fmt.Errorf("获取分类列表失败: %w", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取分类列表失败", err)
 	}
 	var items []*response.CategoryAdminResponse
 	for _, c := range list {
@@ -63,7 +62,7 @@ func (s *categoryService) Create(req *request.CreateCategoryRequest) error {
 	// 检查分类名称是否已存在
 	exists, err := s.categoryRepo.IsExistsByName(req.Name, 0)
 	if err != nil {
-		return fmt.Errorf("检查分类名称失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "检查分类名称失败", err)
 	}
 	if exists {
 		return errors.New(errors.CodeBadRequest, "分类名称已存在")
@@ -80,7 +79,7 @@ func (s *categoryService) Update(id uint, req *request.UpdateCategoryRequest) er
 	// 检查分类是否存在
 	category, err := s.categoryRepo.FindByID(id)
 	if err != nil {
-		return fmt.Errorf("查找分类失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "查找分类失败", err)
 	}
 	if category == nil {
 		return errors.New(errors.CodeNotFound, "分类不存在")
@@ -88,7 +87,7 @@ func (s *categoryService) Update(id uint, req *request.UpdateCategoryRequest) er
 	// 检查分类名称是否重复
 	exists, err := s.categoryRepo.IsExistsByName(req.Name, id)
 	if err != nil {
-		return fmt.Errorf("检查分类名称失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "检查分类名称失败", err)
 	}
 	if exists {
 		return errors.New(errors.CodeBadRequest, "分类名称已存在")
@@ -98,7 +97,7 @@ func (s *categoryService) Update(id uint, req *request.UpdateCategoryRequest) er
 	if req.Status == 0 && category.Status != 0 {
 		count, err := s.categoryRepo.CountByCategoryID(id)
 		if err != nil {
-			return fmt.Errorf("统计关联文章失败: %w", err)
+			return errors.NewWithErr(errors.CodeInternalError, "统计关联文章失败", err)
 		}
 		if count > 0 {
 			return errors.New(errors.CodeBadRequest, "该分类下存在文章，不可禁用")
@@ -119,7 +118,7 @@ func (s *categoryService) Delete(id uint) error {
 	// 检查分类是否存在
 	category, err := s.categoryRepo.FindByID(id)
 	if err != nil {
-		return fmt.Errorf("查找分类失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "查找分类失败", err)
 	}
 	if category == nil {
 		return errors.New(errors.CodeNotFound, "分类不存在")
@@ -127,7 +126,7 @@ func (s *categoryService) Delete(id uint) error {
 	// 检查分类下是否有关联文章
 	count, err := s.categoryRepo.CountByCategoryID(id)
 	if err != nil {
-		return fmt.Errorf("统计关联文章失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "统计关联文章失败", err)
 	}
 	if count > 0 {
 		return errors.New(errors.CodeBadRequest, "该分类下存在文章，无法删除")
@@ -139,7 +138,7 @@ func (s *categoryService) Delete(id uint) error {
 func (s *categoryService) CountEnabled() (int64, error) {
 	count, err := s.categoryRepo.CountEnabled()
 	if err != nil {
-		return 0, fmt.Errorf("统计启用分类失败: %w", err)
+		return 0, errors.NewWithErr(errors.CodeInternalError, "统计启用分类失败", err)
 	}
 	return count, nil
 }

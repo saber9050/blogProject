@@ -14,7 +14,6 @@ import (
 	"blog/pkg/logger"
 	minioPkg "blog/pkg/minio"
 	"context"
-	"fmt"
 	"mime/multipart"
 	"regexp"
 
@@ -125,7 +124,7 @@ func (s *articleService) buildArticleResponse(article *entity.Article, userID ui
 func (s *articleService) ListPublic(page, pageSize int, sort string, categoryID uint, tagIDs []uint, keyword string, userID uint) (*response.ArticleListResponse, error) {
 	list, total, err := s.articleRepo.ListPublic(page, pageSize, sort, categoryID, tagIDs, keyword)
 	if err != nil {
-		return nil, fmt.Errorf("获取文章列表失败: %w", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取文章列表失败", err)
 	}
 
 	var items []*response.ArticleItem
@@ -149,7 +148,7 @@ func (s *articleService) ListPublic(page, pageSize int, sort string, categoryID 
 func (s *articleService) GetDetail(id uint, userID uint) (*response.ArticleDetailResponse, error) {
 	article, err := s.articleRepo.FindByID(id)
 	if err != nil {
-		return nil, fmt.Errorf("查找文章失败: %w", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查找文章失败", err)
 	}
 	if article == nil {
 		return nil, errors.New(errors.CodeNotFound, "文章不存在")
@@ -173,7 +172,7 @@ func (s *articleService) GetDetail(id uint, userID uint) (*response.ArticleDetai
 func (s *articleService) LikeArticle(articleID, userID uint) error {
 	article, err := s.articleRepo.FindByID(articleID)
 	if err != nil {
-		return fmt.Errorf("查找文章失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "查找文章失败", err)
 	}
 	if article == nil {
 		return errors.New(errors.CodeNotFound, "文章不存在")
@@ -182,7 +181,7 @@ func (s *articleService) LikeArticle(articleID, userID uint) error {
 	// 检查是否已点赞
 	liked, err := s.articleRepo.FindLiked(articleID, userID)
 	if err != nil {
-		return fmt.Errorf("检查点赞状态失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "检查点赞状态失败", err)
 	}
 	if liked {
 		return errors.New(errors.CodeBadRequest, "您已经点赞过该文章")
@@ -190,7 +189,7 @@ func (s *articleService) LikeArticle(articleID, userID uint) error {
 
 	// 创建点赞记录
 	if err := s.articleRepo.CreateLike(articleID, userID); err != nil {
-		return fmt.Errorf("点赞失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "点赞失败", err)
 	}
 	// 增加点赞计数
 	return s.articleRepo.IncrementLikeCount(articleID)
@@ -200,7 +199,7 @@ func (s *articleService) LikeArticle(articleID, userID uint) error {
 func (s *articleService) UnlikeArticle(articleID, userID uint) error {
 	article, err := s.articleRepo.FindByID(articleID)
 	if err != nil {
-		return fmt.Errorf("查找文章失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "查找文章失败", err)
 	}
 	if article == nil {
 		return errors.New(errors.CodeNotFound, "文章不存在")
@@ -209,7 +208,7 @@ func (s *articleService) UnlikeArticle(articleID, userID uint) error {
 	// 检查是否已点赞
 	liked, err := s.articleRepo.FindLiked(articleID, userID)
 	if err != nil {
-		return fmt.Errorf("检查点赞状态失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "检查点赞状态失败", err)
 	}
 	if !liked {
 		return errors.New(errors.CodeBadRequest, "您尚未点赞该文章")
@@ -217,7 +216,7 @@ func (s *articleService) UnlikeArticle(articleID, userID uint) error {
 
 	// 删除点赞记录
 	if err := s.articleRepo.DeleteLike(articleID, userID); err != nil {
-		return fmt.Errorf("取消点赞失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "取消点赞失败", err)
 	}
 	// 减少点赞计数
 	return s.articleRepo.DecrementLikeCount(articleID)
@@ -227,7 +226,7 @@ func (s *articleService) UnlikeArticle(articleID, userID uint) error {
 func (s *articleService) AdminList(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) (*response.ArticleListResponse, error) {
 	list, total, err := s.articleRepo.ListAdmin(page, pageSize, status, categoryID, tagIDs, keyword)
 	if err != nil {
-		return nil, fmt.Errorf("获取文章列表失败: %w", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取文章列表失败", err)
 	}
 
 	var items []*response.ArticleItem
@@ -253,7 +252,7 @@ func (s *articleService) AdminCreate(req *request.CreateArticleRequest, userID u
 	if s.categoryRepo != nil {
 		curcategory, err := s.categoryRepo.FindByID(req.TypeID)
 		if err != nil {
-			return nil, fmt.Errorf("查找分类失败: %w", err)
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查找分类失败", err)
 		}
 		if curcategory == nil {
 			return nil, errors.New(errors.CodeBadRequest, "分类不存在")
@@ -278,13 +277,13 @@ func (s *articleService) AdminCreate(req *request.CreateArticleRequest, userID u
 	}
 
 	if err := s.articleRepo.Create(article); err != nil {
-		return nil, fmt.Errorf("创建文章失败: %w", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "创建文章失败", err)
 	}
 
 	// 关联标签
 	if len(req.TagIDs) > 0 {
 		if err := s.articleRepo.SetArticleTags(article.ID, req.TagIDs); err != nil {
-			return nil, fmt.Errorf("关联标签失败: %w", err)
+			return nil, errors.NewWithErr(errors.CodeInternalError, "关联标签失败", err)
 		}
 	}
 
@@ -298,7 +297,7 @@ func (s *articleService) AdminCreate(req *request.CreateArticleRequest, userID u
 func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest) error {
 	article, err := s.articleRepo.FindByID(id)
 	if err != nil {
-		return fmt.Errorf("查找文章失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "查找文章失败", err)
 	}
 	if article == nil {
 		return errors.New(errors.CodeNotFound, "文章不存在")
@@ -308,7 +307,7 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 	if s.categoryRepo != nil && req.TypeID != 0 {
 		curcategory, err := s.categoryRepo.FindByID(req.TypeID)
 		if err != nil {
-			return fmt.Errorf("查找分类失败: %w", err)
+			return errors.NewWithErr(errors.CodeInternalError, "查找分类失败", err)
 		}
 		if curcategory == nil {
 			return errors.New(errors.CodeBadRequest, "分类不存在")
@@ -349,13 +348,13 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 	fields["status"] = req.Status
 
 	if err := s.articleRepo.UpdateFields(id, fields); err != nil {
-		return fmt.Errorf("更新文章失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "更新文章失败", err)
 	}
 
 	// 更新标签关联
 	if req.TagIDs != nil {
 		if err := s.articleRepo.SetArticleTags(id, req.TagIDs); err != nil {
-			return fmt.Errorf("关联标签失败: %w", err)
+			return errors.NewWithErr(errors.CodeInternalError, "关联标签失败", err)
 		}
 	}
 
@@ -379,7 +378,7 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 func (s *articleService) AdminDelete(id uint) error {
 	article, err := s.articleRepo.FindByID(id)
 	if err != nil {
-		return fmt.Errorf("查找文章失败: %w", err)
+		return errors.NewWithErr(errors.CodeInternalError, "查找文章失败", err)
 	}
 	if article == nil {
 		return errors.New(errors.CodeNotFound, "文章不存在")
@@ -537,7 +536,7 @@ func (s *articleService) TransferCategory(fromTypeID, toTypeID uint) (int64, err
 	// 1. 验证源分类是否存在
 	srcCategory, err := s.categoryRepo.FindByID(fromTypeID)
 	if err != nil {
-		return 0, fmt.Errorf("查找源分类失败: %w", err)
+		return 0, errors.NewWithErr(errors.CodeInternalError, "查找源分类失败", err)
 	}
 	if srcCategory == nil {
 		return 0, errors.New(errors.CodeBadRequest, "源分类不存在")
@@ -546,7 +545,7 @@ func (s *articleService) TransferCategory(fromTypeID, toTypeID uint) (int64, err
 	// 2. 验证目标分类是否存在
 	dstCategory, err := s.categoryRepo.FindByID(toTypeID)
 	if err != nil {
-		return 0, fmt.Errorf("查找目标分类失败: %w", err)
+		return 0, errors.NewWithErr(errors.CodeInternalError, "查找目标分类失败", err)
 	}
 	if dstCategory == nil {
 		return 0, errors.New(errors.CodeBadRequest, "目标分类不存在")
@@ -560,7 +559,7 @@ func (s *articleService) TransferCategory(fromTypeID, toTypeID uint) (int64, err
 	// 4. 执行转移
 	affected, err := s.articleRepo.TransferCategory(fromTypeID, toTypeID)
 	if err != nil {
-		return 0, fmt.Errorf("转移分类失败: %w", err)
+		return 0, errors.NewWithErr(errors.CodeInternalError, "转移分类失败", err)
 	}
 
 	return affected, nil
@@ -570,7 +569,7 @@ func (s *articleService) TransferCategory(fromTypeID, toTypeID uint) (int64, err
 func (s *articleService) GetStats() (*response.ArticleStatsResponse, error) {
 	count, views, likes, err := s.articleRepo.GetStats()
 	if err != nil {
-		return nil, fmt.Errorf("获取文章统计数据失败: %w", err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取文章统计数据失败", err)
 	}
 	return &response.ArticleStatsResponse{
 		ArticleCount: count,
