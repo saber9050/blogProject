@@ -110,6 +110,11 @@ func (r *commentRepository) DeleteComment(id uint) error {
 	return r.db.Delete(&entity.Comment{}, id).Error
 }
 
+// DeleteByArticleID 软删除某文章的所有评论
+func (r *commentRepository) DeleteByArticleID(articleID uint) error {
+	return r.db.Where("article_id = ?", articleID).Delete(&entity.Comment{}).Error
+}
+
 // GetCommentByID 根据ID查询评论
 func (r *commentRepository) GetCommentByID(id uint) (*entity.Comment, error) {
 	var comment entity.Comment

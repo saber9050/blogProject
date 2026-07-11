@@ -6,6 +6,7 @@ import (
 	"blog/internal/model/entity"
 	repo "blog/internal/repository/article"
 	"blog/internal/repository/category"
+	commentRepo "blog/internal/repository/comment"
 	"blog/internal/repository/tag"
 	"blog/internal/repository/user"
 	user2 "blog/internal/service/user"
@@ -15,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"mime/multipart"
+	"regexp"
 
 	"go.uber.org/zap"
 )
@@ -25,6 +27,7 @@ type articleService struct {
 	userRepo     user.UserRepository
 	categoryRepo category.CategoryRepository
 	tagRepo      tag.TagRepository
+	commentRepo  commentRepo.CommentRepository
 	userSvc      user2.UserService
 	minio        *minioPkg.Client
 }
@@ -35,6 +38,7 @@ func NewArticleService(
 	userRepo user.UserRepository,
 	categoryRepo category.CategoryRepository,
 	tagRepo tag.TagRepository,
+	commentRepo commentRepo.CommentRepository,
 	userSvc user2.UserService,
 	minio *minioPkg.Client,
 ) ArticleService {
@@ -43,6 +47,7 @@ func NewArticleService(
 		userRepo:     userRepo,
 		categoryRepo: categoryRepo,
 		tagRepo:      tagRepo,
+		commentRepo:  commentRepo,
 		userSvc:      userSvc,
 		minio:        minio,
 	}
@@ -283,6 +288,9 @@ func (s *articleService) AdminCreate(req *request.CreateArticleRequest, userID u
 		}
 	}
 
+	// 同步图片引用（自动解析 content 中的 <img> 并写入 article_images 表）
+	s.syncArticleImages(article.ID, req.Content)
+
 	return &response.CreateArticleResponse{ID: article.ID}, nil
 }
 
@@ -351,6 +359,11 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 		}
 	}
 
+	// 同步图片引用（当 content 变更时）
+	if req.Content != "" {
+		s.syncArticleImages(id, req.Content)
+	}
+
 	if lastURL != "" {
 		ctx := context.Background()
 		err = s.minio.Delete(ctx, lastURL)
@@ -371,11 +384,39 @@ func (s *articleService) AdminDelete(id uint) error {
 	if article == nil {
 		return errors.New(errors.CodeNotFound, "文章不存在")
 	}
+
 	ctx := context.Background()
-	err = s.minio.Delete(ctx, article.CoverURL)
+
+	// 1. 查询文章关联的图片
+	images, err := s.articleRepo.FindArticleImages(id)
 	if err != nil {
-		logger.Error("删除头像失败", zap.Error(err))
+		logger.Error("查询文章图片记录失败", zap.Uint("article_id", id), zap.Error(err))
+	} else {
+		// 2. 删除 MinIO 中的图片文件（失败不中断，记录日志）
+		for _, img := range images {
+			if err := s.minio.Delete(ctx, img.URL); err != nil {
+				logger.Error("删除MinIO图片失败", zap.String("key", img.URL), zap.Error(err))
+			}
+		}
+		// 3. 删除 article_images 表记录
+		if err := s.articleRepo.DeleteArticleImagesByArticleID(id); err != nil {
+			logger.Error("删除文章图片DB记录失败", zap.Uint("article_id", id), zap.Error(err))
+		}
 	}
+
+	// 4. 删除封面图
+	if article.CoverURL != "" {
+		if err := s.minio.Delete(ctx, article.CoverURL); err != nil {
+			logger.Error("删除封面图失败", zap.Error(err))
+		}
+	}
+
+	// 5. 软删除该文章关联的所有评论
+	if err := s.commentRepo.DeleteByArticleID(id); err != nil {
+		logger.Error("删除文章评论失败", zap.Uint("article_id", id), zap.Error(err))
+	}
+
+	// 6. 软删除文章
 	return s.articleRepo.Delete(id)
 }
 
@@ -386,6 +427,109 @@ func (s *articleService) UploadImage(fileHeader *multipart.FileHeader) (string, 
 		return "", err
 	}
 	return s.minio.GetFileURL(str), nil
+}
+
+// extractImageURLs 从 HTML 内容中提取所有 <img> 标签的 src 属性值
+func extractImageURLs(html string) []string {
+	re := regexp.MustCompile(`<img[^>]+src="([^"]+)"`)
+	matches := re.FindAllStringSubmatch(html, -1)
+	var urls []string
+	seen := make(map[string]struct{})
+	for _, m := range matches {
+		if len(m) >= 2 {
+			u := m[1]
+			if _, ok := seen[u]; !ok && u != "" {
+				seen[u] = struct{}{}
+				urls = append(urls, u)
+			}
+		}
+	}
+	return urls
+}
+
+// syncArticleImages 同步文章内容中引用的图片记录
+// 1. 解析 content 提取所有 img src URL
+// 2. 转为相对路径（file key）
+// 3. 与 DB 中已有记录做 diff，删除被移除的图片（从 MinIO + DB），新增不存在的图片
+func (s *articleService) syncArticleImages(articleID uint, content string) {
+	// 1. 提取图片 URL
+	fullURLs := extractImageURLs(content)
+	if len(fullURLs) == 0 {
+		// 内容中没有图片时，无需同步（保留原有记录，避免清理已上传的图片）
+		return
+	}
+
+	// 2. 转为相对路径并去重
+	newKeys := make(map[string]struct{})
+	for _, u := range fullURLs {
+		key, err := s.minio.ParseFileKey(u)
+		if err != nil {
+			logger.Warn("解析图片URL失败", zap.String("url", u), zap.Error(err))
+			continue
+		}
+		newKeys[key] = struct{}{}
+	}
+
+	if len(newKeys) == 0 {
+		return
+	}
+
+	// 3. 查询 DB 中已有记录
+	oldImages, err := s.articleRepo.FindArticleImages(articleID)
+	if err != nil {
+		logger.Error("查询文章图片记录失败", zap.Uint("article_id", articleID), zap.Error(err))
+		return
+	}
+
+	oldKeyMap := make(map[string]uint) // key -> id
+	for _, img := range oldImages {
+		oldKeyMap[img.URL] = img.ID
+	}
+
+	// 4. 计算差集
+	var toDelete []uint                // 需要从 DB + MinIO 删除的图片记录 ID
+	var toCreate []entity.ArticleImage // 需要新增的图片
+
+	for key, id := range oldKeyMap {
+		if _, exists := newKeys[key]; !exists {
+			toDelete = append(toDelete, id)
+		}
+	}
+
+	for key := range newKeys {
+		if _, exists := oldKeyMap[key]; !exists {
+			toCreate = append(toCreate, entity.ArticleImage{
+				ArticleID: articleID,
+				URL:       key,
+			})
+		}
+	}
+
+	// 5. 执行删除：先从 MinIO 删文件，再从 DB 删记录
+	if len(toDelete) > 0 {
+		ctx := context.Background()
+		for _, id := range toDelete {
+			// 找到对应的 key
+			for key, imgID := range oldKeyMap {
+				if imgID == id {
+					if err := s.minio.Delete(ctx, key); err != nil {
+						logger.Error("删除MinIO图片失败", zap.String("key", key), zap.Error(err))
+					}
+					break
+				}
+			}
+		}
+		if err := s.articleRepo.DeleteArticleImages(toDelete); err != nil {
+			logger.Error("删除文章图片DB记录失败", zap.Uint("article_id", articleID), zap.Error(err))
+		}
+	}
+
+	// 6. 执行新增
+	if len(toCreate) > 0 {
+		if err := s.articleRepo.CreateArticleImages(toCreate); err != nil {
+			logger.Error("创建文章图片DB记录失败", zap.Uint("article_id", articleID), zap.Error(err))
+		}
+	}
 }
 
 // GetStats 获取已发布文章的统计数据

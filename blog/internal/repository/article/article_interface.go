@@ -40,4 +40,13 @@ type ArticleRepository interface {
 	DecrementCommentCount(articleID uint) error
 	// GetStats 获取已发布文章的统计数据（文章数、总阅读量、总点赞量）
 	GetStats() (articleCount, totalViews, totalLikes int64, err error)
+
+	// FindArticleImages 获取文章关联的所有图片
+	FindArticleImages(articleID uint) ([]entity.ArticleImage, error)
+	// CreateArticleImages 批量创建文章图片引用
+	CreateArticleImages(images []entity.ArticleImage) error
+	// DeleteArticleImages 批量删除文章图片引用（按 ID）
+	DeleteArticleImages(ids []uint) error
+	// DeleteArticleImagesByArticleID 删除文章的所有图片引用
+	DeleteArticleImagesByArticleID(articleID uint) error
 }

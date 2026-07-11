@@ -237,3 +237,34 @@ func (r *articleRepository) GetStats() (int64, int64, int64, error) {
 	}
 	return result.ArticleCount, result.TotalViews, result.TotalLikes, nil
 }
+
+// FindArticleImages 获取文章关联的所有图片
+func (r *articleRepository) FindArticleImages(articleID uint) ([]entity.ArticleImage, error) {
+	var images []entity.ArticleImage
+	err := r.db.Where("article_id = ?", articleID).Find(&images).Error
+	if err != nil {
+		return nil, err
+	}
+	return images, nil
+}
+
+// CreateArticleImages 批量创建文章图片引用
+func (r *articleRepository) CreateArticleImages(images []entity.ArticleImage) error {
+	if len(images) == 0 {
+		return nil
+	}
+	return r.db.Create(&images).Error
+}
+
+// DeleteArticleImages 批量删除文章图片引用（按 ID）
+func (r *articleRepository) DeleteArticleImages(ids []uint) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.Delete(&entity.ArticleImage{}, ids).Error
+}
+
+// DeleteArticleImagesByArticleID 删除文章的所有图片引用
+func (r *articleRepository) DeleteArticleImagesByArticleID(articleID uint) error {
+	return r.db.Where("article_id = ?", articleID).Delete(&entity.ArticleImage{}).Error
+}

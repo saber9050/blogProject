@@ -14,6 +14,8 @@ type CommentRepository interface {
 	CreateComment(comment *entity.Comment) error
 	// DeleteComment 软删除评论
 	DeleteComment(id uint) error
+	// DeleteByArticleID 软删除某文章的所有评论
+	DeleteByArticleID(articleID uint) error
 	// GetCommentByID 根据ID查询评论（用于权限校验）
 	GetCommentByID(id uint) (*entity.Comment, error)
 	// GetCommentCount 获取文章评论总数

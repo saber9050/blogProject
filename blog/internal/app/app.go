@@ -138,6 +138,9 @@ func (a *App) initDatabase() error {
 		//&entity.Comment{},
 		//&entity.Like{},
 
+		// 文章图片引用
+		&entity.ArticleImage{},
+
 		// 关于页面
 		&entity.About{},
 	); err != nil {
@@ -183,7 +186,7 @@ func (a *App) initDependencies() {
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
 	uSvc := userSvc.NewUserService(uRepo, a.minioClient, authSvc, authCache)
-	aSvc := articleSvc.NewArticleService(aRepo, uRepo, catRepo, tRepo, uSvc, a.minioClient)
+	aSvc := articleSvc.NewArticleService(aRepo, uRepo, catRepo, tRepo, cRepo, uSvc, a.minioClient)
 	cSvc := commentSvc.NewCommentService(cRepo)
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
