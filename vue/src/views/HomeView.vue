@@ -447,14 +447,14 @@ onMounted(async () => {
   // 独立加载分类、标签、作者信息（互不影响）
   try {
     const cRes = await api.get('/categories')
-    categories.value = cRes.data.data || cRes.data || []
+    categories.value = cRes.data?.data || []
   } catch {
     // 分类API失败，不降级，保持空数组
   }
 
   try {
     const tRes = await api.get('/tags')
-    tags.value = tRes.data.data || tRes.data || []
+    tags.value = tRes.data?.data || []
   } catch {
     // 标签API失败，不降级，保持空数组
   }

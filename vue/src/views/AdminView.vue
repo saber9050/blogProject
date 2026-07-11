@@ -245,12 +245,12 @@
           <!-- ---- 文章 ---- -->
           <template v-else-if="modalType === 'article'">
             <div class="modal__field">
-              <label class="modal__label">标题</label>
-              <input v-model="modalForm.title" class="modal__input" placeholder="请输入文章标题" />
+              <label class="modal__label"><span class="required-mark">*</span>标题</label>
+              <input v-model="modalForm.title" class="modal__input" :class="{ 'modal__input--required-empty': !modalForm.title?.trim() }" placeholder="请输入文章标题" />
             </div>
             <div class="modal__field">
-              <label class="modal__label">分类</label>
-              <select v-model.number="modalForm.type_id" class="modal__input">
+              <label class="modal__label"><span class="required-mark">*</span>分类</label>
+              <select v-model.number="modalForm.type_id" class="modal__input" :class="{ 'modal__input--required-empty': !modalForm.type_id }">
                 <option :value="0" disabled>请选择分类</option>
                 <option v-for="c in enabledCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
               </select>
@@ -300,8 +300,8 @@
           <!-- ---- 分类/标签 ---- -->
           <template v-else>
             <div class="modal__field">
-              <label class="modal__label">名称</label>
-              <input v-model="modalForm.name" class="modal__input" placeholder="请输入名称" />
+              <label class="modal__label"><span class="required-mark">*</span>名称</label>
+              <input v-model="modalForm.name" class="modal__input" :class="{ 'modal__input--required-empty': !modalForm.name?.trim() }" placeholder="请输入名称" />
             </div>
             <div class="modal__field">
               <label class="modal__label">状态</label>
@@ -439,8 +439,19 @@ let accountCheckTimer: ReturnType<typeof setTimeout> | null = null
 
 // 保存按钮是否禁用（新增用户时，昵称或校验失败或未通过唯一性校验时禁用）
 const canSaveDisabled = computed(() => {
-  if (modalType.value !== 'user' || editingId.value) return false
-  return nameError.value || accountError.value || nameCheckLoading.value || accountCheckLoading.value || !nameChecked.value || !accountChecked.value
+  // 新增用户：唯一性校验通过后才可保存
+  if (modalType.value === 'user' && !editingId.value) {
+    return nameError.value || accountError.value || nameCheckLoading.value || accountCheckLoading.value || !nameChecked.value || !accountChecked.value
+  }
+  // 文章：标题和分类必填
+  if (modalType.value === 'article') {
+    return !modalForm.title?.trim() || !modalForm.type_id
+  }
+  // 分类/标签：名称必填
+  if (modalType.value === 'category' || modalType.value === 'tag') {
+    return !modalForm.name?.trim()
+  }
+  return false
 })
 
 const checkName = () => {
@@ -1017,6 +1028,11 @@ onMounted(async () => {
 .modal__input:focus { border-color: #1677ff; outline: none; box-shadow: 0 0 0 2px rgba(22,119,255,0.1); }
 
 select.modal__input { appearance: auto; }
+
+.modal__input--required-empty { border-color: #ff4d4f; }
+.modal__input--required-empty:focus { border-color: #ff4d4f; box-shadow: 0 0 0 2px rgba(255,77,79,0.1); }
+
+.required-mark { color: #ff4d4f; margin-right: 2px; font-size: 14px; }
 
 .modal__footer {
   display: flex;

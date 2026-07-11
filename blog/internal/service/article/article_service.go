@@ -250,9 +250,13 @@ func (s *articleService) AdminCreate(req *request.CreateArticleRequest, userID u
 			return nil, errors.New(errors.CodeBadRequest, "分类不存在")
 		}
 	}
-	url, err := s.minio.ParseFileKey(req.CoverURL)
-	if err != nil {
-		return nil, errors.New(errors.CodeInternalError, "解析url失败")
+	url := ""
+	var err error
+	if req.CoverURL != "" {
+		url, err = s.minio.ParseFileKey(req.CoverURL)
+		if err != nil {
+			return nil, errors.New(errors.CodeInternalError, "解析url失败")
+		}
 	}
 	article := &entity.Article{
 		UserID:   userID,
