@@ -291,9 +291,9 @@
               </select>
             </div>
             <div class="modal__field">
-              <label class="modal__label">内容</label>
+              <label class="modal__label"><span class="required-mark">*</span>内容</label>
               <div ref="toolbarContainer" class="toolbar-container"></div>
-              <div ref="editorContainer" class="editor-container"></div>
+              <div ref="editorContainer" class="editor-container" :class="{ 'modal__input--required-empty': !modalForm.content || modalForm.content === '<p><br></p>' || modalForm.content === '<p></p>' }"></div>
             </div>
           </template>
 
@@ -443,9 +443,10 @@ const canSaveDisabled = computed(() => {
   if (modalType.value === 'user' && !editingId.value) {
     return nameError.value || accountError.value || nameCheckLoading.value || accountCheckLoading.value || !nameChecked.value || !accountChecked.value
   }
-  // 文章：标题和分类必填
+  // 文章：标题、分类、内容必填
   if (modalType.value === 'article') {
-    return !modalForm.title?.trim() || !modalForm.type_id
+    const contentEmpty = !modalForm.content || modalForm.content === '<p><br></p>' || modalForm.content === '<p></p>'
+    return !modalForm.title?.trim() || !modalForm.type_id || contentEmpty
   }
   // 分类/标签：名称必填
   if (modalType.value === 'category' || modalType.value === 'tag') {
