@@ -547,6 +547,16 @@ const onCoverChange = async (e: Event) => {
   }
 }
 
+const loadArticleDetail = async (id: number): Promise<Record<string, any> | null> => {
+  try {
+    const res = await api.get(`/articles/${id}`)
+    return res.data?.data || null
+  } catch (err) {
+    console.error('获取文章详情失败:', err)
+    return null
+  }
+}
+
 const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: any) => {
   modalType.value = type
   modalVisible.value = true
@@ -581,25 +591,33 @@ const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: a
     if (type === 'user') {
       modalForm.status = item.status ?? 1
     } else if (type === 'article') {
-      modalForm.title = item.title || ''
-      modalForm.type_id = item.type_id || 0
-      modalForm.summary = item.summary || ''
-      modalForm.content = item.content || ''
-      modalForm.cover_url = item.cover_url || ''
-      coverPreviewUrl.value = item.cover_url || ''
-      modalForm.status = item.status ?? 0
-      if (item.tags) {
-        selectedTags.value = item.tags.map((t: any) => t.id)
+      // 编辑文章：优先调用详情接口获取完整数据
+      let articleData: Record<string, any> | null = null
+      if (item.id) {
+        articleData = await loadArticleDetail(item.id)
+      }
+      // 用详情数据填充表单，若接口失败则降级使用列表数据
+      const src = articleData || item
+      modalForm.title = src.title || ''
+      modalForm.type_id = src.category?.id || src.type_id || 0
+      modalForm.summary = src.summary || ''
+      modalForm.content = src.content || ''
+      modalForm.cover_url = src.cover_url || ''
+      coverPreviewUrl.value = src.cover_url || ''
+      modalForm.status = src.status ?? 0
+      const tags = src.tags || item.tags || []
+      if (tags.length) {
+        selectedTags.value = tags.map((t: any) => t.id)
       }
       // 保存原始数据用于比较修改
       originalArticleData.value = {
-        title: item.title || '',
-        type_id: item.type_id || 0,
-        summary: item.summary || '',
-        content: item.content || '',
-        cover_url: item.cover_url || '',
-        status: item.status ?? 0,
-        tag_ids: item.tags ? item.tags.map((t: any) => t.id) : []
+        title: src.title || '',
+        type_id: modalForm.type_id,
+        summary: src.summary || '',
+        content: src.content || '',
+        cover_url: src.cover_url || '',
+        status: src.status ?? 0,
+        tag_ids: selectedTags.value.slice()
       }
     } else {
       modalForm.name = item.name || ''
@@ -612,7 +630,7 @@ const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: a
   // 文章编辑器：等 DOM 渲染后初始化
   if (type === 'article') {
     await nextTick()
-    initEditor(item?.content || '')
+    initEditor(modalForm.content || '')
   }
 }
 
@@ -629,6 +647,26 @@ const initEditor = async (content: string) => {
     placeholder: '请输入文章内容...',
     onChange: (editor: any) => {
       modalForm.content = editor.getHtml()
+    },
+    MENU_CONF: {
+      // 图片上传配置：只允许图片，使用现有上传接口
+      uploadImage: {
+        allowedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+        customUpload: (file: File, insertFn: (src: string, alt: string, href: string) => void) => {
+          const formData = new FormData()
+          formData.append('file', file)
+          api.post('/admin/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          }).then(res => {
+            const url = res.data?.data?.url || res.data?.url || ''
+            if (url) {
+              insertFn(url, '', '')
+            }
+          }).catch(err => {
+            console.error('图片上传失败:', err)
+          })
+        }
+      }
     }
   }
   // 销毁旧实例
@@ -639,13 +677,15 @@ const initEditor = async (content: string) => {
   const editor = wangEditor.createEditor({
     selector: editorContainer.value,
     config: editorConfig,
-    content: content ? [{ type: 'paragraph', children: [{ text: '' }] }] : undefined,
     html: content || undefined,
     mode: 'default'
   })
   wangEditor.createToolbar({
     editor,
-    selector: toolbarContainer.value
+    selector: toolbarContainer.value,
+    config: {
+      excludeKeys: ['group-video', 'insertImage']
+    }
   })
   editorInstance = editor
 }
