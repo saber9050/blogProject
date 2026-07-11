@@ -195,7 +195,7 @@ func (s *userService) UpdateEmail(userID uint, req *request.UpdateUserEmailReque
 	if err != nil {
 		return nil, fmt.Errorf("检查邮箱发送频率失败:%s", err)
 	}
-	if res {
+	if !res {
 		return nil, errors.New(errors.CodeTooManyRequests, "请勿频繁发送验证码，请60秒后再试")
 	}
 	err = email.SendVerificationEmail(req.NewEmail, token)
