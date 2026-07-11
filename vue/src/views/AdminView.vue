@@ -539,9 +539,10 @@ const onCoverChange = async (e: Event) => {
     modalForm.cover_url = res.data?.data?.url || res.data?.url || ''
     // 上传成功后，预览也切换到服务器URL（避免本地blob URL过期）
     coverPreviewUrl.value = modalForm.cover_url
-  } catch (err) {
+  } catch (err: any) {
     console.error('封面上传失败:', err)
-    showToast('封面图片上传失败，请重试', 'error')
+    const msg = err?.response?.data?.message || '封面图片上传失败，请重试'
+    showToast(msg, 'error')
     coverPreviewUrl.value = ''
     // 重置 file input，允许重新选择同一文件
     if (coverInputRef.value) coverInputRef.value.value = ''
@@ -801,9 +802,10 @@ const handleSave = async () => {
     
     modalVisible.value = false
     destroyEditor()
-  } catch (error) {
+  } catch (error: any) {
     console.error('保存失败:', error)
-    showToast('保存失败，请重试', 'error')
+    const msg = error?.response?.data?.message || '保存失败，请重试'
+    showToast(msg, 'error')
   }
 }
 
@@ -833,9 +835,10 @@ const confirmDelete = async () => {
       adminTags.value = adminTags.value.filter((t) => t.id !== id)
     }
     showToast('删除成功', 'success')
-  } catch (error) {
+  } catch (error: any) {
     console.error('删除失败:', error)
-    showToast('删除失败，请重试', 'error')
+    const msg = error?.response?.data?.message || '删除失败，请重试'
+    showToast(msg, 'error')
   }
 }
 

@@ -94,6 +94,17 @@ func (s *categoryService) Update(id uint, req *request.UpdateCategoryRequest) er
 		return errors.New(errors.CodeBadRequest, "分类名称已存在")
 	}
 
+	// 如果状态改为禁用，检查分类下是否有关联文章
+	if req.Status == 0 && category.Status != 0 {
+		count, err := s.categoryRepo.CountByCategoryID(id)
+		if err != nil {
+			return fmt.Errorf("统计关联文章失败: %w", err)
+		}
+		if count > 0 {
+			return errors.New(errors.CodeBadRequest, "该分类下存在文章，不可禁用")
+		}
+	}
+
 	// 构建需要更新的字段
 	fields := map[string]interface{}{
 		"category_name": req.Name,
