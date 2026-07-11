@@ -21,7 +21,7 @@
             </button>
             <span>&#128172; {{ article.comment_count || 0 }} 评论</span>
           </div>
-          <div class="article-content__body">{{ article.content }}</div>
+          <div class="article-content__body" v-html="displayContent"></div>
         </section>
 
         <!-- 评论区 -->
@@ -166,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
@@ -222,6 +222,13 @@ const article = ref<Article>({
   author: '',
   type_id: 0,
   created_at: ''
+})
+
+// 过滤空 HTML 内容（wangEditor 空内容返回 <p><br></p>）
+const displayContent = computed(() => {
+  const c = article.value.content
+  if (!c || c === '<p><br></p>' || c === '<p></p>') return ''
+  return c
 })
 const comments = ref<Comment[]>([])
 const newComment = ref('')
@@ -544,7 +551,14 @@ onMounted(async () => {
   font-size: 0.95rem;
   line-height: 1.8;
   color: var(--text-secondary);
-  white-space: pre-wrap;
+}
+
+.article-content__body :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 12px 0;
+  display: block;
 }
 
 /* ========== 详情页点赞按钮 ========== */

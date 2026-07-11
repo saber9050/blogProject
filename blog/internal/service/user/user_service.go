@@ -364,6 +364,12 @@ func (s *userService) AdminDeleteUser(id uint) error {
 	if user == nil {
 		return errors.New(errors.CodeNotFound, "用户不存在")
 	}
+	// 删除头像
+	ctx := context.Background()
+	err = s.minio.Delete(ctx, user.AvatarURL)
+	if err != nil {
+		logger.Error("删除头像失败", zap.Error(err))
+	}
 
 	return s.userRepo.Delete(id)
 }

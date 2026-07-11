@@ -10,9 +10,13 @@ import (
 	"blog/internal/repository/user"
 	user2 "blog/internal/service/user"
 	"blog/pkg/errors"
+	"blog/pkg/logger"
 	minioPkg "blog/pkg/minio"
+	"context"
 	"fmt"
 	"mime/multipart"
+
+	"go.uber.org/zap"
 )
 
 // articleService 文章服务实现
@@ -306,12 +310,14 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 	// 构建需要更新的字段
 	fields := make(map[string]interface{})
 
-	if req.CoverURL != "" {
+	lastURL := ""
+	if req.CoverURL != "" && s.minio.GetFileURL(article.CoverURL) != req.CoverURL {
 		url, err := s.minio.ParseFileKey(req.CoverURL)
 		if err != nil {
 			return errors.New(errors.CodeInternalError, "解析url失败")
 		}
 		fields["cover_url"] = url
+		lastURL = article.CoverURL
 	}
 
 	if req.Title != "" {
@@ -345,6 +351,14 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 		}
 	}
 
+	if lastURL != "" {
+		ctx := context.Background()
+		err = s.minio.Delete(ctx, lastURL)
+		if err != nil {
+			logger.Error("删除头像失败", zap.Error(err))
+		}
+	}
+
 	return nil
 }
 
@@ -356,6 +370,11 @@ func (s *articleService) AdminDelete(id uint) error {
 	}
 	if article == nil {
 		return errors.New(errors.CodeNotFound, "文章不存在")
+	}
+	ctx := context.Background()
+	err = s.minio.Delete(ctx, article.CoverURL)
+	if err != nil {
+		logger.Error("删除头像失败", zap.Error(err))
 	}
 	return s.articleRepo.Delete(id)
 }

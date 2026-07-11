@@ -21,3 +21,14 @@ type Article struct {
 func (Article) TableName() string {
 	return "articles"
 }
+
+// ArticleImage 文章内容引用图片实体
+type ArticleImage struct {
+	BaseEntity
+	ArticleID uint   `gorm:"bigint;not null;comment:文章id" json:"article_id"`
+	URL       string `gorm:"type:varchar(255);comment:封面图片url" json:"url"`
+}
+
+func (ArticleImage) TableName() string {
+	return "article_images"
+}

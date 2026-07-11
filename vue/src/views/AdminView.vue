@@ -725,30 +725,35 @@ const handleSave = async () => {
         const original = originalArticleData.value
         const currentTags = selectedTags.value.slice().sort()
         const originalTags = (original.tag_ids || []).slice().sort()
-        
+
+        // 清理空 HTML 内容（wangEditor 空内容返回 <p><br></p>）
+        const cleanContent = modalForm.content === '<p><br></p>' || modalForm.content === '<p></p>' ? '' : modalForm.content
+
         if (modalForm.title !== original.title) articleData.title = modalForm.title
         if (modalForm.type_id !== original.type_id) articleData.type_id = modalForm.type_id
         if (JSON.stringify(currentTags) !== JSON.stringify(originalTags)) articleData.tag_ids = selectedTags.value
         if (modalForm.cover_url !== original.cover_url) articleData.cover_url = modalForm.cover_url
         if (modalForm.summary !== original.summary) articleData.summary = modalForm.summary
-        if (modalForm.content !== original.content) articleData.content = modalForm.content
-        if (modalForm.status !== original.status) articleData.status = modalForm.status
-        
-        // 如果没有修改任何字段，直接关闭模态框
-        if (Object.keys(articleData).length === 0) {
+        if (cleanContent !== original.content) articleData.content = cleanContent
+        // 始终发送 status，避免后端因未接收到字段而默认 0（草稿）
+        articleData.status = modalForm.status
+
+        // 如果只有 status 且未变更，或无任何修改，直接关闭
+        if (Object.keys(articleData).length === 0 || (Object.keys(articleData).length === 1 && 'status' in articleData && articleData.status === original.status)) {
           modalVisible.value = false
           destroyEditor()
           return
         }
       } else {
         // 新增模式：发送所有字段
+        const cleanContent = modalForm.content === '<p><br></p>' || modalForm.content === '<p></p>' ? '' : modalForm.content
         articleData = {
           title: modalForm.title,
           type_id: modalForm.type_id,
           tag_ids: selectedTags.value,
           cover_url: modalForm.cover_url,
           summary: modalForm.summary,
-          content: modalForm.content,
+          content: cleanContent,
           status: modalForm.status
         }
       }
