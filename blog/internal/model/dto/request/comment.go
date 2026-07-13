@@ -18,3 +18,8 @@ type ListRepliesReq struct {
 	Page     int `form:"page" json:"page"`
 	PageSize int `form:"page_size" json:"page_size"`
 }
+
+// AdminBatchDeleteCommentReq 后台批量删除评论请求
+type AdminBatchDeleteCommentReq struct {
+	IDs []uint `json:"ids"`
+}

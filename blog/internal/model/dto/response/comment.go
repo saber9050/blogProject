@@ -23,3 +23,12 @@ type CommentListResponse struct {
 	Page     int           `json:"page"`
 	PageSize int           `json:"page_size"`
 }
+
+// AdminCommentItem 后台评论管理列表项
+type AdminCommentItem struct {
+	ID           uint   `json:"id"`
+	ArticleTitle string `json:"article_title"`
+	UserName     string `json:"user_name"`
+	Content      string `json:"content"`
+	CreatedAt    string `json:"created_at"`
+}

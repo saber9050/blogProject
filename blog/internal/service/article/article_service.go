@@ -103,6 +103,10 @@ func (s *articleService) buildArticleResponse(article *entity.Article, userID ui
 		url = s.minio.GetFileURL(article.CoverURL)
 	}
 
+	// 获取实时点赞数和评论数（从 likes/comments 表 COUNT）
+	likeCount, _ := s.articleRepo.CountLikes(article.ID)
+	commentCount, _ := s.articleRepo.CountComments(article.ID)
+
 	return &response.ArticleItem{
 		ID:           article.ID,
 		Title:        article.Title,
@@ -110,8 +114,8 @@ func (s *articleService) buildArticleResponse(article *entity.Article, userID ui
 		CoverURL:     url,
 		Status:       article.Status,
 		Views:        article.Views,
-		LikeCount:    article.LikeCount,
-		CommentCount: article.CommentCount,
+		LikeCount:    uint(likeCount),
+		CommentCount: uint(commentCount),
 		IsLiked:      isLiked,
 		AuthorName:   authorName,
 		Category:     cat,
@@ -188,11 +192,7 @@ func (s *articleService) LikeArticle(articleID, userID uint) error {
 	}
 
 	// 创建点赞记录
-	if err := s.articleRepo.CreateLike(articleID, userID); err != nil {
-		return errors.NewWithErr(errors.CodeInternalError, "点赞失败", err)
-	}
-	// 增加点赞计数
-	return s.articleRepo.IncrementLikeCount(articleID)
+	return s.articleRepo.CreateLike(articleID, userID)
 }
 
 // UnlikeArticle 取消点赞
@@ -215,11 +215,7 @@ func (s *articleService) UnlikeArticle(articleID, userID uint) error {
 	}
 
 	// 删除点赞记录
-	if err := s.articleRepo.DeleteLike(articleID, userID); err != nil {
-		return errors.NewWithErr(errors.CodeInternalError, "取消点赞失败", err)
-	}
-	// 减少点赞计数
-	return s.articleRepo.DecrementLikeCount(articleID)
+	return s.articleRepo.DeleteLike(articleID, userID)
 }
 
 // AdminList 后台获取文章列表

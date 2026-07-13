@@ -48,7 +48,7 @@ func NewRouter(
 		authCtrl:       auth.NewController(authSvc),
 		userCtrl:       user.NewController(userSvc),
 		articleCtrl:    article.NewArticleController(articleService),
-		adminCtrl:      admin.NewAdminController(userSvc, articleService, categoryService, tagService),
+		adminCtrl:      admin.NewAdminController(userSvc, articleService, categoryService, tagService, commentSvc),
 		commentCtrl:    comment.NewController(commentSvc),
 		categoryCtrl:   category.NewCategoryController(categoryService),
 		tagCtrl:        tag.NewTagController(tagService),

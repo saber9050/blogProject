@@ -16,11 +16,10 @@ type CommentService interface {
 	CreateComment(articleID, userID uint, req *request.CreateCommentReq) (*response.CommentItem, error)
 	// DeleteComment 删除评论
 	DeleteComment(commentID, userID uint, roleID int8) error
-	// SetArticleRepo 设置文章仓库依赖（避免循环依赖）
-	SetArticleRepo(articleRepo interface {
-		IncrementCommentCount(articleID uint) error
-		DecrementCommentCount(articleID uint) error
-	})
+	// ListAdminComments 后台分页查询所有未删除评论
+	ListAdminComments(page, pageSize int) (*response.PaginatedResponse, error)
+	// BatchDeleteComment 批量删除评论，返回实际删除数量
+	BatchDeleteComment(ids []uint) (int64, error)
 	// SetMinioClient 设置MinIO客户端依赖（用于生成完整头像URL）
 	SetMinioClient(minioClient interface {
 		GetFileURL(fileKey string) string

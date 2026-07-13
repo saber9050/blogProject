@@ -330,6 +330,7 @@ const submitComment = async () => {
     }
     comments.value.unshift(newC)
     commentTotal.value++
+    article.value.comment_count = (article.value.comment_count || 0) + 1
     newComment.value = ''
   } catch {
     showToast('发表评论失败，请稍后重试', 'error')
@@ -363,6 +364,9 @@ const submitReply = async (rootCommentId: number) => {
     })
     replyText.value = ''
     replyingTo.value = null
+    // 更新文章评论计数
+    article.value.comment_count = (article.value.comment_count || 0) + 1
+    commentTotal.value++
     // 重新加载该一级评论的子评论
     const parent = comments.value.find((c) => c.id === rootCommentId)
     if (parent) refreshChildren(parent)
@@ -399,6 +403,7 @@ const doDelete = async (commentId: number, parentId: number | null) => {
       c.content = ''
     }
     commentTotal.value = Math.max(0, commentTotal.value - 1)
+    article.value.comment_count = Math.max(0, (article.value.comment_count || 0) - 1)
   }
 }
 

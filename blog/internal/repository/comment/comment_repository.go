@@ -2,6 +2,7 @@ package comment
 
 import (
 	"blog/internal/model/entity"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -20,6 +21,65 @@ type commentWithUser struct {
 	entity.Comment
 	UserName  string `json:"user_name"`
 	AvatarURL string `json:"avatar_url"`
+}
+
+// AdminCommentRow 后台管理评论列表查询行
+type AdminCommentRow struct {
+	ID           uint      `gorm:"column:id"`
+	Content      string    `gorm:"column:content"`
+	ArticleID    uint      `gorm:"column:article_id"`
+	UserName     string    `gorm:"column:user_name"`
+	ArticleTitle string    `gorm:"column:article_title"`
+	CreatedAt    time.Time `gorm:"column:created_at"`
+}
+
+// ListAllComments 分页查询所有未删除评论（后台管理）
+func (r *commentRepository) ListAllComments(page, pageSize int) ([]AdminCommentRow, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Comment{}).Where("deleted_at IS NULL").Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return nil, 0, nil
+	}
+
+	offset := (page - 1) * pageSize
+	var rows []AdminCommentRow
+	err := r.db.Table("comments").
+		Select("comments.id, comments.content, comments.article_id, comments.created_at, users.user_name, articles.title AS article_title").
+		Joins("LEFT JOIN users ON users.id = comments.user_id").
+		Joins("LEFT JOIN articles ON articles.id = comments.article_id").
+		Where("comments.deleted_at IS NULL").
+		Order("comments.created_at DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+// BatchDeleteComments 批量软删除评论
+func (r *commentRepository) BatchDeleteComments(ids []uint) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result := r.db.Delete(&entity.Comment{}, ids)
+	return result.RowsAffected, result.Error
+}
+
+// GetArticleIDsByCommentIDs 批量查询评论所属文章ID
+func (r *commentRepository) GetArticleIDsByCommentIDs(ids []uint) ([]uint, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var articleIDs []uint
+	err := r.db.Model(&entity.Comment{}).
+		Select("DISTINCT article_id").
+		Where("id IN ?", ids).
+		Pluck("article_id", &articleIDs).Error
+	return articleIDs, err
 }
 
 // ListComments 分页查询一级评论

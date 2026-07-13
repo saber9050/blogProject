@@ -192,8 +192,6 @@ func (a *App) initDependencies() {
 	tSvc := tagSvc.NewTagService(tRepo)
 	aboutSvc := aboutSvc.NewAboutService(aboutRepo, a.minioClient, uRepo)
 
-	// 设置评论服务的文章仓库依赖（用于更新评论计数）
-	cSvc.SetArticleRepo(aRepo)
 	// 设置评论服务的MinIO客户端依赖（用于生成完整头像URL）
 	cSvc.SetMinioClient(a.minioClient)
 	// 设置评论服务的用户仓库依赖（用于获取用户信息）

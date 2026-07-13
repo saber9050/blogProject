@@ -13,10 +13,6 @@ import (
 
 type commentService struct {
 	commentRepo commentRepo.CommentRepository
-	articleRepo interface {
-		IncrementCommentCount(articleID uint) error
-		DecrementCommentCount(articleID uint) error
-	}
 	minioClient interface {
 		GetFileURL(fileKey string) string
 	}
@@ -28,14 +24,6 @@ type commentService struct {
 // NewCommentService 创建评论服务实例
 func NewCommentService(repo commentRepo.CommentRepository) CommentService {
 	return &commentService{commentRepo: repo}
-}
-
-// SetArticleRepo 设置文章仓库依赖（避免循环依赖）
-func (s *commentService) SetArticleRepo(articleRepo interface {
-	IncrementCommentCount(articleID uint) error
-	DecrementCommentCount(articleID uint) error
-}) {
-	s.articleRepo = articleRepo
 }
 
 // SetMinioClient 设置MinIO客户端依赖（用于生成完整头像URL）
@@ -170,13 +158,6 @@ func (s *commentService) CreateComment(articleID, userID uint, req *request.Crea
 		return nil, fmt.Errorf("发表评论失败: %w", err)
 	}
 
-	// 增加文章评论计数
-	if s.articleRepo != nil {
-		if err := s.articleRepo.IncrementCommentCount(articleID); err != nil {
-			fmt.Printf("增加文章评论计数失败: %v\n", err)
-		}
-	}
-
 	// 查询用户信息（用于返回用户名和头像）
 	userName := ""
 	avatarURL := ""
@@ -222,18 +203,60 @@ func (s *commentService) DeleteComment(commentID, userID uint, roleID int8) erro
 		return errors.NewDefault(errors.CodeForbidden)
 	}
 
-	if err := s.commentRepo.DeleteComment(commentID); err != nil {
-		return fmt.Errorf("删除评论失败: %w", err)
+	return s.commentRepo.DeleteComment(commentID)
+}
+
+// ListAdminComments 后台分页查询所有未删除评论
+func (s *commentService) ListAdminComments(page, pageSize int) (*response.PaginatedResponse, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	if pageSize > 50 {
+		pageSize = 50
 	}
 
-	// 减少文章评论计数
-	if s.articleRepo != nil {
-		if err := s.articleRepo.DecrementCommentCount(comment.ArticleID); err != nil {
-			fmt.Printf("减少文章评论计数失败: %v\n", err)
+	rows, total, err := s.commentRepo.ListAllComments(page, pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("查询评论列表失败: %w", err)
+	}
+	if len(rows) == 0 {
+		return &response.PaginatedResponse{
+			List:     []response.AdminCommentItem{},
+			Total:    0,
+			Page:     page,
+			PageSize: pageSize,
+		}, nil
+	}
+
+	items := make([]response.AdminCommentItem, len(rows))
+	for i, r := range rows {
+		items[i] = response.AdminCommentItem{
+			ID:           r.ID,
+			ArticleTitle: r.ArticleTitle,
+			UserName:     r.UserName,
+			Content:      r.Content,
+			CreatedAt:    r.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		}
 	}
 
-	return nil
+	return &response.PaginatedResponse{
+		List:     items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
+}
+
+// BatchDeleteComment 批量删除评论，返回实际删除数量
+func (s *commentService) BatchDeleteComment(ids []uint) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	return s.commentRepo.BatchDeleteComments(ids)
 }
 
 // entityToItem 将实体转为响应DTO

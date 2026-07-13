@@ -30,14 +30,10 @@ type ArticleRepository interface {
 	CreateLike(articleID, userID uint) error
 	// DeleteLike 取消点赞
 	DeleteLike(articleID, userID uint) error
-	// IncrementLikeCount 增加点赞计数
-	IncrementLikeCount(articleID uint) error
-	// DecrementLikeCount 减少点赞计数
-	DecrementLikeCount(articleID uint) error
-	// IncrementCommentCount 增加评论计数
-	IncrementCommentCount(articleID uint) error
-	// DecrementCommentCount 减少评论计数
-	DecrementCommentCount(articleID uint) error
+	// CountLikes 获取文章点赞数
+	CountLikes(articleID uint) (int64, error)
+	// CountComments 获取文章评论数（未删除的）
+	CountComments(articleID uint) (int64, error)
 	// GetStats 获取已发布文章的统计数据（文章数、总阅读量、总点赞量）
 	GetStats() (articleCount, totalViews, totalLikes int64, err error)
 

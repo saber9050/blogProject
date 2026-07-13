@@ -31,4 +31,9 @@ func (ctrl *AdminController) RegisterRoutes(r *gin.RouterGroup) {
 	r.POST("/tags", ctrl.CreateTag)
 	r.PUT("/tags/:id", ctrl.UpdateTag)
 	r.DELETE("/tags/:id", ctrl.DeleteTag)
+
+	// 评论管理
+	r.GET("/comments", ctrl.ListComments)
+	r.DELETE("/comments", ctrl.BatchDeleteComments)
+	r.DELETE("/comments/:id", ctrl.DeleteComment)
 }

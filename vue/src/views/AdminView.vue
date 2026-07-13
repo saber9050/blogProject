@@ -58,6 +58,20 @@
             </tbody>
           </table>
           <div v-if="!users.length" class="admin-empty">暂无用户数据</div>
+          <div v-if="users.length" class="pagination">
+            <button class="pagination__btn" :disabled="userPage <= 1" @click="loadUsers(userPage - 1)">上一页</button>
+            <template v-for="p in getPageRange(userPage, calcPages(userTotal, userPageSize))" :key="p">
+              <span v-if="p === '...'" class="pagination__ellipsis">...</span>
+              <button v-else class="pagination__btn" :class="{ 'pagination__btn--active': p === userPage }" @click="loadUsers(p)">{{ p }}</button>
+            </template>
+            <button class="pagination__btn" :disabled="userPage >= calcPages(userTotal, userPageSize)" @click="loadUsers(userPage + 1)">下一页</button>
+            <span class="pagination__info">共 {{ userTotal }} 条</span>
+            <select class="pagination__size" v-model.number="userPageSize" @change="loadUsers(1)">
+              <option :value="10">10条/页</option>
+              <option :value="20">20条/页</option>
+              <option :value="50">50条/页</option>
+            </select>
+          </div>
         </section>
 
         <!-- ========== 文章管理 ========== -->
@@ -108,6 +122,75 @@
             </tbody>
           </table>
           <div v-if="!adminArticles.length" class="admin-empty">暂无文章数据</div>
+          <div v-if="adminArticles.length" class="pagination">
+            <button class="pagination__btn" :disabled="articlePage <= 1" @click="loadArticles(articlePage - 1)">上一页</button>
+            <template v-for="p in getPageRange(articlePage, calcPages(articleTotal, articlePageSize))" :key="p">
+              <span v-if="p === '...'" class="pagination__ellipsis">...</span>
+              <button v-else class="pagination__btn" :class="{ 'pagination__btn--active': p === articlePage }" @click="loadArticles(p)">{{ p }}</button>
+            </template>
+            <button class="pagination__btn" :disabled="articlePage >= calcPages(articleTotal, articlePageSize)" @click="loadArticles(articlePage + 1)">下一页</button>
+            <span class="pagination__info">共 {{ articleTotal }} 条</span>
+            <select class="pagination__size" v-model.number="articlePageSize" @change="loadArticles(1)">
+              <option :value="10">10条/页</option>
+              <option :value="20">20条/页</option>
+              <option :value="50">50条/页</option>
+            </select>
+          </div>
+        </section>
+
+        <!-- ========== 评论管理 ========== -->
+        <section v-if="activeTab === 'comments'" class="admin-panel">
+          <div class="admin-panel__header">
+            <h2 class="admin-panel__title">评论管理</h2>
+            <div class="admin-panel__actions">
+              <button v-if="!batchMode" class="btn-sm btn-sm--danger" @click="batchMode = true">批量删除</button>
+              <template v-else>
+                <button class="btn-sm" @click="exitBatchMode">取消</button>
+                <button class="btn-sm btn-sm--danger" :disabled="!selectedCommentIds.length" @click="handleBatchDeleteComments">确认删除 ({{ selectedCommentIds.length }})</button>
+              </template>
+            </div>
+          </div>
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th v-if="batchMode"><input type="checkbox" :checked="allCommentsSelected" @change="toggleAllComments" /></th>
+                <th>ID</th>
+                <th>所属文章</th>
+                <th>评论者</th>
+                <th>评论内容</th>
+                <th>时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="c in adminComments" :key="c.id">
+                <td v-if="batchMode"><input type="checkbox" :value="c.id" v-model="selectedCommentIds" /></td>
+                <td>{{ c.id }}</td>
+                <td>{{ c.article_title }}</td>
+                <td>{{ c.user_name }}</td>
+                <td>{{ c.content }}</td>
+                <td>{{ fmt(c.created_at) }}</td>
+                <td>
+                  <button class="btn-sm btn-sm--danger" @click="handleDelete('comment', c.id)">删除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="!adminComments.length" class="admin-empty">暂无评论数据</div>
+          <div v-if="adminComments.length" class="pagination">
+            <button class="pagination__btn" :disabled="commentPage <= 1" @click="loadComments(commentPage - 1)">上一页</button>
+            <template v-for="p in getPageRange(commentPage, calcPages(commentTotal, commentPageSize))" :key="p">
+              <span v-if="p === '...'" class="pagination__ellipsis">...</span>
+              <button v-else class="pagination__btn" :class="{ 'pagination__btn--active': p === commentPage }" @click="loadComments(p)">{{ p }}</button>
+            </template>
+            <button class="pagination__btn" :disabled="commentPage >= calcPages(commentTotal, commentPageSize)" @click="loadComments(commentPage + 1)">下一页</button>
+            <span class="pagination__info">共 {{ commentTotal }} 条</span>
+            <select class="pagination__size" v-model.number="commentPageSize" @change="loadComments(1)">
+              <option :value="10">10条/页</option>
+              <option :value="20">20条/页</option>
+              <option :value="50">50条/页</option>
+            </select>
+          </div>
         </section>
 
         <!-- ========== 分类管理 ========== -->
@@ -148,6 +231,20 @@
             </tbody>
           </table>
           <div v-if="!adminCategories.length" class="admin-empty">暂无分类数据</div>
+          <div v-if="adminCategories.length" class="pagination">
+            <button class="pagination__btn" :disabled="categoryPage <= 1" @click="loadCategories(categoryPage - 1)">上一页</button>
+            <template v-for="p in getPageRange(categoryPage, calcPages(categoryTotal, categoryPageSize))" :key="p">
+              <span v-if="p === '...'" class="pagination__ellipsis">...</span>
+              <button v-else class="pagination__btn" :class="{ 'pagination__btn--active': p === categoryPage }" @click="loadCategories(p)">{{ p }}</button>
+            </template>
+            <button class="pagination__btn" :disabled="categoryPage >= calcPages(categoryTotal, categoryPageSize)" @click="loadCategories(categoryPage + 1)">下一页</button>
+            <span class="pagination__info">共 {{ categoryTotal }} 条</span>
+            <select class="pagination__size" v-model.number="categoryPageSize" @change="loadCategories(1)">
+              <option :value="10">10条/页</option>
+              <option :value="20">20条/页</option>
+              <option :value="50">50条/页</option>
+            </select>
+          </div>
         </section>
 
         <!-- ========== 标签管理 ========== -->
@@ -188,6 +285,20 @@
             </tbody>
           </table>
           <div v-if="!adminTags.length" class="admin-empty">暂无标签数据</div>
+          <div v-if="adminTags.length" class="pagination">
+            <button class="pagination__btn" :disabled="tagPage <= 1" @click="loadTags(tagPage - 1)">上一页</button>
+            <template v-for="p in getPageRange(tagPage, calcPages(tagTotal, tagPageSize))" :key="p">
+              <span v-if="p === '...'" class="pagination__ellipsis">...</span>
+              <button v-else class="pagination__btn" :class="{ 'pagination__btn--active': p === tagPage }" @click="loadTags(p)">{{ p }}</button>
+            </template>
+            <button class="pagination__btn" :disabled="tagPage >= calcPages(tagTotal, tagPageSize)" @click="loadTags(tagPage + 1)">下一页</button>
+            <span class="pagination__info">共 {{ tagTotal }} 条</span>
+            <select class="pagination__size" v-model.number="tagPageSize" @change="loadTags(1)">
+              <option :value="10">10条/页</option>
+              <option :value="20">20条/页</option>
+              <option :value="50">50条/页</option>
+            </select>
+          </div>
         </section>
       </main>
     </div>
@@ -330,7 +441,7 @@
       <div class="modal modal--delete">
         <h3 class="modal__title">确认删除</h3>
         <div class="modal__body">
-          <p class="delete-confirm-text">确定要删除该{{ deleteTarget?.type === 'user' ? '用户' : deleteTarget?.type === 'article' ? '文章' : deleteTarget?.type === 'category' ? '分类' : '标签' }}吗？此操作不可恢复。</p>
+          <p class="delete-confirm-text">确定要删除该{{ deleteTarget?.type === 'user' ? '用户' : deleteTarget?.type === 'article' ? '文章' : deleteTarget?.type === 'comment' ? '评论' : deleteTarget?.type === 'category' ? '分类' : '标签' }}吗？此操作不可恢复。</p>
         </div>
         <div class="modal__footer">
           <button class="btn btn--cancel" @click="deleteModalVisible = false">取消</button>
@@ -370,7 +481,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, type Ref } from 'vue'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import { showToast } from '../utils/toast'
@@ -406,11 +517,20 @@ interface CatTagItem {
   created_at: string
 }
 
+interface AdminCommentItem {
+  id: number
+  article_title: string
+  user_name: string
+  content: string
+  created_at: string
+}
+
 // ---------- 状态 ----------
 const activeTab = ref('users')
 const tabs = [
   { key: 'users', label: '用户管理', icon: '👥' },
   { key: 'articles', label: '文章管理', icon: '📝' },
+  { key: 'comments', label: '评论管理', icon: '💬' },
   { key: 'categories', label: '分类管理', icon: '📁' },
   { key: 'tags', label: '标签管理', icon: '🏷️' }
 ]
@@ -419,6 +539,26 @@ const users = ref<UserItem[]>([])
 const adminArticles = ref<ArticleItem[]>([])
 const adminCategories = ref<CatTagItem[]>([])
 const adminTags = ref<CatTagItem[]>([])
+const adminComments = ref<AdminCommentItem[]>([])
+const selectedCommentIds = ref<number[]>([])
+const batchMode = ref(false)
+
+// 分页状态
+const userPage = ref(1)
+const userPageSize = ref(10)
+const userTotal = ref(0)
+const articlePage = ref(1)
+const articlePageSize = ref(10)
+const articleTotal = ref(0)
+const commentPage = ref(1)
+const commentPageSize = ref(10)
+const commentTotal = ref(0)
+const categoryPage = ref(1)
+const categoryPageSize = ref(10)
+const categoryTotal = ref(0)
+const tagPage = ref(1)
+const tagPageSize = ref(10)
+const tagTotal = ref(0)
 
 // 模态框
 const modalVisible = ref(false)
@@ -506,6 +646,106 @@ const checkPasswordFormat = () => {
   }
   passwordError.value = false
   passwordErrorMsg.value = ''
+}
+
+// 是否全选评论
+const allCommentsSelected = computed(() => {
+  return adminComments.value.length > 0 && selectedCommentIds.value.length === adminComments.value.length
+})
+
+// 全选/取消全选评论
+const toggleAllComments = () => {
+  if (allCommentsSelected.value) {
+    selectedCommentIds.value = []
+  } else {
+    selectedCommentIds.value = adminComments.value.map(c => c.id)
+  }
+}
+
+// 退出批量模式
+const exitBatchMode = () => {
+  batchMode.value = false
+  selectedCommentIds.value = []
+}
+
+// 批量删除评论
+const handleBatchDeleteComments = async () => {
+  if (!selectedCommentIds.value.length) return
+  try {
+    await api.delete('/admin/comments', { data: { ids: selectedCommentIds.value } })
+    showToast('批量删除成功', 'success')
+    exitBatchMode()
+    await loadComments(commentPage.value)
+  } catch (error: any) {
+    console.error('批量删除失败:', error)
+    const msg = error?.response?.data?.message || '批量删除失败，请重试'
+    showToast(msg, 'error')
+  }
+}
+
+// ---------- 分页加载 ----------
+const loadUsers = async (page = 1) => {
+  userPage.value = page
+  try {
+    const res = await api.get('/admin/users', { params: { page: userPage.value, page_size: userPageSize.value } })
+    users.value = res.data.data?.list || []
+    userTotal.value = res.data.data?.total || 0
+  } catch (e) { console.error('加载用户失败:', e) }
+}
+
+const loadArticles = async (page = 1) => {
+  articlePage.value = page
+  try {
+    const res = await api.get('/admin/articles', { params: { page: articlePage.value, page_size: articlePageSize.value } })
+    adminArticles.value = res.data.data?.list || []
+    articleTotal.value = res.data.data?.total || 0
+  } catch (e) { console.error('加载文章失败:', e) }
+}
+
+const loadComments = async (page = 1) => {
+  commentPage.value = page
+  try {
+    const res = await api.get('/admin/comments', { params: { page: commentPage.value, page_size: commentPageSize.value } })
+    adminComments.value = res.data.data?.list || []
+    commentTotal.value = res.data.data?.total || 0
+  } catch (e) { console.error('加载评论失败:', e) }
+}
+
+const loadCategories = async (page = 1) => {
+  categoryPage.value = page
+  try {
+    const res = await api.get('/admin/categories', { params: { page: categoryPage.value, page_size: categoryPageSize.value } })
+    adminCategories.value = res.data.data?.list || []
+    categoryTotal.value = res.data.data?.total || 0
+  } catch (e) { console.error('加载分类失败:', e) }
+}
+
+const loadTags = async (page = 1) => {
+  tagPage.value = page
+  try {
+    const res = await api.get('/admin/tags', { params: { page: tagPage.value, page_size: tagPageSize.value } })
+    adminTags.value = res.data.data?.list || []
+    tagTotal.value = res.data.data?.total || 0
+  } catch (e) { console.error('加载标签失败:', e) }
+}
+
+const calcPages = (total: number, size: number) => Math.ceil(total / size) || 1
+
+const getPageRange = (current: number, total: number): (number | '...')[] => {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages: (number | '...')[] = []
+  if (current <= 4) {
+    for (let i = 1; i <= 5; i++) pages.push(i)
+    pages.push('...'); pages.push(total)
+  } else if (current >= total - 3) {
+    pages.push(1); pages.push('...')
+    for (let i = total - 4; i <= total; i++) pages.push(i)
+  } else {
+    pages.push(1); pages.push('...')
+    for (let i = current - 1; i <= current + 1; i++) pages.push(i)
+    pages.push('...'); pages.push(total)
+  }
+  return pages
 }
 
 // 保存按钮是否禁用（新增用户时，昵称或校验失败或未通过唯一性校验时禁用）
@@ -801,8 +1041,7 @@ const handleSave = async () => {
         })
       }
       // 重新加载用户列表
-      const uRes = await api.get('/admin/users')
-      users.value = uRes.data.data?.list || []
+      await loadUsers(editingId.value ? userPage.value : 1)
     } else if (modalType.value === 'article') {
       let articleData: Record<string, any> = {}
       
@@ -852,8 +1091,7 @@ const handleSave = async () => {
         await api.post('/admin/articles', articleData)
       }
       // 重新加载文章列表
-      const aRes = await api.get('/admin/articles')
-      adminArticles.value = aRes.data.data?.list || []
+      await loadArticles(editingId.value ? articlePage.value : 1)
     } else if (modalType.value === 'category') {
       const categoryData = {
         name: modalForm.name,
@@ -866,8 +1104,7 @@ const handleSave = async () => {
         await api.post('/admin/categories', categoryData)
       }
       // 重新加载分类列表
-      const cRes = await api.get('/admin/categories')
-      adminCategories.value = cRes.data.data?.list || []
+      await loadCategories(editingId.value ? categoryPage.value : 1)
     } else if (modalType.value === 'tag') {
       const tagData = {
         name: modalForm.name,
@@ -880,8 +1117,7 @@ const handleSave = async () => {
         await api.post('/admin/tags', tagData)
       }
       // 重新加载标签列表
-      const tRes = await api.get('/admin/tags')
-      adminTags.value = tRes.data.data?.list || []
+      await loadTags(editingId.value ? tagPage.value : 1)
     }
     
     modalVisible.value = false
@@ -904,19 +1140,29 @@ const confirmDelete = async () => {
   deleteModalVisible.value = false
   deleteTarget.value = null
 
+  const reloadWithFallback = async (loadFn: Function, page: Ref<number>, data: Ref<any[]>) => {
+    await loadFn(page.value)
+    if (data.value.length === 0 && page.value > 1) {
+      await loadFn(page.value - 1)
+    }
+  }
+
   try {
     if (type === 'user') {
       await api.delete(`/admin/users/${id}`)
-      users.value = users.value.filter((u) => u.id !== id)
+      await reloadWithFallback(loadUsers, userPage, users)
     } else if (type === 'article') {
       await api.delete(`/admin/articles/${id}`)
-      adminArticles.value = adminArticles.value.filter((a) => a.id !== id)
+      await reloadWithFallback(loadArticles, articlePage, adminArticles)
+    } else if (type === 'comment') {
+      await api.delete(`/admin/comments/${id}`)
+      await reloadWithFallback(loadComments, commentPage, adminComments)
     } else if (type === 'category') {
       await api.delete(`/admin/categories/${id}`)
-      adminCategories.value = adminCategories.value.filter((c) => c.id !== id)
+      await reloadWithFallback(loadCategories, categoryPage, adminCategories)
     } else if (type === 'tag') {
       await api.delete(`/admin/tags/${id}`)
-      adminTags.value = adminTags.value.filter((t) => t.id !== id)
+      await reloadWithFallback(loadTags, tagPage, adminTags)
     }
     showToast('删除成功', 'success')
   } catch (error: any) {
@@ -938,12 +1184,10 @@ const handleTransfer = async () => {
     transferFrom.value = 0
     transferTo.value = 0
     // 重新加载文章和分类列表
-    const [aRes, cRes] = await Promise.all([
-      api.get('/admin/articles'),
-      api.get('/admin/categories')
+    await Promise.all([
+      loadArticles(articlePage.value),
+      loadCategories(categoryPage.value)
     ])
-    adminArticles.value = aRes.data.data?.list || []
-    adminCategories.value = cRes.data.data?.list || []
   } catch (error: any) {
     console.error('转移失败:', error)
     const msg = error?.response?.data?.message || '转移失败，请重试'
@@ -953,16 +1197,13 @@ const handleTransfer = async () => {
 
 onMounted(async () => {
   try {
-    const [uRes, aRes, cRes, tRes] = await Promise.all([
-      api.get('/admin/users'),
-      api.get('/admin/articles'),
-      api.get('/admin/categories'),
-      api.get('/admin/tags')
+    await Promise.all([
+      loadUsers(1),
+      loadArticles(1),
+      loadComments(1),
+      loadCategories(1),
+      loadTags(1)
     ])
-    users.value = uRes.data.data?.list || []
-    adminArticles.value = aRes.data.data?.list || []
-    adminCategories.value = cRes.data.data?.list || []
-    adminTags.value = tRes.data.data?.list || []
   } catch (error) {
     console.error('加载数据失败:', error)
     showToast('加载数据失败，请刷新页面重试', 'error')
@@ -1281,5 +1522,58 @@ select.modal__input { appearance: auto; }
   font-size: 12px;
   color: #999;
   margin: 8px 0 0;
+}
+
+/* ---------- 分页 ---------- */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 0;
+  flex-wrap: wrap;
+}
+
+.pagination__btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination__btn:hover { border-color: #1677ff; color: #1677ff; }
+.pagination__btn--active { background: #1677ff; color: #fff; border-color: #1677ff; }
+.pagination__btn--active:hover { background: #4096ff; border-color: #4096ff; color: #fff; }
+.pagination__btn:disabled { color: #d9d9d9; border-color: #d9d9d9; cursor: not-allowed; background: #fafafa; }
+
+.pagination__ellipsis {
+  display: inline-block;
+  width: 24px;
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+}
+
+.pagination__info {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+.pagination__size {
+  margin-left: 4px;
+  padding: 4px 6px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
 }
 </style>

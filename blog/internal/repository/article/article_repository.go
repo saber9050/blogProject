@@ -65,7 +65,10 @@ func (r *articleRepository) ListPublic(page, pageSize int, sort string, category
 	switch sort {
 	case "popular":
 		// 热度排序：点赞数×3 + 浏览量×1 + 评论数×2
-		query = query.Order("(like_count * 3 + views * 1 + comment_count * 2) DESC")
+		query = query.Order(`
+			(COALESCE((SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id), 0) * 3 +
+			views * 1 +
+			COALESCE((SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id AND comments.deleted_at IS NULL), 0) * 2) DESC`)
 	default:
 		query = query.Order("created_at DESC")
 	}
@@ -198,28 +201,22 @@ func (r *articleRepository) DeleteLike(articleID, userID uint) error {
 		Delete(&entity.Like{}).Error
 }
 
-// IncrementLikeCount 增加点赞计数
-func (r *articleRepository) IncrementLikeCount(articleID uint) error {
-	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
-		UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
+// CountLikes 获取文章点赞数
+func (r *articleRepository) CountLikes(articleID uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&entity.Like{}).
+		Where("article_id = ?", articleID).
+		Count(&count).Error
+	return count, err
 }
 
-// DecrementLikeCount 减少点赞计数
-func (r *articleRepository) DecrementLikeCount(articleID uint) error {
-	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
-		UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
-}
-
-// IncrementCommentCount 增加评论计数
-func (r *articleRepository) IncrementCommentCount(articleID uint) error {
-	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
-		UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
-}
-
-// DecrementCommentCount 减少评论计数
-func (r *articleRepository) DecrementCommentCount(articleID uint) error {
-	return r.db.Model(&entity.Article{}).Where("id = ?", articleID).
-		UpdateColumn("comment_count", gorm.Expr("comment_count - 1")).Error
+// CountComments 获取文章评论数（未删除的）
+func (r *articleRepository) CountComments(articleID uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&entity.Comment{}).
+		Where("article_id = ? AND deleted_at IS NULL", articleID).
+		Count(&count).Error
+	return count, err
 }
 
 // GetStats 获取已发布文章的统计数据（文章数、总阅读量、总点赞量）
@@ -230,7 +227,7 @@ func (r *articleRepository) GetStats() (int64, int64, int64, error) {
 		TotalLikes   int64 `gorm:"column:total_likes"`
 	}
 	err := r.db.Model(&entity.Article{}).
-		Select("COUNT(*) as article_count, COALESCE(SUM(views), 0) as total_views, COALESCE(SUM(like_count), 0) as total_likes").
+		Select("COUNT(*) as article_count, COALESCE(SUM(views), 0) as total_views, (SELECT COUNT(*) FROM likes INNER JOIN articles a2 ON a2.id = likes.article_id WHERE a2.status = 1) as total_likes").
 		Where("status = ?", 1).
 		Scan(&result).Error
 	if err != nil {
