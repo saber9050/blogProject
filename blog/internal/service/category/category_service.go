@@ -6,6 +6,9 @@ import (
 	"blog/internal/model/entity"
 	repo "blog/internal/repository/category"
 	"blog/pkg/errors"
+	"blog/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 // categoryService 分类服务实现
@@ -22,6 +25,7 @@ func NewCategoryService(categoryRepo repo.CategoryRepository) CategoryService {
 func (s *categoryService) ListPublic() ([]*response.CategoryPublicResponse, error) {
 	list, err := s.categoryRepo.ListPublic()
 	if err != nil {
+		logger.Error("获取分类列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取分类列表失败", err)
 	}
 	var result []*response.CategoryPublicResponse
@@ -38,6 +42,7 @@ func (s *categoryService) ListPublic() ([]*response.CategoryPublicResponse, erro
 func (s *categoryService) List(page, pageSize int, status *int, keyword string) (*response.PaginatedResponse, error) {
 	list, total, err := s.categoryRepo.List(page, pageSize, status, keyword)
 	if err != nil {
+		logger.Error("获取分类列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取分类列表失败", err)
 	}
 	var items []*response.CategoryAdminResponse
@@ -62,6 +67,7 @@ func (s *categoryService) Create(req *request.CreateCategoryRequest) error {
 	// 检查分类名称是否已存在
 	exists, err := s.categoryRepo.IsExistsByName(req.Name, 0)
 	if err != nil {
+		logger.Error("检查分类名称失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "检查分类名称失败", err)
 	}
 	if exists {
@@ -79,6 +85,7 @@ func (s *categoryService) Update(id uint, req *request.UpdateCategoryRequest) er
 	// 检查分类是否存在
 	category, err := s.categoryRepo.FindByID(id)
 	if err != nil {
+		logger.Error("查找分类失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "查找分类失败", err)
 	}
 	if category == nil {
@@ -87,6 +94,7 @@ func (s *categoryService) Update(id uint, req *request.UpdateCategoryRequest) er
 	// 检查分类名称是否重复
 	exists, err := s.categoryRepo.IsExistsByName(req.Name, id)
 	if err != nil {
+		logger.Error("检查分类名称失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "检查分类名称失败", err)
 	}
 	if exists {
@@ -97,6 +105,7 @@ func (s *categoryService) Update(id uint, req *request.UpdateCategoryRequest) er
 	if req.Status == 0 && category.Status != 0 {
 		count, err := s.categoryRepo.CountByCategoryID(id)
 		if err != nil {
+			logger.Error("统计关联文章失败", zap.Error(err))
 			return errors.NewWithErr(errors.CodeInternalError, "统计关联文章失败", err)
 		}
 		if count > 0 {
@@ -118,6 +127,7 @@ func (s *categoryService) Delete(id uint) error {
 	// 检查分类是否存在
 	category, err := s.categoryRepo.FindByID(id)
 	if err != nil {
+		logger.Error("查找分类失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "查找分类失败", err)
 	}
 	if category == nil {
@@ -126,6 +136,7 @@ func (s *categoryService) Delete(id uint) error {
 	// 检查分类下是否有关联文章
 	count, err := s.categoryRepo.CountByCategoryID(id)
 	if err != nil {
+		logger.Error("统计关联文章失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "统计关联文章失败", err)
 	}
 	if count > 0 {
@@ -138,6 +149,7 @@ func (s *categoryService) Delete(id uint) error {
 func (s *categoryService) CountEnabled() (int64, error) {
 	count, err := s.categoryRepo.CountEnabled()
 	if err != nil {
+		logger.Error("统计启用分类失败", zap.Error(err))
 		return 0, errors.NewWithErr(errors.CodeInternalError, "统计启用分类失败", err)
 	}
 	return count, nil

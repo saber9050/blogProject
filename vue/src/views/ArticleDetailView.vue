@@ -554,6 +554,7 @@ watch(() => route.params.id, async (newId) => {
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
   overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .article-content__title {
@@ -579,6 +580,13 @@ watch(() => route.params.id, async (newId) => {
   font-size: 0.95rem;
   line-height: 1.8;
   color: var(--text-secondary);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.article-content__body :deep(pre) {
+  white-space: pre-wrap;
+  overflow-x: auto;
 }
 
 .article-content__body :deep(img) {

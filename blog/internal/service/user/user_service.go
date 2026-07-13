@@ -47,6 +47,7 @@ func NewUserService(userRepo repo.UserRepository, minio *minioPkg.Client, authSv
 func (s *userService) GetUserInfo(userID uint) (*response.UserInfoResponse, error) {
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
+		logger.Error("获取用户信息失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取用户信息失败", err)
 	}
 	if user == nil {
@@ -82,6 +83,7 @@ func (s *userService) UpdateProfile(userID uint, req *request.UpdateUserProfileR
 	}
 
 	if err := s.userRepo.UpdateProfile(userID, updates); err != nil {
+		logger.Error("更新用户资料失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "更新用户资料失败", err)
 	}
 
@@ -93,6 +95,7 @@ func (s *userService) UpdateAvatar(userID uint, fileHeader *multipart.FileHeader
 	// 找到用户
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil || user == nil {
+		logger.Error("获取用户信息失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取用户信息失败", err)
 	}
 
@@ -104,6 +107,7 @@ func (s *userService) UpdateAvatar(userID uint, fileHeader *multipart.FileHeader
 
 	// 更新用户头像 URL
 	if err := s.userRepo.UpdateProfile(userID, map[string]interface{}{"avatar_url": fileKey}); err != nil {
+		logger.Error("更新用户头像失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "更新用户头像失败", err)
 	}
 
@@ -131,6 +135,7 @@ func (s *userService) UpLoadImage(fileHeader *multipart.FileHeader) (string, err
 	// 打开上传的文件
 	src, err := fileHeader.Open()
 	if err != nil {
+		logger.Error("打开上传文件失败", zap.Error(err))
 		return "", errors.NewWithErr(errors.CodeInternalError, "打开上传文件失败", err)
 	}
 	defer func() {
@@ -155,6 +160,7 @@ func (s *userService) UpLoadImage(fileHeader *multipart.FileHeader) (string, err
 
 	fileKey, err := s.minio.Upload(ctx, objectName, src, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
 	if err != nil {
+		logger.Error("上传图片失败", zap.Error(err))
 		return "", errors.NewWithErr(errors.CodeInternalError, "上传图片失败", err)
 	}
 	return fileKey, nil
@@ -165,11 +171,13 @@ func (s *userService) UpdateEmail(userID uint, req *request.UpdateUserEmailReque
 	// 获取用户
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
+		logger.Error("获取用户信息失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取用户信息失败", err)
 	}
 	// 验证并删除邮箱验证码
 	err = s.authSvc.VerifyCaptcha(user.Email, constant.CaptchaPurposeResetEmail, req.Captcha)
 	if err != nil {
+		logger.Error("验证邮箱验证码失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "验证邮箱验证码失败", err)
 	}
 	// 验证密码
@@ -187,11 +195,13 @@ func (s *userService) UpdateEmail(userID uint, req *request.UpdateUserEmailReque
 	// 生成token
 	token, err := jwt.GenerateToken(user.ID, req.NewEmail, uint(user.RoleID))
 	if err != nil {
+		logger.Error("生成Token失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "生成Token失败", err)
 	}
 	// 限制频率
 	res, err := s.authCache.CheckEmailSendLimit(req.NewEmail)
 	if err != nil {
+		logger.Error("检查邮箱发送频率失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "检查邮箱发送频率失败", err)
 	}
 	if !res {
@@ -202,8 +212,10 @@ func (s *userService) UpdateEmail(userID uint, req *request.UpdateUserEmailReque
 		// 删除频率限制
 		err2 := s.authCache.DeleteEmailSendLimit(req.NewEmail)
 		if err2 != nil {
+			logger.Error("删除新邮箱频率限制失败", zap.Error(err2))
 			return nil, errors.NewWithErr(errors.CodeInternalError, "删除新邮箱频率限制失败", err2)
 		}
+		logger.Error("给新邮箱发送邮件失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "给新邮箱发送邮件失败", err)
 	}
 	return &response.UpdateUserEmailResponse{
@@ -216,6 +228,7 @@ func (s *userService) AddEmail(userID uint, req *request.AddEmailRequest) error 
 	// 检查有无邮箱
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
+		logger.Error("获取用户信息失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "获取用户信息失败", err)
 	}
 	if user.Email != "" {
@@ -224,6 +237,7 @@ func (s *userService) AddEmail(userID uint, req *request.AddEmailRequest) error 
 	// 检查邮箱验证码
 	err = s.authSvc.VerifyCaptcha(req.NewEmail, constant.CaptchaPurposeAddEmail, req.Captcha)
 	if err != nil {
+		logger.Error("验证邮箱验证码失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "验证邮箱验证码失败", err)
 	}
 	// 检查新邮箱是否存在
@@ -239,6 +253,7 @@ func (s *userService) AddEmail(userID uint, req *request.AddEmailRequest) error 
 	update["email"] = req.NewEmail
 	err = s.userRepo.UpdateProfile(userID, update)
 	if err != nil {
+		logger.Error("添加邮箱失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "添加邮箱失败", err)
 	}
 	return nil
@@ -249,6 +264,7 @@ func (s *userService) UpdateAdminEmail(id uint, token, newEmail string) error {
 	// 检查是否在黑名单
 	ok, err := s.authCache.CheckBlacklist(token)
 	if err != nil {
+		logger.Error("检查token是否在黑名单失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "检查token是否在黑名单失败", err)
 	}
 	if ok {
@@ -259,11 +275,13 @@ func (s *userService) UpdateAdminEmail(id uint, token, newEmail string) error {
 	update["email"] = newEmail
 	err = s.userRepo.UpdateProfile(id, update)
 	if err != nil {
+		logger.Error("更新邮箱失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "更新邮箱失败", err)
 	}
 	// token加入黑名单
 	err = s.authCache.BlacklistToken(token, 300)
 	if err != nil {
+		logger.Error("将token加入黑名单失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "将token加入黑名单失败", err)
 	}
 	return nil
@@ -273,6 +291,7 @@ func (s *userService) UpdateAdminEmail(id uint, token, newEmail string) error {
 func (s *userService) IsExistsEmail(rqEmail string) (bool, error) {
 	ok, err := s.userRepo.IsExistsEmail(rqEmail)
 	if err != nil {
+		logger.Error("查询新邮箱是否存在失败", zap.Error(err))
 		return false, errors.NewWithErr(errors.CodeInternalError, "查询新邮箱是否存在失败", err)
 	}
 	return ok, nil
@@ -291,6 +310,7 @@ func randomName() string {
 func (s *userService) ListNormalUsers(page, pageSize int) ([]*response.AdminUserResponse, int64, error) {
 	list, total, err := s.userRepo.ListByRole(0, page, pageSize)
 	if err != nil {
+		logger.Error("获取用户列表失败", zap.Error(err))
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "获取用户列表失败", err)
 	}
 
@@ -312,6 +332,7 @@ func (s *userService) AdminCreateUser(req *request.AdminCreateUserRequest) (uint
 	// 检查昵称是否已存在
 	exists, err := s.authSvc.IsExistsName(req.UserName)
 	if err != nil {
+		logger.Error("检查昵称失败", zap.Error(err))
 		return 0, errors.NewWithErr(errors.CodeInternalError, "检查昵称失败", err)
 	}
 	if exists {
@@ -321,6 +342,7 @@ func (s *userService) AdminCreateUser(req *request.AdminCreateUserRequest) (uint
 	// 检查账号是否已存在
 	exists, err = s.authSvc.IsExistsAccount(req.Account)
 	if err != nil {
+		logger.Error("检查账号失败", zap.Error(err))
 		return 0, errors.NewWithErr(errors.CodeInternalError, "检查账号失败", err)
 	}
 	if exists {
@@ -330,6 +352,7 @@ func (s *userService) AdminCreateUser(req *request.AdminCreateUserRequest) (uint
 	// 加密密码
 	hash, err := utils.HashPassword(req.Password)
 	if err != nil {
+		logger.Error("密码加密失败", zap.Error(err))
 		return 0, errors.NewWithErr(errors.CodeInternalError, "密码加密失败", err)
 	}
 
@@ -346,6 +369,7 @@ func (s *userService) AdminCreateUser(req *request.AdminCreateUserRequest) (uint
 func (s *userService) AdminUpdateStatus(id uint, status int8) error {
 	user, err := s.userRepo.FindByID(id)
 	if err != nil {
+		logger.Error("查找用户失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "查找用户失败", err)
 	}
 	if user == nil {
@@ -359,6 +383,7 @@ func (s *userService) AdminUpdateStatus(id uint, status int8) error {
 func (s *userService) AdminDeleteUser(id uint) error {
 	user, err := s.userRepo.FindByID(id)
 	if err != nil {
+		logger.Error("查找用户失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "查找用户失败", err)
 	}
 	if user == nil {

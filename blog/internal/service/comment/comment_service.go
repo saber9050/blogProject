@@ -6,8 +6,10 @@ import (
 	"blog/internal/model/entity"
 	commentRepo "blog/internal/repository/comment"
 	"blog/pkg/errors"
+	"blog/pkg/logger"
 	"fmt"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -54,6 +56,7 @@ func (s *commentService) ListComments(articleID uint, page, pageSize int) (*resp
 
 	comments, total, err := s.commentRepo.ListComments(articleID, page, pageSize)
 	if err != nil {
+		logger.Error("查询评论列表失败", zap.Error(err))
 		return nil, fmt.Errorf("查询评论列表失败: %w", err)
 	}
 	if len(comments) == 0 {
@@ -72,6 +75,7 @@ func (s *commentService) ListComments(articleID uint, page, pageSize int) (*resp
 	}
 	childrenCounts, err := s.commentRepo.GetChildrenCounts(parentIDs)
 	if err != nil {
+		logger.Error("查询子评论数失败", zap.Error(err))
 		return nil, fmt.Errorf("查询子评论数失败: %w", err)
 	}
 
@@ -102,6 +106,7 @@ func (s *commentService) ListReplies(parentID uint, page, pageSize int) (*respon
 
 	comments, total, err := s.commentRepo.ListReplies(parentID, page, pageSize)
 	if err != nil {
+		logger.Error("查询回复列表失败", zap.Error(err))
 		return nil, fmt.Errorf("查询回复列表失败: %w", err)
 	}
 	if len(comments) == 0 {
@@ -139,6 +144,7 @@ func (s *commentService) CreateComment(articleID, userID uint, req *request.Crea
 			if err == gorm.ErrRecordNotFound {
 				return nil, errors.NewDefault(errors.CodeNotFound)
 			}
+			logger.Error("查询父评论失败", zap.Error(err))
 			return nil, errors.NewWithErr(errors.CodeInternalError, "查询父评论失败", err)
 		}
 		if parent.ArticleID != articleID {
@@ -155,6 +161,7 @@ func (s *commentService) CreateComment(articleID, userID uint, req *request.Crea
 	}
 
 	if err := s.commentRepo.CreateComment(comment); err != nil {
+		logger.Error("发表评论失败", zap.Error(err))
 		return nil, fmt.Errorf("发表评论失败: %w", err)
 	}
 
@@ -195,6 +202,7 @@ func (s *commentService) DeleteComment(commentID, userID uint, roleID int8) erro
 		if err == gorm.ErrRecordNotFound {
 			return errors.NewDefault(errors.CodeNotFound)
 		}
+		logger.Error("查询评论失败", zap.Error(err))
 		return errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
 	}
 
@@ -220,6 +228,7 @@ func (s *commentService) ListAdminComments(page, pageSize int) (*response.Pagina
 
 	rows, total, err := s.commentRepo.ListAllComments(page, pageSize)
 	if err != nil {
+		logger.Error("查询评论列表失败", zap.Error(err))
 		return nil, fmt.Errorf("查询评论列表失败: %w", err)
 	}
 	if len(rows) == 0 {
