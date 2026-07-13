@@ -125,7 +125,7 @@ func (a *App) initDatabase() error {
 	a.mysqlDB = mysqlDB
 
 	//自动迁移数据库表
-	//logger.Info("开始数据库迁移...")
+	logger.Info("开始数据库迁移...")
 	if err := a.mysqlDB.AutoMigrate(
 		// 用户相关
 		&entity.User{},

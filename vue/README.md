@@ -26,7 +26,7 @@ vue/
 │   │   └── main.css           # 全局样式 + CSS 变量
 │   ├── components/
 │   │   ├── AuthShell.vue      # 认证页面外壳
-│   │   ├── NavBar.vue         # 顶部导航栏
+│   │   ├── NavBar.vue         # 顶部导航栏（含"随便看看"随机文章）
 │   │   └── ToastContainer.vue # Toast 消息容器
 │   ├── views/
 │   │   ├── HomeView.vue           # 首页
@@ -89,15 +89,16 @@ npm run build
 | `/register` | 注册 | 新用户注册 |
 | `/forgot-password` | 忘记密码 | 密码重置 |
 | `/article/:id` | 文章详情 | 查看完整文章 |
-| `/admin` | 管理后台 | 文章/分类/评论/标签管理（需管理员） |
+| `/admin` | 管理后台 | 文章/分类/评论/标签/用户管理（需管理员） |
 | `/profile` | 个人中心 | 个人信息修改、邮箱变更 |
 | `/about` | 关于 | 关于页面 |
 
 ## 主要功能
 
 - 文章列表浏览和全文展示
+- 随机一篇文章（导航栏"随便看看"）
 - 用户注册/登录/密码重置
-- 后台管理：文章、分类、评论、标签 CRUD
+- 后台管理：文章、分类、评论、标签、用户 CRUD
 - 富文本编辑器（wangEditor）撰写文章
 - 分类一键转移
 - 个人资料编辑 + 邮箱修改

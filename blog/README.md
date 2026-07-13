@@ -106,7 +106,7 @@ go run main.go
 - `GET /api/v1/health` — 健康检查
 - `/api/v1/auth/*` — 认证（登录、注册、验证码、密码重置）
 - `/api/v1/users/*` — 用户信息（需登录）
-- `/api/v1/articles/*` — 前台文章
+- `/api/v1/articles/*` — 前台文章（含 `GET /random` 随机一篇文章）
 - `/api/v1/categories/*` — 分类
 - `/api/v1/tags/*` — 标签
 - `/api/v1/articles/comments/*` — 评论
@@ -117,14 +117,25 @@ go run main.go
 
 接口文档位于 `docs/` 目录：
 
-- `admin_article_api.md` — 文章管理
-- `admin_category_api.md` — 分类管理
+| 文档 | 说明 |
+|---|---|
+| `article_api.md` | 前台文章（列表、详情、随机文章） |
+| `auth_api.md` | 认证相关（登录、注册、验证码、密码重置） |
+| `user_api.md` | 用户信息 |
+| `comment_api.md` | 评论 |
+| `admin_article_api.md` | 后台文章管理 |
+| `admin_category_api.md` | 后台分类管理 |
+| `admin_tag_api.md` | 后台标签管理 |
+| `admin_user_api.md` | 后台用户管理 |
+| `about_api.md` | 关于页面 |
+| `DEVELOPMENT.md` | 开发指南 |
 
 ## 主要功能
 
 - 用户注册/登录/密码重置（邮箱验证码）
 - JWT 认证 + 角色鉴权（普通用户 / 管理员）
 - 文章 CRUD + 富文本编辑
+- 随机一篇文章
 - 分类管理（含禁用检查和文章一键转移）
 - 评论管理（级联删除）
 - 标签管理
