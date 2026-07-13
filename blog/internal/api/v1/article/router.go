@@ -11,6 +11,7 @@ func (ctrl *ArticleController) RegisterRoutes(r *gin.RouterGroup) {
 	articleGroup := r.Group("/articles")
 	{
 		articleGroup.GET("", middleware.OptionalAuth(), ctrl.ListArticles)         // 获取文章列表（可选认证）
+		articleGroup.GET("/random", ctrl.GetRandomArticle)                         // 获取随机文章（无需认证）
 		articleGroup.GET("/stats", ctrl.GetArticleStats)                           // 获取文章统计数据（无需认证）
 		articleGroup.GET("/:id", middleware.OptionalAuth(), ctrl.GetArticleDetail) // 获取文章详情（可选认证）
 		articleGroup.POST("/:id/like", middleware.Auth(), ctrl.LikeArticle)        // 点赞（需认证）

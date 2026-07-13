@@ -166,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
@@ -487,16 +487,14 @@ const loadComments = async () => {
   }
 }
 
-onMounted(async () => {
-  loadCurrentUser()
-  const id = route.params.id as string
+// 加载文章数据
+const loadArticle = async (id: string) => {
   try {
     const res = await api.get(`/articles/${id}`)
     const data = res.data.data || res.data
     article.value = {
       ...article.value,
       ...data,
-      // 兼容旧字段名
       view_count: data.view_count ?? data.views ?? 0,
       like_count: data.like_count ?? data.likes ?? 0,
       comment_count: data.comment_count ?? 0,
@@ -505,6 +503,31 @@ onMounted(async () => {
   } catch {
     // 文章加载失败
   }
+}
+
+// 重置评论状态
+const resetComments = () => {
+  comments.value = []
+  commentPage.value = 1
+  commentTotal.value = 0
+  commentHasMore.value = false
+  newComment.value = ''
+  replyingTo.value = null
+}
+
+onMounted(async () => {
+  loadCurrentUser()
+  const id = route.params.id as string
+  await loadArticle(id)
+  loadComments()
+})
+
+// 监听路由参数变化，同一组件内切换文章时重新加载
+watch(() => route.params.id, async (newId) => {
+  if (!newId) return
+  loadCurrentUser()
+  resetComments()
+  await loadArticle(newId as string)
   loadComments()
 })
 </script>
@@ -591,6 +614,8 @@ onMounted(async () => {
 
 /* ========== 评论区 ========== */
 .article-comments {
+  position: sticky;
+  top: 76px;
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.85);

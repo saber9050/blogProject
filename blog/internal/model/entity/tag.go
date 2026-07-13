@@ -4,7 +4,7 @@ package entity
 type Tag struct {
 	BaseEntity
 	TagName string `gorm:"type:varchar(100);not null;comment:标签名" json:"tag_name"`
-	Status  int8   `gorm:"type:tinyint;not null;default:1;comment:状态:1启用,0禁用" json:"status"`
+	Status  int8   `gorm:"type:tinyint;not null;comment:状态:1启用,0禁用" json:"status"`
 }
 
 func (Tag) TableName() string {

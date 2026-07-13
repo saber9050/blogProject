@@ -125,3 +125,13 @@ func (ctrl *ArticleController) GetArticleStats(c *gin.Context) {
 
 	response.Success(c, result)
 }
+
+// GetRandomArticle 随机获取一篇已发布文章的 ID
+func (ctrl *ArticleController) GetRandomArticle(c *gin.Context) {
+	id, err := ctrl.articleService.GetRandomArticleID()
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	response.Success(c, gin.H{"id": id})
+}

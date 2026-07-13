@@ -577,3 +577,15 @@ func (s *articleService) GetStats() (*response.ArticleStatsResponse, error) {
 		TotalLikes:   likes,
 	}, nil
 }
+
+// GetRandomArticleID 随机获取一篇已发布文章的 ID
+func (s *articleService) GetRandomArticleID() (uint, error) {
+	id, err := s.articleRepo.GetRandomID()
+	if err != nil {
+		return 0, errors.NewWithErr(errors.CodeInternalError, "获取随机文章失败", err)
+	}
+	if id == 0 {
+		return 0, errors.New(errors.CodeNotFound, "暂无已发布的文章")
+	}
+	return id, nil
+}

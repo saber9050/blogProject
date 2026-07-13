@@ -11,6 +11,9 @@
       <div class="navbar__links">
         <RouterLink to="/" class="navbar__link" active-class="navbar__link--active" exact>首页</RouterLink>
         <button class="navbar__link" @click="$router.push('/about')">关于</button>
+        <button class="navbar__link navbar__link--random" :disabled="randomLoading" @click="goRandomArticle">
+          {{ randomLoading ? '⏳ 找找看...' : '🎲 随便看看' }}
+        </button>
       </div>
 
       <!-- 搜索栏 -->
@@ -74,6 +77,7 @@
 import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
+import { showToast } from '../utils/toast'
 
 interface UserInfo {
   id: number
@@ -87,6 +91,7 @@ const user = ref<UserInfo | null>(null)
 const blogName = ref('')
 const searchText = ref('')
 const dropdownOpen = ref(false)
+const randomLoading = ref(false)
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 
 const openDropdown = () => {
@@ -108,6 +113,21 @@ const emit = defineEmits<{ search: [q: string] }>()
 
 const doSearch = () => {
   emit('search', searchText.value.trim())
+}
+
+const goRandomArticle = async () => {
+  if (randomLoading.value) return
+  randomLoading.value = true
+  try {
+    const res = await api.get('/articles/random')
+    if (res.data.data?.id) {
+      router.push(`/article/${res.data.data.id}`)
+    }
+  } catch (err: any) {
+    showToast(err.response?.data?.message || '获取随机文章失败', 'error')
+  } finally {
+    randomLoading.value = false
+  }
 }
 
 watch(searchText, (val) => {
@@ -261,6 +281,11 @@ onMounted(async () => {
 .navbar__link--active {
   background: rgba(16,185,129,0.12);
   color: var(--primary-700);
+}
+
+.navbar__link--random:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ====== 搜索栏 ====== */

@@ -53,7 +53,6 @@ func (s *userService) GetUserInfo(userID uint) (*response.UserInfoResponse, erro
 		return nil, errors.ErrUserNotFound
 	}
 
-	fmt.Println("------" + s.minio.GetFileURL(user.AvatarURL))
 	return &response.UserInfoResponse{
 		UserID:       user.ID,
 		UserName:     user.UserName,
@@ -336,6 +335,7 @@ func (s *userService) AdminCreateUser(req *request.AdminCreateUserRequest) (uint
 
 	// 创建用户（role_id = 0）
 	if err := s.userRepo.Create(req.UserName, req.Account, hash, req.Status); err != nil {
+		logger.Error("创建用户失败", zap.Error(err))
 		return 0, errors.NewWithErr(errors.CodeInternalError, "创建用户失败", err)
 	}
 

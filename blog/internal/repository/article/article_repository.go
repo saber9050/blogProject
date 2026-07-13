@@ -4,6 +4,7 @@ import (
 	"blog/internal/model/entity"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 
 	"gorm.io/gorm"
@@ -273,4 +274,22 @@ func (r *articleRepository) DeleteArticleImagesByArticleID(articleID uint) error
 func (r *articleRepository) TransferCategory(fromTypeID, toTypeID uint) (int64, error) {
 	result := r.db.Model(&entity.Article{}).Where("type_id = ?", fromTypeID).Update("type_id", toTypeID)
 	return result.RowsAffected, result.Error
+}
+
+// GetRandomID 随机获取一篇已发布文章的 ID
+func (r *articleRepository) GetRandomID() (uint, error) {
+	var count int64
+	if err := r.db.Model(&entity.Article{}).Where("status = ?", 1).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	if count == 0 {
+		return 0, nil
+	}
+
+	offset := rand.Intn(int(count))
+	var article entity.Article
+	if err := r.db.Where("status = ?", 1).Offset(offset).Limit(1).Find(&article).Error; err != nil {
+		return 0, err
+	}
+	return article.ID, nil
 }

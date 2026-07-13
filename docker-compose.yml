@@ -1,0 +1,116 @@
+version: "3.8"
+
+services:
+
+  # ===================== MySQL =====================
+  mysql:
+    image: mysql:8.0
+    container_name: blog-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_PASSWORD:-123456}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-blog-project}"
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - blog-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===================== Redis =====================
+  redis:
+    image: redis:7-alpine
+    container_name: blog-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - blog-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===================== MinIO =====================
+  minio:
+    image: minio/minio:latest
+    container_name: blog-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ACCESS_KEY:-admin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_SECRET_KEY:-1223349392Zxp}"
+      TZ: Asia/Shanghai
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+    networks:
+      - blog-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===================== Backend =====================
+  blog-backend:
+    build:
+      context: ./blog
+      dockerfile: Dockerfile
+    container_name: blog-backend
+    restart: unless-stopped
+    ports:
+      - "9527:9527"
+    environment:
+      # 覆盖数据库连接地址（内部 Docker 网络）
+      CORE_COACH_DATABASE_MYSQL_HOST: mysql
+      CORE_COACH_DATABASE_MYSQL_PORT: 3306
+      CORE_COACH_DATABASE_REDIS_HOST: redis
+      CORE_COACH_DATABASE_REDIS_PORT: 6379
+      # MinIO 连接地址（内部 Docker 网络）
+      CORE_COACH_MINIO_ENDPOINT: minio:9000
+      # ★ 请将以下地址改为服务器的公网 IP 或域名，用于生成浏览器可访问的文件 URL
+      # CORE_COACH_MINIO_BASE_URL: "http://your-server-ip:9000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - blog-network
+
+  # ===================== Frontend =====================
+  blog-frontend:
+    build:
+      context: ./vue
+      dockerfile: Dockerfile
+    container_name: blog-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - blog-backend
+    networks:
+      - blog-network
+
+volumes:
+  mysql_data:
+  redis_data:
+  minio_data:
+
+networks:
+  blog-network:
+    driver: bridge

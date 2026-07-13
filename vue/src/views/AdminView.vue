@@ -212,16 +212,21 @@
               </div>
               <div class="modal__field">
                 <label class="modal__label">账号</label>
-                <div class="modal__input-wrapper" :class="{ 'modal__input-wrapper--error': accountError, 'modal__input-wrapper--ok': !accountError && accountChecked }">
-                  <input v-model="modalForm.account" class="modal__input" :class="{ 'modal__input--error': accountError }" placeholder="请输入账号" @input="checkAccount" />
+                <div class="modal__input-wrapper" :class="{ 'modal__input-wrapper--error': accountError || accountFormatError, 'modal__input-wrapper--ok': !accountError && !accountFormatError && accountChecked }">
+                  <input v-model="modalForm.account" class="modal__input" :class="{ 'modal__input--error': accountError || accountFormatError }" placeholder="请输入 11 位数字账号" maxlength="11" @input="checkAccount" />
                   <span v-if="accountCheckLoading" class="modal__input-suffix">检查中...</span>
                   <span v-else-if="accountError" class="modal__input-suffix modal__input-suffix--error">账号已存在</span>
-                  <span v-else-if="accountChecked" class="modal__input-suffix modal__input-suffix--ok">可用</span>
+                  <span v-else-if="accountChecked && !accountFormatError" class="modal__input-suffix modal__input-suffix--ok">可用</span>
                 </div>
+                <p v-if="accountFormatError" class="modal__field-hint modal__field-hint--error">账号必须为 11 位数字</p>
               </div>
               <div class="modal__field">
                 <label class="modal__label">密码</label>
-                <input v-model="modalForm.password" class="modal__input" type="password" placeholder="请输入密码" />
+                <div class="modal__input-wrapper" :class="{ 'modal__input-wrapper--error': passwordError }">
+                  <input v-model="modalForm.password" class="modal__input" :class="{ 'modal__input--error': passwordError }" type="password" placeholder="11-20 位，需包含字母和数字" @input="checkPasswordFormat" />
+                </div>
+                <p v-if="passwordError" class="modal__field-hint modal__field-hint--error">{{ passwordErrorMsg }}</p>
+                <p v-else class="modal__field-hint">密码需 11-20 位，必须同时包含字母和数字</p>
               </div>
               <div class="modal__field">
                 <label class="modal__label">状态</label>
@@ -471,11 +476,43 @@ const accountChecked = ref(false)
 let nameCheckTimer: ReturnType<typeof setTimeout> | null = null
 let accountCheckTimer: ReturnType<typeof setTimeout> | null = null
 
+// 账号格式校验
+const accountFormatError = ref(false)
+// 密码格式校验
+const passwordError = ref(false)
+const passwordErrorMsg = ref('')
+
+const checkPasswordFormat = () => {
+  const val = modalForm.password || ''
+  if (!val) {
+    passwordError.value = false
+    passwordErrorMsg.value = ''
+    return
+  }
+  if (val.length < 11 || val.length > 20) {
+    passwordError.value = true
+    passwordErrorMsg.value = '密码长度需为 11-20 位'
+    return
+  }
+  if (!/[a-zA-Z]/.test(val) || !/\d/.test(val)) {
+    passwordError.value = true
+    passwordErrorMsg.value = '密码必须同时包含字母和数字'
+    return
+  }
+  if (/[^a-zA-Z0-9]/.test(val)) {
+    passwordError.value = true
+    passwordErrorMsg.value = '密码只能包含字母和数字'
+    return
+  }
+  passwordError.value = false
+  passwordErrorMsg.value = ''
+}
+
 // 保存按钮是否禁用（新增用户时，昵称或校验失败或未通过唯一性校验时禁用）
 const canSaveDisabled = computed(() => {
   // 新增用户：唯一性校验通过后才可保存
   if (modalType.value === 'user' && !editingId.value) {
-    return nameError.value || accountError.value || nameCheckLoading.value || accountCheckLoading.value || !nameChecked.value || !accountChecked.value
+    return nameError.value || accountError.value || accountFormatError.value || passwordError.value || nameCheckLoading.value || accountCheckLoading.value || !nameChecked.value || !accountChecked.value
   }
   // 文章：标题、分类、内容必填
   if (modalType.value === 'article') {
@@ -521,8 +558,18 @@ const checkAccount = () => {
   if (!val) {
     accountError.value = false
     accountCheckLoading.value = false
+    accountFormatError.value = false
     return
   }
+  // 格式校验：11 位数字
+  if (!/^\d{11}$/.test(val)) {
+    accountFormatError.value = true
+    accountError.value = false
+    accountChecked.value = false
+    accountCheckLoading.value = false
+    return
+  }
+  accountFormatError.value = false
   accountCheckLoading.value = true
   accountCheckTimer = setTimeout(async () => {
     try {
@@ -606,6 +653,9 @@ const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: a
   accountChecked.value = false
   nameCheckLoading.value = false
   accountCheckLoading.value = false
+  accountFormatError.value = false
+  passwordError.value = false
+  passwordErrorMsg.value = ''
 
   // reset
   modalForm.user_name = ''
@@ -1079,6 +1129,16 @@ onMounted(async () => {
 
 .modal__input-suffix--error { color: #ff4d4f; }
 .modal__input-suffix--ok { color: #52c41a; }
+
+.modal__field-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #999;
+  line-height: 1.4;
+}
+.modal__field-hint--error {
+  color: #ff4d4f;
+}
 
 .btn--primary:disabled { background: #a0c4ff; border-color: #a0c4ff; cursor: not-allowed; }
 

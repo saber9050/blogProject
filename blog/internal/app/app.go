@@ -128,15 +128,15 @@ func (a *App) initDatabase() error {
 	//logger.Info("开始数据库迁移...")
 	if err := a.mysqlDB.AutoMigrate(
 		// 用户相关
-		//&entity.User{},
+		&entity.User{},
 
 		// 文章相关
-		//&entity.Article{},
-		//&entity.Tag{},
-		//&entity.TagArticle{},
-		//&entity.Category{},
-		//&entity.Comment{},
-		//&entity.Like{},
+		&entity.Article{},
+		&entity.Tag{},
+		&entity.TagArticle{},
+		&entity.Category{},
+		&entity.Comment{},
+		&entity.Like{},
 
 		// 文章图片引用
 		&entity.ArticleImage{},

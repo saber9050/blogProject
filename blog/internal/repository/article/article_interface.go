@@ -51,4 +51,7 @@ type ArticleRepository interface {
 	DeleteArticleImagesByArticleID(articleID uint) error
 	// TransferCategory 将一个分类下的所有文章转移到另一个分类，返回受影响行数
 	TransferCategory(fromTypeID, toTypeID uint) (int64, error)
+
+	// GetRandomID 随机获取一篇已发布文章的 ID
+	GetRandomID() (uint, error)
 }

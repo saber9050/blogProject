@@ -30,4 +30,6 @@ type ArticleService interface {
 	GetStats() (*response.ArticleStatsResponse, error)
 	// TransferCategory 将一个分类下的所有文章转移到另一个分类
 	TransferCategory(fromTypeID, toTypeID uint) (int64, error)
+	// GetRandomArticleID 随机获取一篇已发布文章的 ID
+	GetRandomArticleID() (uint, error)
 }
