@@ -20,7 +20,7 @@
           <!-- 分类 -->
           <div class="home-bar">
             <span class="home-bar__label">分类</span>
-            <div class="category-bar">
+            <div class="category-bar" ref="categoryBarRef">
               <button
                 class="category-tag"
                 :class="{ 'category-tag--active': activeCategory === null }"
@@ -29,13 +29,19 @@
                 全部
               </button>
               <button
-                v-for="cat in categories"
+                v-for="(cat, index) in categories"
                 :key="cat.id"
                 class="category-tag"
-                :class="{ 'category-tag--active': activeCategory === cat.id }"
+                :class="{
+                  'category-tag--active': activeCategory === cat.id,
+                  'category-tag--hidden': !categoryExpanded && categoryHasMore && index >= categoryVisibleCount
+                }"
                 @click="changeCategory(cat.id)"
               >
                 {{ cat.name }}
+              </button>
+              <button v-if="categoryHasMore" class="category-tag category-toggle" @click="toggleCategory">
+                {{ categoryExpanded ? '收起' : '更多' }}
               </button>
             </div>
           </div>
@@ -43,15 +49,21 @@
           <!-- 标签（多选） -->
           <div class="home-bar">
             <span class="home-bar__label">标签</span>
-            <div class="category-bar">
+            <div class="category-bar" ref="tagBarRef">
               <button
-                v-for="tag in tags"
+                v-for="(tag, index) in tags"
                 :key="tag.id"
                 class="category-tag"
-                :class="{ 'category-tag--active': activeTags.includes(tag.id) }"
+                :class="{
+                  'category-tag--active': activeTags.includes(tag.id),
+                  'category-tag--hidden': !tagExpanded && tagHasMore && index >= tagVisibleCount
+                }"
                 @click="toggleTag(tag.id)"
               >
                 {{ tag.name }}
+              </button>
+              <button v-if="tagHasMore" class="category-tag category-toggle" @click="toggleTagSection">
+                {{ tagExpanded ? '收起' : '更多' }}
               </button>
             </div>
           </div>
@@ -162,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
@@ -230,6 +242,68 @@ const searchQuery = ref('')
 const sortBy = ref<'latest' | 'popular'>('latest')
 const activeCategory = ref<number | null>(null)
 const activeTags = ref<number[]>([])
+
+// 展开/收起状态
+const categoryBarRef = ref<HTMLElement | null>(null)
+const tagBarRef = ref<HTMLElement | null>(null)
+const categoryExpanded = ref(false)
+const tagExpanded = ref(false)
+const categoryHasMore = ref(false)
+const tagHasMore = ref(false)
+const categoryVisibleCount = ref(0)
+const tagVisibleCount = ref(0)
+
+const measureAndCollapse = (container: HTMLElement | null, expanded: boolean, hasMore: { value: boolean }, visibleCount: { value: number }, extraBefore: number) => {
+  if (!container) return
+  const allTags = Array.from(container.querySelectorAll('.category-tag')) as HTMLElement[]
+  const toggle = container.querySelector('.category-toggle') as HTMLElement | null
+  const realTags = allTags.filter(t => t !== toggle)
+
+  if (realTags.length < 2) {
+    hasMore.value = false
+    visibleCount.value = realTags.length
+    return
+  }
+
+  if (expanded) {
+    hasMore.value = true
+    visibleCount.value = realTags.length
+    return
+  }
+
+  // 第一次测量：所有标签可见
+  // 找到首行项目数
+  const firstTop = realTags[0].offsetTop
+  const firstLineCount = realTags.filter(t => t.offsetTop === firstTop).length
+
+  if (firstLineCount < realTags.length) {
+    hasMore.value = true
+    // 保留位置：extraBefore 个固定按钮（如"全部"）+ 1 个 toggle
+    visibleCount.value = Math.max(0, firstLineCount - extraBefore - 1)
+  } else {
+    hasMore.value = false
+    visibleCount.value = realTags.length
+  }
+}
+
+const updateOverflow = () => {
+  measureAndCollapse(categoryBarRef.value, categoryExpanded.value, categoryHasMore, categoryVisibleCount, 1)
+  measureAndCollapse(tagBarRef.value, tagExpanded.value, tagHasMore, tagVisibleCount, 0)
+}
+
+const toggleCategory = () => {
+  categoryExpanded.value = !categoryExpanded.value
+  nextTick(() => measureAndCollapse(categoryBarRef.value, categoryExpanded.value, categoryHasMore, categoryVisibleCount, 1))
+}
+
+const toggleTagSection = () => {
+  tagExpanded.value = !tagExpanded.value
+  nextTick(() => measureAndCollapse(tagBarRef.value, tagExpanded.value, tagHasMore, tagVisibleCount, 0))
+}
+
+watch([categories, tags], () => {
+  nextTick(updateOverflow)
+})
 
 const PAGE_SIZE = 10
 
@@ -506,6 +580,14 @@ onMounted(async () => {
   flex-shrink: 0;
   min-width: 50px;
   line-height: 38px;
+}
+
+.category-tag--hidden {
+  display: none;
+}
+
+.category-toggle {
+  color: var(--primary-600) !important;
 }
 
 .home-sort { display: flex; gap: 6px; }
