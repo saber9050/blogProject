@@ -187,15 +187,10 @@ func (a *App) initDependencies() {
 	authSvc := auth2.NewAuthService(authRepo, authCache)
 	uSvc := userSvc.NewUserService(uRepo, a.minioClient, authSvc, authCache)
 	aSvc := articleSvc.NewArticleService(aRepo, uRepo, catRepo, tRepo, cRepo, uSvc, a.minioClient)
-	cSvc := commentSvc.NewCommentService(cRepo)
+	cSvc := commentSvc.NewCommentService(cRepo, a.minioClient, uRepo)
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
 	aboutSvc := aboutSvc.NewAboutService(aboutRepo, a.minioClient, uRepo)
-
-	// 设置评论服务的MinIO客户端依赖（用于生成完整头像URL）
-	cSvc.SetMinioClient(a.minioClient)
-	// 设置评论服务的用户仓库依赖（用于获取用户信息）
-	cSvc.SetUserRepo(uRepo)
 
 	// 创建 Router
 	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc)

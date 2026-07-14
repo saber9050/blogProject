@@ -5,8 +5,10 @@ import (
 	"blog/internal/model/dto/response"
 	"blog/internal/model/entity"
 	commentRepo "blog/internal/repository/comment"
+	userRepo "blog/internal/repository/user"
 	"blog/pkg/errors"
 	"blog/pkg/logger"
+	minioPkg "blog/pkg/minio"
 	"fmt"
 
 	"go.uber.org/zap"
@@ -15,31 +17,13 @@ import (
 
 type commentService struct {
 	commentRepo commentRepo.CommentRepository
-	minioClient interface {
-		GetFileURL(fileKey string) string
-	}
-	userRepo interface {
-		FindByID(id uint) (*entity.User, error)
-	}
+	minioClient *minioPkg.Client
+	userRepo    userRepo.UserRepository
 }
 
 // NewCommentService 创建评论服务实例
-func NewCommentService(repo commentRepo.CommentRepository) CommentService {
-	return &commentService{commentRepo: repo}
-}
-
-// SetMinioClient 设置MinIO客户端依赖（用于生成完整头像URL）
-func (s *commentService) SetMinioClient(minioClient interface {
-	GetFileURL(fileKey string) string
-}) {
-	s.minioClient = minioClient
-}
-
-// SetUserRepo 设置用户仓库依赖（用于获取用户信息）
-func (s *commentService) SetUserRepo(userRepo interface {
-	FindByID(id uint) (*entity.User, error)
-}) {
-	s.userRepo = userRepo
+func NewCommentService(repo commentRepo.CommentRepository, minio *minioPkg.Client, uRepo userRepo.UserRepository) CommentService {
+	return &commentService{commentRepo: repo, minioClient: minio, userRepo: uRepo}
 }
 
 // ListComments 获取一级评论列表

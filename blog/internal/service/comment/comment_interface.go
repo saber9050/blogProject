@@ -3,7 +3,6 @@ package comment
 import (
 	"blog/internal/model/dto/request"
 	"blog/internal/model/dto/response"
-	"blog/internal/model/entity"
 )
 
 // CommentService 评论服务接口
@@ -20,12 +19,4 @@ type CommentService interface {
 	ListAdminComments(page, pageSize int) (*response.PaginatedResponse, error)
 	// BatchDeleteComment 批量删除评论，返回实际删除数量
 	BatchDeleteComment(ids []uint) (int64, error)
-	// SetMinioClient 设置MinIO客户端依赖（用于生成完整头像URL）
-	SetMinioClient(minioClient interface {
-		GetFileURL(fileKey string) string
-	})
-	// SetUserRepo 设置用户仓库依赖（用于获取用户信息）
-	SetUserRepo(userRepo interface {
-		FindByID(id uint) (*entity.User, error)
-	})
 }
