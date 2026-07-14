@@ -13,7 +13,7 @@
 | JWT | golang-jwt v5 |
 | 配置 | Viper |
 | 日志 | Zap + Lumberjack |
-| 存储 | MinIO |
+| 存储 | MinIO（图片/文件） |
 | 邮件 | gomail |
 | 验证码 | base64Captcha |
 
@@ -53,7 +53,7 @@ blog/
 │   ├── logger/          # 日志
 │   ├── minio/           # MinIO 对象存储
 │   ├── response/        # 统一 HTTP 响应
-│   └── utils/           # 工具函数
+│   └── utils/           # 工具函数（密码哈希、RSA 加密等）
 ├── logs/                # 运行日志
 ├── docs/                # API 接口文档
 └── go.mod
@@ -76,17 +76,19 @@ blog/
 cp configs/config.yaml.example configs/config.yaml
 ```
 
-配置项说明：
-
 | 配置 | 说明 |
 |---|---|
-| `database.mysql` | MySQL 连接信息 |
-| `database.redis` | Redis 连接信息 |
+| `app.port` | 服务端口（默认 9527） |
+| `app.mode` | 运行模式（debug / release / test） |
+| `database.mysql` | MySQL 连接信息（含连接池大小） |
+| `database.redis` | Redis 连接信息（含 DB 编号、连接池大小） |
 | `jwt.secret` | JWT 签名密钥 |
-| `jwt.expire_hours` | Token 过期时间 |
+| `jwt.expire_hours` | Access Token 过期时间（小时） |
+| `log.*` | 日志级别、文件路径、轮转策略 |
+| `cors.*` | CORS 跨域配置 |
 | `email` | SMTP 邮件发送配置 |
 | `minio` | MinIO 对象存储配置 |
-| `app.port` | 服务端口（默认 9527） |
+| `default_admin` | 首次启动自动创建管理员 |
 
 支持环境变量覆盖敏感字段：`MYSQL_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`。
 
@@ -101,19 +103,125 @@ go run main.go
 
 采用分层架构：**控制器 (Controller) → 服务 (Service) → 仓储 (Repository) → 数据库**，通过依赖注入组装。
 
-### 路由结构
+## API 路由
 
-- `GET /api/v1/health` — 健康检查
-- `/api/v1/auth/*` — 认证（登录、注册、验证码、密码重置）
-- `/api/v1/users/*` — 用户信息（需登录）
-- `/api/v1/articles/*` — 前台文章（含 `GET /random` 随机一篇文章）
-- `/api/v1/categories/*` — 分类
-- `/api/v1/tags/*` — 标签
-- `/api/v1/articles/comments/*` — 评论
-- `/api/v1/admin/*` — 后台管理（需管理员权限）
-- `/api/v1/abouts/*` — 关于页面
+### 健康检查
 
-### API 文档
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/v1/health` | 健康检查 |
+
+### 认证 `/api/v1/auth/`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/auth/register` | 注册 |
+| POST | `/auth/login` | 密码登录 |
+| POST | `/auth/email_login` | 邮箱验证码登录 |
+| POST | `/auth/logout` | 登出（JWT Redis 黑名单） |
+| GET | `/auth/captcha` | 图形验证码 |
+| POST | `/auth/send_email_code` | 发送邮箱验证码 |
+| POST | `/auth/forgot_password` | 忘记密码重置 |
+| POST | `/auth/reset_password` | 重置密码 |
+| GET | `/auth/is_exists_name` | 检查用户名是否已存在 |
+| GET | `/auth/is_exists_account` | 检查账号是否已存在 |
+
+### 用户 `/api/v1/user/`（需登录）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/user/profile` | 获取个人信息 |
+| POST | `/user/profile` | 编辑个人信息 |
+| POST | `/user/avatar` | 更换头像（MinIO 上传） |
+| POST | `/user/password` | 修改密码 |
+| POST | `/user/email_ack` | 请求修改邮箱（发送验证码） |
+| POST | `/user/add_email` | 添加邮箱 |
+| GET | `/user/email` | 确认邮箱变更（无状态链接） |
+| GET | `/user/is_exists_email` | 检查邮箱是否已存在 |
+
+### 文章 `/api/v1/articles/`
+
+| 方法 | 路径 | 说明 | 认证 |
+|---|---|---|---|
+| GET | `/articles` | 文章列表（支持 sort / category_id / tag_ids / keyword 参数） | 可选 |
+| GET | `/articles/:id` | 文章详情 | 可选 |
+| GET | `/articles/random` | 随机一篇文章 | - |
+| GET | `/articles/stats` | 文章统计（总文章数、浏览量、点赞数） | - |
+| POST | `/articles/:id/like` | 点赞文章 | 需登录 |
+| DELETE | `/articles/:id/like` | 取消点赞 | 需登录 |
+
+### 分类 `/api/v1/categories/`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/categories` | 分类列表 |
+| GET | `/categories/count` | 启用分类数量 |
+
+### 标签 `/api/v1/tags/`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/tags` | 标签列表 |
+| GET | `/tags/count` | 启用标签数量 |
+
+### 评论 `/api/v1/articles/comments/`
+
+| 方法 | 路径 | 说明 | 认证 |
+|---|---|---|---|
+| GET | `/articles/:id/comments` | 一级评论列表 | - |
+| GET | `/articles/:id/comments/:commentId/replies` | 二级回复列表 | - |
+| POST | `/articles/:id/comments` | 发表评论 | 需登录 |
+| DELETE | `/articles/:id/comments/:commentId` | 删除评论 | 需登录 |
+
+### 关于 `/api/v1/about/`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/about` | 获取关于页面信息 |
+| PUT | `/about` | 更新关于页面（管理员） |
+
+### 后台管理 `/api/v1/admin/`（需管理员）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET/POST/PUT/DELETE | `/admin/articles` | 文章 CRUD |
+| PUT | `/admin/articles/transfer` | 文章分类一键转移 |
+| GET/POST/PUT/DELETE | `/admin/categories` | 分类 CRUD |
+| GET/POST/PUT/DELETE | `/admin/tags` | 标签 CRUD |
+| GET/DELETE | `/admin/comments` | 评论列表、批量删除 |
+| GET/POST/PUT/DELETE | `/admin/users` | 用户 CRUD |
+| POST | `/admin/upload` | 图片上传（MinIO） |
+
+## 中间件
+
+| 中间件 | 说明 |
+|---|---|
+| Recovery | panic 恢复，Zap 记录堆栈 |
+| Logger | HTTP 请求日志（方法、状态码、延迟、IP） |
+| CORS | 动态跨域配置，支持预检请求和凭据 |
+| Auth(roleID) | JWT 验证 + 角色鉴权 |
+| OptionalAuth() | 可选认证——有 token 注入用户上下文，无 token 也放行 |
+
+## 主要功能
+
+- 用户注册/登录/密码重置（邮箱验证码）
+- 邮箱验证码登录 / JWT 黑名单登出
+- JWT 认证 + 角色鉴权（普通用户 / 管理员）
+- 文章 CRUD + 富文本编辑
+- 随机一篇文章
+- 文章点赞/取消点赞
+- 文章统计（总文章数、总浏览量、总点赞数）
+- 嵌套评论/回复（支持二级回复）
+- 分类管理（含禁用检查和文章一键转移）
+- 标签管理
+- 个人中心（头像上传、邮箱修改）
+- 关于页面管理
+- 对象存储（MinIO 图片/文件上传）
+- 图形验证码 + 频率限制
+- 日志分级归档 + 轮转
+- 启动时自动创建默认管理员
+
+## API 文档
 
 接口文档位于 `docs/` 目录：
 
@@ -123,23 +231,10 @@ go run main.go
 | `auth_api.md` | 认证相关（登录、注册、验证码、密码重置） |
 | `user_api.md` | 用户信息 |
 | `comment_api.md` | 评论 |
+| `about_api.md` | 关于页面 |
 | `admin_article_api.md` | 后台文章管理 |
 | `admin_category_api.md` | 后台分类管理 |
 | `admin_tag_api.md` | 后台标签管理 |
+| `admin_comment_api.md` | 后台评论管理 |
 | `admin_user_api.md` | 后台用户管理 |
-| `about_api.md` | 关于页面 |
 | `DEVELOPMENT.md` | 开发指南 |
-
-## 主要功能
-
-- 用户注册/登录/密码重置（邮箱验证码）
-- JWT 认证 + 角色鉴权（普通用户 / 管理员）
-- 文章 CRUD + 富文本编辑
-- 随机一篇文章
-- 分类管理（含禁用检查和文章一键转移）
-- 评论管理（级联删除）
-- 标签管理
-- 个人中心（邮箱修改）
-- 对象存储（MinIO 图片/文件上传）
-- 图形验证码 + 频率限制
-- 日志分级归档

@@ -29,7 +29,7 @@ vue/
 │   │   ├── NavBar.vue         # 顶部导航栏（含"随便看看"随机文章）
 │   │   └── ToastContainer.vue # Toast 消息容器
 │   ├── views/
-│   │   ├── HomeView.vue           # 首页
+│   │   ├── HomeView.vue           # 首页（文章列表 + 侧边栏）
 │   │   ├── LoginView.vue          # 登录
 │   │   ├── RegisterView.vue       # 注册
 │   │   ├── ForgotPasswordView.vue # 忘记密码
@@ -84,25 +84,40 @@ npm run build
 
 | 路径 | 页面 | 说明 |
 |---|---|---|
-| `/` | 首页 | 文章列表 |
-| `/login` | 登录 | 账号密码登录 |
+| `/` | 首页 | 文章列表 + 侧边栏 |
+| `/login` | 登录 | 账号密码登录或邮箱验证码登录 |
 | `/register` | 注册 | 新用户注册 |
 | `/forgot-password` | 忘记密码 | 密码重置 |
-| `/article/:id` | 文章详情 | 查看完整文章 |
+| `/article/:id` | 文章详情 | 查看完整文章（含评论、点赞） |
 | `/admin` | 管理后台 | 文章/分类/评论/标签/用户管理（需管理员） |
-| `/profile` | 个人中心 | 个人信息修改、邮箱变更 |
+| `/profile` | 个人中心 | 个人信息修改、头像更换、邮箱变更 |
 | `/about` | 关于 | 关于页面 |
+| `/*`（未匹配） | 重定向 | 所有未匹配路径重定向到首页 |
 
 ## 主要功能
 
-- 文章列表浏览和全文展示
+- 文章列表浏览（支持分类筛选、标签多选、关键词搜索、最新/热门排序）
+- 文章全文展示 + 嵌套评论/回复
+- 文章点赞/取消点赞
+- 文章统计（总文章数、总浏览量、总点赞数）
 - 随机一篇文章（导航栏"随便看看"）
-- 用户注册/登录/密码重置
+- 分类/标签溢出时自动折叠，支持展开/收起
+- 用户注册/登录/密码重置（邮箱验证码）
 - 后台管理：文章、分类、评论、标签、用户 CRUD
 - 富文本编辑器（wangEditor）撰写文章
 - 分类一键转移
-- 个人资料编辑 + 邮箱修改
-- Toast 消息通知
+- 个人资料编辑 + 头像上传 + 邮箱修改
+- Toast 消息通知（success / error / info）
+
+## Axios 拦截器
+
+### 请求拦截器
+- 自动从 `localStorage` 读取 `token`，注入 `Authorization: Bearer` 请求头
+
+### 响应拦截器
+- 遇到 `401` 时清除 token
+- 若当前页面为受保护路径（`/admin`、`/profile`），重定向到 `/login`
+- 公开页面保持未登录状态，不清除用户数据
 
 ## 后端 API 代理
 
@@ -110,10 +125,15 @@ npm run build
 
 ```ts
 // vite.config.ts
-proxy: {
-  '/api': {
-    target: 'http://localhost:9527',
-    changeOrigin: true
+server: {
+  host: '0.0.0.0',
+  port: 3000,
+  proxy: {
+    '/api': {
+      target: 'http://localhost:9527',
+      changeOrigin: true,
+      rewrite: (path) => path
+    }
   }
 }
 ```
