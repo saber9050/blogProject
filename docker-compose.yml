@@ -1,4 +1,24 @@
-version: "3.8"
+# ============================================================
+# 🚀 服务器上 Docker Hub 拉不动？配置镜像加速：
+#
+# 1️⃣ 设置 registry mirror（一行搞定）：
+#      sudo mkdir -p /etc/docker
+#      sudo tee /etc/docker/daemon.json <<-'EOF'
+#      {
+#        "registry-mirrors": [
+#          "https://docker.m.daocloud.io",
+#          "https://dockerproxy.cn",
+#          "https://docker.nju.edu.cn"
+#        ]
+#      }
+#      EOF
+#      sudo systemctl daemon-reload
+#      sudo systemctl restart docker
+#
+# 2️⃣ 配置后拉取镜像（比默认快 10 倍）：
+#      docker compose pull
+#      docker compose up -d --build
+# ============================================================
 
 services:
 
@@ -42,7 +62,7 @@ services:
 
   # ===================== MinIO =====================
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: blog-minio
     restart: unless-stopped
     environment:

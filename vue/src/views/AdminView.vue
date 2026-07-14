@@ -485,6 +485,7 @@ import { ref, reactive, computed, onMounted, nextTick, type Ref } from 'vue'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import { showToast } from '../utils/toast'
+import type { IEditorConfig } from '@wangeditor/editor'
 
 // ---------- 类型 ----------
 interface UserItem {
@@ -969,7 +970,7 @@ const initEditor = async (content: string) => {
   if (!toolbarContainer.value || !editorContainer.value) return
   // 动态导入 wangEditor
   const wangEditor = await import('@wangeditor/editor')
-  const editorConfig: wangEditor.IEditorConfig = {
+  const editorConfig: Partial<IEditorConfig> = {
     placeholder: '请输入文章内容...',
     onChange: (editor: any) => {
       modalForm.content = editor.getHtml()

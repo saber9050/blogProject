@@ -3,3 +3,11 @@
 logs/*
 !logs/.gitkeep
 configs/*.example
+vendor/
+tmp/
+node_modules/
+*.out
+*.test
+*.exe
+*.log
+.DS_Store

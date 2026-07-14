@@ -88,7 +88,7 @@
                 :src="item.cover_url"
                 :alt="item.title"
                 class="article-card__cover"
-                @error="$event.target.style.display='none'"
+                @error="handleImgError"
               />
             </article>
 
@@ -394,6 +394,11 @@ const fmt = (d: string) => {
 
 const goDetail = (id: number) => {
   router.push(`/article/${id}`)
+}
+
+const handleImgError = (e: Event) => {
+  const el = e.target as HTMLElement | null
+  if (el) el.style.display = 'none'
 }
 
 const onSearch = (q: string) => {
