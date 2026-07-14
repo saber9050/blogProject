@@ -146,6 +146,7 @@ func (r *articleRepository) GetTagsByArticleID(articleID uint) ([]*entity.Tag, e
 	err := r.db.Table("tags").
 		Joins("JOIN tag_articles ON tags.id = tag_articles.tag_id").
 		Where("tag_articles.article_id = ?", articleID).
+		Where("tags.status = ?", 1).
 		Find(&tags).Error
 	if err != nil {
 		return nil, err

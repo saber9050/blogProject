@@ -569,7 +569,15 @@ func (s *articleService) TransferCategory(fromTypeID, toTypeID uint) (int64, err
 		return 0, errors.New(errors.CodeBadRequest, "源分类和目标分类不能相同")
 	}
 
-	// 4. 执行转移
+	// 4. 验证分类都是启用状态
+	if srcCategory.Status != 1 {
+		return 0, errors.New(errors.CodeBadRequest, "源分类已被禁用，无法转移")
+	}
+	if dstCategory.Status != 1 {
+		return 0, errors.New(errors.CodeBadRequest, "目标分类已被禁用，无法转移")
+	}
+
+	// 5. 执行转移
 	affected, err := s.articleRepo.TransferCategory(fromTypeID, toTypeID)
 	if err != nil {
 		logger.Error("转移分类失败", zap.Error(err))

@@ -459,14 +459,14 @@
             <label class="modal__label"><span class="required-mark">*</span>源分类</label>
             <select v-model.number="transferFrom" class="modal__input" :class="{ 'modal__input--required-empty': !transferFrom }">
               <option :value="0" disabled>请选择源分类</option>
-              <option v-for="c in adminCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+              <option v-for="c in enabledCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
           </div>
           <div class="modal__field">
             <label class="modal__label"><span class="required-mark">*</span>目标分类</label>
             <select v-model.number="transferTo" class="modal__input" :class="{ 'modal__input--required-empty': !transferTo }">
               <option :value="0" disabled>请选择目标分类</option>
-              <option v-for="c in adminCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+              <option v-for="c in enabledCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
           </div>
           <p class="transfer-hint">将源分类下的所有文章转移到目标分类。</p>
