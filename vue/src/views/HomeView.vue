@@ -155,10 +155,10 @@
             <div class="sidebar-section">
               <h4 class="sidebar-section__title">最近文章</h4>
               <div class="sidebar-articles">
-                <div v-for="article in sidebarArticles" :key="article.id" class="sidebar-article">
+                <div v-for="article in sidebarArticles" :key="article.id" class="sidebar-article" @click="goDetail(article.id)">
                   {{ article.title }}
                 </div>
-                <div v-if="!sidebarArticles.length" class="sidebar-article">暂无文章</div>
+                <div v-if="!sidebarArticles.length" class="sidebar-article sidebar-article--empty">暂无文章</div>
               </div>
             </div>
             
@@ -792,6 +792,7 @@ onMounted(async () => {
   border-radius: 8px;
   font-size: 0.85rem;
   color: var(--text-secondary);
+  cursor: pointer;
   transition: all 0.2s ease;
 }
 
