@@ -85,6 +85,8 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 用户路由组（需登录）
 		r.userCtrl.RegisterRouter(v1)
+		// 邮箱确认链接（无登录态，通过 token 鉴权）
+		r.userCtrl.RegisterRouterACK(v1)
 
 		// 前台文章路由（部分接口可选认证）
 		r.articleCtrl.RegisterRoutes(v1)

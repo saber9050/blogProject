@@ -279,7 +279,18 @@
               <button class="modal-panel__close" @click="closePasswordModal">&times;</button>
             </div>
 
-            <form class="modal-panel__body" @submit.prevent="handleChangePassword">
+            <!-- 无邮箱：提示先添加邮箱 -->
+            <div v-if="!userInfo.email" class="modal-panel__body">
+              <div class="no-email-prompt">
+                <p class="no-email-prompt__text">请先添加邮箱，才能修改密码</p>
+                <button type="button" class="submit-primary" @click="openAddEmailFromPassword">
+                  去添加邮箱
+                </button>
+              </div>
+            </div>
+
+            <!-- 有邮箱：正常表单 -->
+            <form v-else class="modal-panel__body" @submit.prevent="handleChangePassword">
               <!-- 邮箱验证码 -->
               <div class="form-stack">
                 <div class="field-header">
@@ -309,38 +320,53 @@
                 <p v-if="passwordErrors.captcha" class="helper-text helper-text--error">{{ passwordErrors.captcha }}</p>
               </div>
 
-              <!-- 新密码 -->
+              <!-- 新密码（带实时校验） -->
               <div class="form-stack">
                 <div class="field-header">
                   <label class="field-label">新密码</label>
                 </div>
-                <div class="input-shell" :class="{ 'input-shell--error': !!passwordErrors.newPassword }">
+                <div
+                  class="input-shell"
+                  :class="{
+                    'input-shell--error': passwordStatus === 'error',
+                    'input-shell--valid': passwordStatus === 'valid'
+                  }"
+                >
                   <span class="input-shell__icon">&#128274;</span>
                   <input
                       v-model="passwordForm.newPassword"
                       class="input-shell__control"
                       type="password"
                       placeholder="请输入新密码"
-                      @input="clearPasswordError('newPassword')"
+                      @input="onPasswordInput"
                   />
+                  <span v-if="passwordStatus === 'valid'" class="status-mark status-mark--valid">&#10003;</span>
                 </div>
                 <p v-if="passwordErrors.newPassword" class="helper-text helper-text--error">{{ passwordErrors.newPassword }}</p>
+                <p v-else class="helper-text helper-text--hint">密码需 11-20 位，必须同时包含数字和字母</p>
               </div>
 
-              <!-- 确认密码 -->
+              <!-- 确认新密码 -->
               <div class="form-stack">
                 <div class="field-header">
                   <label class="field-label">确认新密码</label>
                 </div>
-                <div class="input-shell" :class="{ 'input-shell--error': !!passwordErrors.ack }">
+                <div
+                  class="input-shell"
+                  :class="{
+                    'input-shell--error': passwordAckStatus === 'error',
+                    'input-shell--valid': passwordAckStatus === 'valid'
+                  }"
+                >
                   <span class="input-shell__icon">&#128274;</span>
                   <input
                       v-model="passwordForm.ack"
                       class="input-shell__control"
                       type="password"
                       placeholder="请再次输入新密码"
-                      @input="clearPasswordError('ack')"
+                      @input="onPasswordAckInput"
                   />
+                  <span v-if="passwordAckStatus === 'valid'" class="status-mark status-mark--valid">&#10003;</span>
                 </div>
                 <p v-if="passwordErrors.ack" class="helper-text helper-text--error">{{ passwordErrors.ack }}</p>
               </div>
@@ -757,11 +783,76 @@ const showPasswordModal = ref(false)
 const passwordLoading = ref(false)
 const passwordSending = ref(false)
 const passwordCountdown = ref(0)
+const passwordStatus = ref<'' | 'valid' | 'error'>('')
+const passwordAckStatus = ref<'' | 'valid' | 'error'>('')
 const passwordForm = ref<PasswordForm>({ captcha: '', newPassword: '', ack: '' })
 const passwordErrors = reactive<PasswordErrors>({})
 
 const clearPasswordError = (field: keyof PasswordErrors) => {
   passwordErrors[field] = undefined
+}
+
+// ===== 新密码：实时校验（同注册页规则） =====
+const validatePasswordStrength = (): boolean => {
+  const val = passwordForm.value.newPassword
+  if (!val) {
+    passwordErrors.newPassword = '新密码不能为空'
+    passwordStatus.value = 'error'
+    return false
+  }
+  if (val.length < 11 || val.length > 20) {
+    passwordErrors.newPassword = '密码长度需为11-20位'
+    passwordStatus.value = 'error'
+    return false
+  }
+  if (!/[a-zA-Z]/.test(val) || !/\d/.test(val)) {
+    passwordErrors.newPassword = '密码必须同时包含数字和字母'
+    passwordStatus.value = 'error'
+    return false
+  }
+  if (/[^a-zA-Z0-9]/.test(val)) {
+    passwordErrors.newPassword = '密码只能包含数字和字母'
+    passwordStatus.value = 'error'
+    return false
+  }
+  passwordErrors.newPassword = undefined
+  passwordStatus.value = 'valid'
+  // 密码变更后重新校验确认密码
+  if (passwordForm.value.ack) {
+    validatePasswordAck()
+  }
+  return true
+}
+
+const onPasswordInput = () => {
+  validatePasswordStrength()
+}
+
+// ===== 确认密码：实时校验 =====
+const validatePasswordAck = (): boolean => {
+  const val = passwordForm.value.ack
+  if (!val) {
+    passwordErrors.ack = '请再次输入新密码'
+    passwordAckStatus.value = 'error'
+    return false
+  }
+  if (val.length < 11 || val.length > 20) {
+    passwordErrors.ack = '密码长度需为11-20位'
+    passwordAckStatus.value = 'error'
+    return false
+  }
+  if (passwordForm.value.newPassword && val !== passwordForm.value.newPassword) {
+    passwordErrors.ack = '两次密码输入不一致'
+    passwordAckStatus.value = 'error'
+    return false
+  }
+  passwordErrors.ack = undefined
+  passwordAckStatus.value = 'valid'
+  return true
+}
+
+const onPasswordAckInput = () => {
+  validatePasswordAck()
 }
 
 const sendPasswordCaptcha = async () => {
@@ -805,21 +896,8 @@ const validatePasswordForm = (): boolean => {
     valid = false
   }
 
-  if (!passwordForm.value.newPassword) {
-    passwordErrors.newPassword = '新密码不能为空'
-    valid = false
-  } else if (passwordForm.value.newPassword.length < 6) {
-    passwordErrors.newPassword = '密码长度至少6位'
-    valid = false
-  }
-
-  if (!passwordForm.value.ack) {
-    passwordErrors.ack = '请再次输入新密码'
-    valid = false
-  } else if (passwordForm.value.newPassword !== passwordForm.value.ack) {
-    passwordErrors.ack = '两次密码输入不一致'
-    valid = false
-  }
+  if (!validatePasswordStrength()) valid = false
+  if (!validatePasswordAck()) valid = false
 
   return valid
 }
@@ -846,12 +924,19 @@ const handleChangePassword = async () => {
   }
 }
 
+const openAddEmailFromPassword = () => {
+  showPasswordModal.value = false
+  showAddEmailModal.value = true
+}
+
 const closePasswordModal = () => {
   showPasswordModal.value = false
   passwordForm.value = { captcha: '', newPassword: '', ack: '' }
   passwordErrors.captcha = undefined
   passwordErrors.newPassword = undefined
   passwordErrors.ack = undefined
+  passwordStatus.value = ''
+  passwordAckStatus.value = ''
 }
 
 // ==================== 获取用户信息 ====================
@@ -1133,6 +1218,26 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* ========== 无邮箱提示 ========== */
+.no-email-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 32px 0;
+}
+
+.no-email-prompt__text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.no-email-prompt .submit-primary {
+  align-self: center;
 }
 
 /* ========== 只读输入框 ========== */

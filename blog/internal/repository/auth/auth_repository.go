@@ -76,6 +76,7 @@ func (r *authRepository) CreateUser(name, account, passwordHash string, roleID i
 		Account:      account,
 		PasswordHash: passwordHash,
 		RoleID:       roleID,
+		Status:       1,
 	}
 	return r.db.Create(&user).Error
 }
