@@ -33,55 +33,8 @@ func (r *articleRepository) FindByID(id uint) (*entity.Article, error) {
 	return &article, nil
 }
 
-// ListPublic 前台获取已发布的文章列表
-func (r *articleRepository) ListPublic(page, pageSize int, sort string, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error) {
-	var list []*entity.Article
-	var total int64
-
-	query := r.db.Model(&entity.Article{}).Where("status = ?", 1)
-
-	if categoryID > 0 {
-		query = query.Where("type_id = ?", categoryID)
-	}
-	if keyword != "" {
-		query = query.Where("title LIKE ? OR summary LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
-	}
-
-	// 如果有标签筛选，需要子查询
-	if len(tagIDs) > 0 {
-		tagStr := strings.Trim(strings.Replace(fmt.Sprint(tagIDs), " ", ",", -1), "[]")
-		subQuery := r.db.Table("tag_articles").
-			Select("article_id").
-			Where("tag_id IN (" + tagStr + ")").
-			Group("article_id")
-		query = query.Where("id IN (?)", subQuery)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	// 排序
-	switch sort {
-	case "popular":
-		// 热度排序：点赞数×3 + 浏览量×1 + 评论数×2
-		query = query.Order(`
-			(COALESCE((SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id), 0) * 3 +
-			views * 1 +
-			COALESCE((SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id AND comments.deleted_at IS NULL), 0) * 2) DESC`)
-	default:
-		query = query.Order("created_at DESC")
-	}
-
-	err := query.Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error
-	if err != nil {
-		return nil, 0, err
-	}
-	return list, total, nil
-}
-
-// ListAdmin 后台获取文章列表
-func (r *articleRepository) ListAdmin(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error) {
+// List 获取文章列表
+func (r *articleRepository) List(page, pageSize int, status *int, sort string, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error) {
 	var list []*entity.Article
 	var total int64
 
@@ -109,10 +62,18 @@ func (r *articleRepository) ListAdmin(page, pageSize int, status *int, categoryI
 		return nil, 0, err
 	}
 
-	err := query.Order("created_at DESC").
-		Offset((page - 1) * pageSize).
-		Limit(pageSize).
-		Find(&list).Error
+	// 排序
+	switch sort {
+	case "popular":
+		query = query.Order(`
+			(COALESCE((SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id), 0) * 3 +
+			views * 1 +
+			COALESCE((SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id AND comments.deleted_at IS NULL), 0) * 2) DESC`)
+	default:
+		query = query.Order("created_at DESC")
+	}
+
+	err := query.Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error
 	if err != nil {
 		return nil, 0, err
 	}

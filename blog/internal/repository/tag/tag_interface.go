@@ -8,8 +8,6 @@ type TagRepository interface {
 	FindByID(id uint) (*entity.Tag, error)
 	// FindByIDs 批量查找标签
 	FindByIDs(ids []uint) ([]*entity.Tag, error)
-	// ListPublic 获取所有启用的标签（前台）
-	ListPublic() ([]*entity.Tag, error)
 	// List 获取分页的标签列表（后台）
 	List(page, pageSize int, status *int, keyword string) ([]*entity.Tag, int64, error)
 	// Create 创建标签

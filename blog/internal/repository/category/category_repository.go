@@ -30,19 +30,6 @@ func (r *categoryRepository) FindByID(id uint) (*entity.Category, error) {
 	return &category, nil
 }
 
-// ListPublic 获取所有启用的分类（前台）
-func (r *categoryRepository) ListPublic() ([]*entity.Category, error) {
-	var list []*entity.Category
-	err := r.db.Model(&entity.Category{}).
-		Where("status = ?", 1).
-		Order("created_at DESC").
-		Find(&list).Error
-	if err != nil {
-		return nil, err
-	}
-	return list, nil
-}
-
 // List 获取分页的分类列表（后台）
 func (r *categoryRepository) List(page, pageSize int, status *int, keyword string) ([]*entity.Category, int64, error) {
 	var list []*entity.Category

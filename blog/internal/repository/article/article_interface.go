@@ -8,10 +8,8 @@ import (
 type ArticleRepository interface {
 	// FindByID 通过 ID 查找文章
 	FindByID(id uint) (*entity.Article, error)
-	// ListPublic 前台获取已发布的文章列表
-	ListPublic(page, pageSize int, sort string, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error)
-	// ListAdmin 后台获取文章列表（可查看所有状态）
-	ListAdmin(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error)
+	// List 获取文章列表
+	List(page, pageSize int, status *int, sort string, categoryID uint, tagIDs []uint, keyword string) ([]*entity.Article, int64, error)
 	// Create 创建文章
 	Create(article *entity.Article) error
 	// UpdateFields 更新文章的指定字段

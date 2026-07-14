@@ -6,8 +6,6 @@ import "blog/internal/model/entity"
 type CategoryRepository interface {
 	// FindByID 通过 ID 查找分类
 	FindByID(id uint) (*entity.Category, error)
-	// ListPublic 获取所有启用的分类（前台）
-	ListPublic() ([]*entity.Category, error)
 	// List 获取分页的分类列表（后台）
 	List(page, pageSize int, status *int, keyword string) ([]*entity.Category, int64, error)
 	// Create 创建分类

@@ -40,19 +40,6 @@ func (r *tagRepository) FindByIDs(ids []uint) ([]*entity.Tag, error) {
 	return list, nil
 }
 
-// ListPublic 获取所有启用的标签（前台）
-func (r *tagRepository) ListPublic() ([]*entity.Tag, error) {
-	var list []*entity.Tag
-	err := r.db.Model(&entity.Tag{}).
-		Where("status = ?", 1).
-		Order("created_at DESC").
-		Find(&list).Error
-	if err != nil {
-		return nil, err
-	}
-	return list, nil
-}
-
 // List 获取分页的标签列表（后台）
 func (r *tagRepository) List(page, pageSize int, status *int, keyword string) ([]*entity.Tag, int64, error) {
 	var list []*entity.Tag

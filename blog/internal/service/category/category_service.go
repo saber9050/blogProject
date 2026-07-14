@@ -23,7 +23,8 @@ func NewCategoryService(categoryRepo repo.CategoryRepository) CategoryService {
 
 // ListPublic 获取所有启用的分类（前台）
 func (s *categoryService) ListPublic() ([]*response.CategoryPublicResponse, error) {
-	list, err := s.categoryRepo.ListPublic()
+	enabled := 1
+	list, _, err := s.categoryRepo.List(1, 10000, &enabled, "")
 	if err != nil {
 		logger.Error("获取分类列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取分类列表失败", err)

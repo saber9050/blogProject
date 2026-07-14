@@ -23,7 +23,8 @@ func NewTagService(tagRepo repo.TagRepository) TagService {
 
 // ListPublic 获取所有启用的标签（前台）
 func (s *tagService) ListPublic() ([]*response.TagPublicResponse, error) {
-	list, err := s.tagRepo.ListPublic()
+	enabled := 1
+	list, _, err := s.tagRepo.List(1, 10000, &enabled, "")
 	if err != nil {
 		logger.Error("获取标签列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取标签列表失败", err)

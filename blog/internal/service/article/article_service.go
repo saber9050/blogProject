@@ -126,7 +126,8 @@ func (s *articleService) buildArticleResponse(article *entity.Article, userID ui
 
 // ListPublic 前台获取文章列表
 func (s *articleService) ListPublic(page, pageSize int, sort string, categoryID uint, tagIDs []uint, keyword string, userID uint) (*response.ArticleListResponse, error) {
-	list, total, err := s.articleRepo.ListPublic(page, pageSize, sort, categoryID, tagIDs, keyword)
+	enabled := 1
+	list, total, err := s.articleRepo.List(page, pageSize, &enabled, sort, categoryID, tagIDs, keyword)
 	if err != nil {
 		logger.Error("获取文章列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取文章列表失败", err)
@@ -226,7 +227,7 @@ func (s *articleService) UnlikeArticle(articleID, userID uint) error {
 
 // AdminList 后台获取文章列表
 func (s *articleService) AdminList(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) (*response.ArticleListResponse, error) {
-	list, total, err := s.articleRepo.ListAdmin(page, pageSize, status, categoryID, tagIDs, keyword)
+	list, total, err := s.articleRepo.List(page, pageSize, status, "", categoryID, tagIDs, keyword)
 	if err != nil {
 		logger.Error("获取文章列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取文章列表失败", err)
