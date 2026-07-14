@@ -22,6 +22,7 @@ import (
 	"blog/pkg/database"
 	"blog/pkg/logger"
 	minioPkg "blog/pkg/minio"
+	"blog/pkg/utils"
 	"context"
 	"errors"
 	"fmt"
@@ -71,18 +72,21 @@ func (a *App) Initialize() error {
 		return err
 	}
 
-	// 4. 初始化 MinIO
+	// 4. 初始化默认管理员
+	a.initDefaultAdmin()
+
+	// 5. 初始化 MinIO
 	if err := a.initMinIO(); err != nil {
 		return err
 	}
 
-	// 5. 初始化依赖
+	// 6. 初始化依赖
 	a.initDependencies()
 
-	// 5. 初始化路由
+	// 7. 初始化路由
 	a.initRouter()
 
-	// 6. 初始化服务器
+	// 8. 初始化服务器
 	a.initServer()
 
 	return nil
@@ -156,6 +160,40 @@ func (a *App) initDatabase() error {
 	a.redis = rs
 
 	return nil
+}
+
+// initDefaultAdmin 初始化默认管理员
+func (a *App) initDefaultAdmin() {
+	if !a.cfg.Admin.Enabled {
+		logger.Info("默认管理员创建已禁用")
+		return
+	}
+
+	var count int64
+	a.mysqlDB.Model(&entity.User{}).Where("role_id = ?", 1).Count(&count)
+	if count > 0 {
+		logger.Info("管理员账号已存在，跳过创建")
+		return
+	}
+
+	hash, err := utils.HashPassword(a.cfg.Admin.Password)
+	if err != nil {
+		logger.Error("默认管理员密码加密失败", zap.Error(err))
+		return
+	}
+
+	admin := entity.User{
+		UserName:     a.cfg.Admin.Username,
+		Account:      a.cfg.Admin.Account,
+		PasswordHash: hash,
+		RoleID:       1,
+		Status:       1,
+	}
+	if err := a.mysqlDB.Create(&admin).Error; err != nil {
+		logger.Error("创建默认管理员失败", zap.Error(err))
+		return
+	}
+	logger.Info("默认管理员账号已创建")
 }
 
 // initMinIO 初始化 MinIO 客户端

@@ -2,16 +2,17 @@ package config
 
 // Config 应用配置结构体
 type Config struct {
-	App      AppConfig      `mapstructure:"app"`
-	Database DatabaseConfig `mapstructure:"database"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	Log      LogConfig      `mapstructure:"log"`
-	CORS     CORSConfig     `mapstructure:"cors"`
-	Coze     CozeConfig     `mapstructure:"coze"`
-	Email    EmailConfig    `mapstructure:"email"`
-	WeChat   WeChatConfig   `mapstructure:"wechat"`
-	Minio    MinioConfig    `mapstructure:"minio"`
-	Crypto   CryptoConfig   `mapstructure:"crypto"`
+	App      AppConfig          `mapstructure:"app"`
+	Database DatabaseConfig     `mapstructure:"database"`
+	JWT      JWTConfig          `mapstructure:"jwt"`
+	Log      LogConfig          `mapstructure:"log"`
+	CORS     CORSConfig         `mapstructure:"cors"`
+	Coze     CozeConfig         `mapstructure:"coze"`
+	Email    EmailConfig        `mapstructure:"email"`
+	WeChat   WeChatConfig       `mapstructure:"wechat"`
+	Minio    MinioConfig        `mapstructure:"minio"`
+	Crypto   CryptoConfig       `mapstructure:"crypto"`
+	Admin    DefaultAdminConfig `mapstructure:"default_admin"`
 }
 
 // AppConfig 应用配置
@@ -116,6 +117,14 @@ type MinioConfig struct {
 	BucketName      string `mapstructure:"bucket_name"`
 	UseSSL          bool   `mapstructure:"use_ssl"`
 	BaseURL         string `mapstructure:"base_url"` // 用于拼接文件访问 URL，为空时自动根据 endpoint 和 use_ssl 生成
+}
+
+// DefaultAdminConfig 默认管理员配置
+type DefaultAdminConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Username string `mapstructure:"username"`
+	Account  string `mapstructure:"account"`
+	Password string `mapstructure:"password"`
 }
 
 // CryptoConfig 数据传输加密配置
