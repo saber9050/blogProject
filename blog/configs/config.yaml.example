@@ -2,7 +2,7 @@
 app:
   name: "blog-project"
   version: "1.0.0"
-  mode: "test"  # debug, release, test
+  mode: "release"  # debug, release, test
   host: "192.168.100.100"     # 地址：邮件中链接访问使用
   port: 9527                  # 端口
 
