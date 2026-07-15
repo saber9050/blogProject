@@ -970,10 +970,73 @@ const initEditor = async (content: string) => {
   if (!toolbarContainer.value || !editorContainer.value) return
   // 动态导入 wangEditor
   const wangEditor = await import('@wangeditor/editor')
+  // 粘贴/工具栏图片上传通用函数
+  const uploadImage = (editor: any, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    api.post('/admin/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => {
+      const url = res.data?.data?.url || res.data?.url || ''
+      if (url) {
+        editor.restoreSelection()
+        editor.dangerouslyInsertHtml(`<img src="${url}" alt="" />`)
+      }
+    }).catch(err => {
+      console.error('图片上传失败:', err)
+    })
+  }
+
   const editorConfig: Partial<IEditorConfig> = {
     placeholder: '请输入文章内容...',
     onChange: (editor: any) => {
       modalForm.content = editor.getHtml()
+    },
+    // 粘贴拦截：处理粘贴的图片
+    customPaste: (editor: any, event: ClipboardEvent) => {
+      const cd = event.clipboardData
+      if (!cd) return true
+
+      // 1. 从 clipboardData.items 中检测图片文件
+      if (cd.items) {
+        for (let i = 0; i < cd.items.length; i++) {
+          const item = cd.items[i]
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile()
+            if (file) {
+              event.preventDefault()
+              uploadImage(editor, file)
+              return false
+            }
+          }
+        }
+      }
+
+      // 2. 从 clipboardData.files 中检测图片文件（兼容部分浏览器）
+      if (cd.files && cd.files.length > 0) {
+        for (let i = 0; i < cd.files.length; i++) {
+          const file = cd.files[i]
+          if (file.type.startsWith('image/')) {
+            event.preventDefault()
+            uploadImage(editor, file)
+            return false
+          }
+        }
+      }
+
+      // 3. 检测粘贴纯文本是否为图片 URL
+      const text = cd.getData('text/plain')
+      if (text) {
+        const trimmed = text.trim()
+        if (/^https?:\/\/.+\.(jpe?g|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(trimmed)) {
+          event.preventDefault()
+          editor.restoreSelection()
+          editor.dangerouslyInsertHtml(`<img src="${trimmed}" alt="" />`)
+          return false
+        }
+      }
+
+      return true
     },
     MENU_CONF: {
       // 图片上传配置：只允许图片，使用现有上传接口

@@ -584,17 +584,119 @@ watch(() => route.params.id, async (newId) => {
   word-break: break-word;
 }
 
-.article-content__body :deep(pre) {
-  white-space: pre-wrap;
-  overflow-x: auto;
-}
-
 .article-content__body :deep(img) {
   max-width: 100%;
   height: auto;
   border-radius: 6px;
   margin: 12px 0;
+  display: inline-block;
+}
+
+/* ── table ── */
+.article-content__body :deep(table) {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 0.9rem;
+  overflow-x: auto;
   display: block;
+}
+.article-content__body :deep(th),
+.article-content__body :deep(td) {
+  border: 1px solid #d0d5dd;
+  padding: 8px 12px;
+  vertical-align: top;
+  text-align: left;
+}
+.article-content__body :deep(th) {
+  background: #f2f4f7;
+  font-weight: 700;
+  color: #1d2939;
+}
+.article-content__body :deep(td) {
+  color: #344054;
+  background: #fff;
+}
+.article-content__body :deep(tr:nth-child(even) td) {
+  background: #f9fafb;
+}
+
+/* ── code block (pre > code) ── */
+.article-content__body :deep(pre) {
+  position: relative;
+  margin: 16px 0;
+  padding: 16px 20px;
+  border-radius: 8px;
+  background: #1e293b;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.article-content__body :deep(pre code) {
+  display: block;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: #e2e8f0;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* ── inline code ── */
+.article-content__body :deep(code):not(pre code) {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #be123c;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85em;
+  word-break: break-word;
+}
+
+/* ── blockquote ── */
+.article-content__body :deep(blockquote) {
+  margin: 16px 0;
+  padding: 8px 16px;
+  border-left: 4px solid var(--primary-500);
+  background: rgba(16, 185, 129, 0.06);
+  color: #475569;
+  font-style: italic;
+}
+
+/* ── lists ── */
+.article-content__body :deep(ul),
+.article-content__body :deep(ol) {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+.article-content__body :deep(li) {
+  margin: 4px 0;
+}
+
+/* ── headings ── */
+.article-content__body :deep(h1),
+.article-content__body :deep(h2),
+.article-content__body :deep(h3),
+.article-content__body :deep(h4),
+.article-content__body :deep(h5),
+.article-content__body :deep(h6) {
+  margin: 20px 0 10px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.35;
+}
+.article-content__body :deep(h1) { font-size: 1.5rem; }
+.article-content__body :deep(h2) { font-size: 1.3rem; }
+.article-content__body :deep(h3) { font-size: 1.15rem; }
+.article-content__body :deep(h4) { font-size: 1.05rem; }
+.article-content__body :deep(h5) { font-size: 1rem; }
+.article-content__body :deep(h6) { font-size: 0.9rem; }
+
+/* ── horizontal rule ── */
+.article-content__body :deep(hr) {
+  margin: 20px 0;
+  border: none;
+  border-top: 1px solid #e2e8f0;
 }
 
 /* ========== 详情页点赞按钮 ========== */
