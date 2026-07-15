@@ -68,6 +68,7 @@ minio:
   access_key_secret:                        # Secret Key
   bucket_name: "blog-project"               # Bucket 名称
   use_ssl: false                            # 是否使用 SSL
+  base_url:                                 # 文件访问 URL 基础地址（外部浏览器访问）
 
 # 默认管理员配置
 default_admin:
