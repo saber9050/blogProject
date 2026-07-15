@@ -5,6 +5,7 @@ import ForgotPasswordView from '../views/ForgotPasswordView.vue'
 import HomeView from '../views/HomeView.vue'
 import ArticleDetailView from '../views/ArticleDetailView.vue'
 import AdminView from '../views/AdminView.vue'
+import ArticleEditorView from '../views/ArticleEditorView.vue'
 import AboutView from '../views/AboutView.vue'
 import ProfileView from '../views/ProfileView.vue'
 
@@ -40,6 +41,16 @@ const router = createRouter({
       path: '/admin',
       name: 'admin',
       component: AdminView
+    },
+    {
+      path: '/admin/article/new',
+      name: 'article-new',
+      component: ArticleEditorView
+    },
+    {
+      path: '/admin/article/:id/edit',
+      name: 'article-edit',
+      component: ArticleEditorView
     },
     {
       path: '/about',

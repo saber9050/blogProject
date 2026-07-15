@@ -80,7 +80,7 @@
             <h2 class="admin-panel__title">文章管理</h2>
             <div class="admin-panel__actions">
               <button class="btn-sm" @click="transferModalVisible = true">一键转移</button>
-              <button class="btn-sm btn-sm--primary" @click="openModal('article')">+ 新增</button>
+              <button class="btn-sm btn-sm--primary" @click="router.push('/admin/article/new')">+ 新增</button>
             </div>
           </div>
           <table class="admin-table">
@@ -114,7 +114,7 @@
                 </td>
                 <td>
                   <div class="table-actions">
-                    <button class="btn-sm" @click="openModal('article', a)">编辑</button>
+                    <button class="btn-sm" @click="router.push('/admin/article/' + a.id + '/edit')">编辑</button>
                     <button class="btn-sm btn-sm--danger" @click="handleDelete('article', a.id)">删除</button>
                   </div>
                 </td>
@@ -305,7 +305,7 @@
 
     <!-- ========== 编辑/新增模态框 ========== -->
     <div v-if="modalVisible" class="modal-overlay" @click.self="modalVisible = false">
-      <div class="modal" :class="{ 'modal--wide': modalType === 'article' }">
+      <div class="modal">
         <h3 class="modal__title">{{ modalTitle }}</h3>
         <div class="modal__body">
           <!-- ---- 用户 ---- -->
@@ -357,61 +357,6 @@
                 </select>
               </div>
             </template>
-          </template>
-
-          <!-- ---- 文章 ---- -->
-          <template v-else-if="modalType === 'article'">
-            <div class="modal__field">
-              <label class="modal__label"><span class="required-mark">*</span>标题</label>
-              <input v-model="modalForm.title" class="modal__input" :class="{ 'modal__input--required-empty': !modalForm.title?.trim() }" placeholder="请输入文章标题" />
-            </div>
-            <div class="modal__field">
-              <label class="modal__label"><span class="required-mark">*</span>分类</label>
-              <select v-model.number="modalForm.type_id" class="modal__input" :class="{ 'modal__input--required-empty': !modalForm.type_id }">
-                <option :value="0" disabled>请选择分类</option>
-                <option v-for="c in enabledCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
-              </select>
-            </div>
-            <div class="modal__field">
-              <label class="modal__label">标签</label>
-              <div class="tag-selector">
-                <span
-                  v-for="t in enabledTags"
-                  :key="t.id"
-                  class="tag-option"
-                  :class="{ 'tag-option--selected': selectedTags.includes(t.id) }"
-                  @click="toggleTag(t.id)"
-                >
-                  {{ t.name }}
-                </span>
-              </div>
-            </div>
-            <div class="modal__field">
-              <label class="modal__label">封面图片</label>
-              <div class="cover-upload">
-                <input ref="coverInputRef" type="file" accept="image/*" style="display:none" @change="onCoverChange" />
-                <button class="btn-sm" @click="selectCover">
-                  {{ modalForm.cover_url ? '更换封面' : '选择封面' }}
-                </button>
-                <img v-if="coverPreviewUrl || modalForm.cover_url" :src="coverPreviewUrl || modalForm.cover_url" class="cover-preview" />
-              </div>
-            </div>
-            <div class="modal__field">
-              <label class="modal__label">摘要</label>
-              <textarea v-model="modalForm.summary" class="modal__input" rows="2" placeholder="请输入文章摘要" style="resize:vertical;min-height:44px;"></textarea>
-            </div>
-            <div class="modal__field">
-              <label class="modal__label">状态</label>
-              <select v-model.number="modalForm.status" class="modal__input">
-                <option :value="1">已发布</option>
-                <option :value="0">草稿箱</option>
-              </select>
-            </div>
-            <div class="modal__field">
-              <label class="modal__label"><span class="required-mark">*</span>内容</label>
-              <div ref="toolbarContainer" class="toolbar-container"></div>
-              <div ref="editorContainer" class="editor-container" :class="{ 'modal__input--required-empty': !modalForm.content || modalForm.content === '<p><br></p>' || modalForm.content === '<p></p>' }"></div>
-            </div>
           </template>
 
           <!-- ---- 分类/标签 ---- -->
@@ -481,11 +426,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick, type Ref } from 'vue'
+import { ref, reactive, computed, onMounted, type Ref } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import { showToast } from '../utils/toast'
-import type { IEditorConfig } from '@wangeditor/editor'
 
 // ---------- 类型 ----------
 interface UserItem {
@@ -527,6 +472,7 @@ interface AdminCommentItem {
 }
 
 // ---------- 状态 ----------
+const router = useRouter()
 const activeTab = ref('users')
 const tabs = [
   { key: 'users', label: '用户管理', icon: '👥' },
@@ -563,7 +509,7 @@ const tagTotal = ref(0)
 
 // 模态框
 const modalVisible = ref(false)
-const modalType = ref<'user' | 'article' | 'category' | 'tag'>('user')
+const modalType = ref<'user' | 'category' | 'tag'>('user')
 const editingId = ref<number | null>(null)
 const editingUser = ref<UserItem | null>(null)
 
@@ -591,22 +537,6 @@ const modalForm = reactive<Record<string, any>>({
 
 // 仅启用的分类和标签（用于文章表单）
 const enabledCategories = computed(() => adminCategories.value.filter(c => c.status === 1))
-const enabledTags = computed(() => adminTags.value.filter(t => t.status === 1))
-
-// 标签
-const selectedTags = ref<number[]>([])
-// 文章原始数据（用于比较修改）
-const originalArticleData = ref<Record<string, any> | null>(null)
-
-// 编辑器
-const toolbarContainer = ref<HTMLDivElement | null>(null)
-const editorContainer = ref<HTMLDivElement | null>(null)
-let editorInstance: any = null
-
-// 封面文件上传
-const coverInputRef = ref<HTMLInputElement | null>(null)
-const coverPreviewUrl = ref('')  // 本地预览或原始URL，用于 img src 显示
-
 // 唯一性校验状态
 const nameCheckLoading = ref(false)
 const accountCheckLoading = ref(false)
@@ -755,11 +685,6 @@ const canSaveDisabled = computed(() => {
   if (modalType.value === 'user' && !editingId.value) {
     return nameError.value || accountError.value || accountFormatError.value || passwordError.value || nameCheckLoading.value || accountCheckLoading.value || !nameChecked.value || !accountChecked.value
   }
-  // 文章：标题、分类、内容必填
-  if (modalType.value === 'article') {
-    const contentEmpty = !modalForm.content || modalForm.content === '<p><br></p>' || modalForm.content === '<p></p>'
-    return !modalForm.title?.trim() || !modalForm.type_id || contentEmpty
-  }
   // 分类/标签：名称必填
   if (modalType.value === 'category' || modalType.value === 'tag') {
     return !modalForm.name?.trim()
@@ -833,55 +758,7 @@ const fmt = (d: string) => {
   return new Date(d).toLocaleDateString('zh-CN')
 }
 
-const toggleTag = (id: number) => {
-  const idx = selectedTags.value.indexOf(id)
-  if (idx >= 0) {
-    selectedTags.value.splice(idx, 1)
-  } else {
-    selectedTags.value.push(id)
-  }
-}
-
-const selectCover = () => {
-  coverInputRef.value?.click()
-}
-
-const onCoverChange = async (e: Event) => {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  // 立即显示本地预览
-  coverPreviewUrl.value = URL.createObjectURL(file)
-  // 上传到服务器
-  try {
-    const formData = new FormData()
-    formData.append('file', file)
-    const res = await api.post('/admin/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
-    modalForm.cover_url = res.data?.data?.url || res.data?.url || ''
-    // 上传成功后，预览也切换到服务器URL（避免本地blob URL过期）
-    coverPreviewUrl.value = modalForm.cover_url
-  } catch (err: any) {
-    console.error('封面上传失败:', err)
-    const msg = err?.response?.data?.message || '封面图片上传失败，请重试'
-    showToast(msg, 'error')
-    coverPreviewUrl.value = ''
-    // 重置 file input，允许重新选择同一文件
-    if (coverInputRef.value) coverInputRef.value.value = ''
-  }
-}
-
-const loadArticleDetail = async (id: number): Promise<Record<string, any> | null> => {
-  try {
-    const res = await api.get(`/articles/${id}`)
-    return res.data?.data || null
-  } catch (err) {
-    console.error('获取文章详情失败:', err)
-    return null
-  }
-}
-
-const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: any) => {
+const openModal = (type: 'user' | 'category' | 'tag', item?: any) => {
   modalType.value = type
   modalVisible.value = true
   editingId.value = item?.id || null
@@ -903,190 +780,23 @@ const openModal = async (type: 'user' | 'article' | 'category' | 'tag', item?: a
   modalForm.account = ''
   modalForm.password = ''
   modalForm.status = 1
-  modalForm.title = ''
-  modalForm.type_id = 0
-  modalForm.summary = ''
-  modalForm.content = ''
-  modalForm.cover_url = ''
   modalForm.name = ''
-  selectedTags.value = []
-  coverPreviewUrl.value = ''
-  originalArticleData.value = null
 
   if (item) {
-    modalTitle.value = type === 'user' ? '编辑用户' : type === 'article' ? '编辑文章' : type === 'category' ? '编辑分类' : '编辑标签'
+    modalTitle.value = type === 'user' ? '编辑用户' : type === 'category' ? '编辑分类' : '编辑标签'
     if (type === 'user') {
       modalForm.status = item.status ?? 1
-    } else if (type === 'article') {
-      // 编辑文章：优先调用详情接口获取完整数据
-      let articleData: Record<string, any> | null = null
-      if (item.id) {
-        articleData = await loadArticleDetail(item.id)
-      }
-      // 用详情数据填充表单，若接口失败则降级使用列表数据
-      const src = articleData || item
-      modalForm.title = src.title || ''
-      modalForm.type_id = src.category?.id || src.type_id || 0
-      modalForm.summary = src.summary || ''
-      modalForm.content = src.content || ''
-      modalForm.cover_url = src.cover_url || ''
-      coverPreviewUrl.value = src.cover_url || ''
-      modalForm.status = src.status ?? 0
-      const tags = src.tags || item.tags || []
-      if (tags.length) {
-        selectedTags.value = tags.map((t: any) => t.id)
-      }
-      // 保存原始数据用于比较修改
-      originalArticleData.value = {
-        title: src.title || '',
-        type_id: modalForm.type_id,
-        summary: src.summary || '',
-        content: src.content || '',
-        cover_url: src.cover_url || '',
-        status: src.status ?? 0,
-        tag_ids: selectedTags.value.slice()
-      }
     } else {
       modalForm.name = item.name || ''
       modalForm.status = item.status ?? 1
     }
   } else {
-    modalTitle.value = type === 'user' ? '新增用户' : type === 'article' ? '新增文章' : type === 'category' ? '新增分类' : '新增标签'
-  }
-
-  // 文章编辑器：等 DOM 渲染后初始化
-  if (type === 'article') {
-    await nextTick()
-    initEditor(modalForm.content || '')
+    modalTitle.value = type === 'user' ? '新增用户' : type === 'category' ? '新增分类' : '新增标签'
   }
 }
 
 const closeModal = () => {
   modalVisible.value = false
-  destroyEditor()
-}
-
-const initEditor = async (content: string) => {
-  if (!toolbarContainer.value || !editorContainer.value) return
-  // 动态导入 wangEditor
-  const wangEditor = await import('@wangeditor/editor')
-  // 粘贴/工具栏图片上传通用函数
-  const uploadImage = (editor: any, file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    api.post('/admin/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    }).then(res => {
-      const url = res.data?.data?.url || res.data?.url || ''
-      if (url) {
-        editor.restoreSelection()
-        editor.dangerouslyInsertHtml(`<img src="${url}" alt="" />`)
-      }
-    }).catch(err => {
-      console.error('图片上传失败:', err)
-    })
-  }
-
-  const editorConfig: Partial<IEditorConfig> = {
-    placeholder: '请输入文章内容...',
-    onChange: (editor: any) => {
-      modalForm.content = editor.getHtml()
-    },
-    // 粘贴拦截：处理粘贴的图片
-    customPaste: (editor: any, event: ClipboardEvent) => {
-      const cd = event.clipboardData
-      if (!cd) return true
-
-      // 1. 从 clipboardData.items 中检测图片文件
-      if (cd.items) {
-        for (let i = 0; i < cd.items.length; i++) {
-          const item = cd.items[i]
-          if (item.type.startsWith('image/')) {
-            const file = item.getAsFile()
-            if (file) {
-              event.preventDefault()
-              uploadImage(editor, file)
-              return false
-            }
-          }
-        }
-      }
-
-      // 2. 从 clipboardData.files 中检测图片文件（兼容部分浏览器）
-      if (cd.files && cd.files.length > 0) {
-        for (let i = 0; i < cd.files.length; i++) {
-          const file = cd.files[i]
-          if (file.type.startsWith('image/')) {
-            event.preventDefault()
-            uploadImage(editor, file)
-            return false
-          }
-        }
-      }
-
-      // 3. 检测粘贴纯文本是否为图片 URL
-      const text = cd.getData('text/plain')
-      if (text) {
-        const trimmed = text.trim()
-        if (/^https?:\/\/.+\.(jpe?g|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(trimmed)) {
-          event.preventDefault()
-          editor.restoreSelection()
-          editor.dangerouslyInsertHtml(`<img src="${trimmed}" alt="" />`)
-          return false
-        }
-      }
-
-      return true
-    },
-    MENU_CONF: {
-      // 图片上传配置：只允许图片，使用现有上传接口
-      uploadImage: {
-        allowedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-        customUpload: (file: File, insertFn: (src: string, alt: string, href: string) => void) => {
-          const formData = new FormData()
-          formData.append('file', file)
-          api.post('/admin/upload', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          }).then(res => {
-            const url = res.data?.data?.url || res.data?.url || ''
-            if (url) {
-              insertFn(url, '', '')
-            }
-          }).catch(err => {
-            console.error('图片上传失败:', err)
-          })
-        }
-      }
-    }
-  }
-  // 销毁旧实例
-  if (editorInstance) {
-    editorInstance.destroy()
-    editorInstance = null
-  }
-  const editor = wangEditor.createEditor({
-    selector: editorContainer.value,
-    config: editorConfig,
-    html: content || undefined,
-    mode: 'default'
-  })
-  wangEditor.createToolbar({
-    editor,
-    selector: toolbarContainer.value,
-    config: {
-      excludeKeys: ['group-video', 'insertImage']
-    }
-  })
-  editorInstance = editor
-}
-
-const destroyEditor = () => {
-  if (editorInstance) {
-    try {
-      editorInstance.destroy()
-    } catch {}
-    editorInstance = null
-  }
 }
 
 const handleSave = async () => {
@@ -1106,56 +816,6 @@ const handleSave = async () => {
       }
       // 重新加载用户列表
       await loadUsers(editingId.value ? userPage.value : 1)
-    } else if (modalType.value === 'article') {
-      let articleData: Record<string, any> = {}
-      
-      if (editingId.value && originalArticleData.value) {
-        // 编辑模式：只发送修改的字段
-        const original = originalArticleData.value
-        const currentTags = selectedTags.value.slice().sort()
-        const originalTags = (original.tag_ids || []).slice().sort()
-
-        // 清理空 HTML 内容（wangEditor 空内容返回 <p><br></p>）
-        const cleanContent = modalForm.content === '<p><br></p>' || modalForm.content === '<p></p>' ? '' : modalForm.content
-
-        if (modalForm.title !== original.title) articleData.title = modalForm.title
-        if (modalForm.type_id !== original.type_id) articleData.type_id = modalForm.type_id
-        if (JSON.stringify(currentTags) !== JSON.stringify(originalTags)) articleData.tag_ids = selectedTags.value
-        if (modalForm.cover_url !== original.cover_url) articleData.cover_url = modalForm.cover_url
-        if (modalForm.summary !== original.summary) articleData.summary = modalForm.summary
-        if (cleanContent !== original.content) articleData.content = cleanContent
-        // 始终发送 status，避免后端因未接收到字段而默认 0（草稿）
-        articleData.status = modalForm.status
-
-        // 如果只有 status 且未变更，或无任何修改，直接关闭
-        if (Object.keys(articleData).length === 0 || (Object.keys(articleData).length === 1 && 'status' in articleData && articleData.status === original.status)) {
-          modalVisible.value = false
-          destroyEditor()
-          return
-        }
-      } else {
-        // 新增模式：发送所有字段
-        const cleanContent = modalForm.content === '<p><br></p>' || modalForm.content === '<p></p>' ? '' : modalForm.content
-        articleData = {
-          title: modalForm.title,
-          type_id: modalForm.type_id,
-          tag_ids: selectedTags.value,
-          cover_url: modalForm.cover_url,
-          summary: modalForm.summary,
-          content: cleanContent,
-          status: modalForm.status
-        }
-      }
-      
-      if (editingId.value) {
-        // 更新文章
-        await api.put(`/admin/articles/${editingId.value}`, articleData)
-      } else {
-        // 创建文章
-        await api.post('/admin/articles', articleData)
-      }
-      // 重新加载文章列表
-      await loadArticles(editingId.value ? articlePage.value : 1)
     } else if (modalType.value === 'category') {
       const categoryData = {
         name: modalForm.name,
@@ -1185,7 +845,6 @@ const handleSave = async () => {
     }
     
     modalVisible.value = false
-    destroyEditor()
   } catch (error: any) {
     console.error('保存失败:', error)
     const msg = error?.response?.data?.message || '保存失败，请重试'
@@ -1467,8 +1126,6 @@ onMounted(async () => {
   box-shadow: 0 6px 16px rgba(0,0,0,0.12);
 }
 
-.modal--wide { width: 680px; }
-
 .modal__title {
   font-size: 16px;
   font-weight: 600;
@@ -1534,53 +1191,6 @@ select.modal__input { appearance: auto; }
 .modal--delete { width: 380px; }
 
 .delete-confirm-text { font-size: 14px; color: #333; line-height: 1.6; margin: 8px 0; }
-
-/* ---------- 标签选择器 ---------- */
-.tag-selector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tag-option {
-  display: inline-block;
-  padding: 4px 12px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  user-select: none;
-}
-
-.tag-option:hover { border-color: #1677ff; color: #1677ff; }
-.tag-option--selected { background: #1677ff; color: #fff; border-color: #1677ff; }
-
-/* ---------- 封面 ---------- */
-.cover-upload { display: flex; align-items: center; gap: 12px; }
-
-.cover-preview {
-  width: 80px;
-  height: 52px;
-  object-fit: cover;
-  border-radius: 4px;
-  border: 1px solid #f0f0f0;
-}
-
-/* ---------- 编辑器 ---------- */
-.editor-container {
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  min-height: 300px;
-}
-
-.editor-container :deep(.w-e-toolbar) {
-  border-bottom: 1px solid #d9d9d9;
-}
-
-.editor-container :deep(.w-e-text-container) {
-  min-height: 260px;
-}
 
 .transfer-hint {
   font-size: 12px;
