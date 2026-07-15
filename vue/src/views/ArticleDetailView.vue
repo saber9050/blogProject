@@ -500,6 +500,7 @@ const loadArticle = async (id: string) => {
     article.value = {
       ...article.value,
       ...data,
+      author: data.author || data.author_name || '',
       view_count: data.view_count ?? data.views ?? 0,
       like_count: data.like_count ?? data.likes ?? 0,
       comment_count: data.comment_count ?? 0,

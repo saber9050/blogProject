@@ -307,7 +307,7 @@ const destroyEditor = () => {
 
 const goBack = () => {
   destroyEditor()
-  router.push('/admin')
+  router.push('/admin?tab=articles')
 }
 
 const handleSave = async () => {

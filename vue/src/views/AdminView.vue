@@ -80,7 +80,7 @@
             <h2 class="admin-panel__title">文章管理</h2>
             <div class="admin-panel__actions">
               <button class="btn-sm" @click="transferModalVisible = true">一键转移</button>
-              <button class="btn-sm btn-sm--primary" @click="router.push('/admin/article/new')">+ 新增</button>
+              <button class="btn-sm btn-sm--primary" @click="goToArticleEditor('/admin/article/new')">+ 新增</button>
             </div>
           </div>
           <table class="admin-table">
@@ -114,7 +114,7 @@
                 </td>
                 <td>
                   <div class="table-actions">
-                    <button class="btn-sm" @click="router.push('/admin/article/' + a.id + '/edit')">编辑</button>
+                    <button class="btn-sm" @click="goToArticleEditor('/admin/article/' + a.id + '/edit')">编辑</button>
                     <button class="btn-sm btn-sm--danger" @click="handleDelete('article', a.id)">删除</button>
                   </div>
                 </td>
@@ -427,7 +427,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, type Ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import { showToast } from '../utils/toast'
@@ -473,6 +473,7 @@ interface AdminCommentItem {
 
 // ---------- 状态 ----------
 const router = useRouter()
+const route = useRoute()
 const activeTab = ref('users')
 const tabs = [
   { key: 'users', label: '用户管理', icon: '👥' },
@@ -895,6 +896,12 @@ const confirmDelete = async () => {
   }
 }
 
+const goToArticleEditor = (path: string) => {
+  // 离开前记住当前文章列表页码
+  sessionStorage.setItem('admin_article_page', String(articlePage.value))
+  router.push(path)
+}
+
 const handleTransfer = async () => {
   if (!transferFrom.value || !transferTo.value || transferFrom.value === transferTo.value) return
   try {
@@ -919,10 +926,24 @@ const handleTransfer = async () => {
 }
 
 onMounted(async () => {
+  // 从 query 参数切到指定 tab（文章编辑器返回时跳转到文章管理）
+  const tabParam = route.query.tab
+  if (tabParam && tabs.some(t => t.key === tabParam)) {
+    activeTab.value = tabParam as string
+  }
+
+  // 恢复从文章编辑器返回时保存的页码
+  let articleStartPage = 1
+  const savedPage = sessionStorage.getItem('admin_article_page')
+  if (savedPage) {
+    articleStartPage = parseInt(savedPage, 10) || 1
+    sessionStorage.removeItem('admin_article_page')
+  }
+
   try {
     await Promise.all([
       loadUsers(1),
-      loadArticles(1),
+      loadArticles(articleStartPage),
       loadComments(1),
       loadCategories(1),
       loadTags(1)

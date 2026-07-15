@@ -9,3 +9,4 @@ blog/docs
 
 # 忽略config.yaml
 blog/configs/config.yaml
+blog/configs/config2.yaml
