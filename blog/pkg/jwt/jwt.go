@@ -66,3 +66,25 @@ func RefreshToken(tokenString string) (string, error) {
 	// 用原有数据生成新令牌
 	return GenerateToken(claims.UserID, claims.Username, claims.UserRoleID)
 }
+
+// GenerateTokenExpire 生成指定过期时间 Token 单位秒
+// 用于短时间（例如5分钟）的临时token
+func GenerateTokenExpire(userID uint, username string, userRole, expireSecond uint) (string, error) {
+	cfg := config.Get().JWT
+
+	claims := CustomClaims{
+		UserID:     userID,
+		Username:   username,
+		UserRoleID: userRole,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireSecond) * time.Second)), // 过期时间
+			IssuedAt:  jwt.NewNumericDate(time.Now()),                                                // 令牌签发时间
+			NotBefore: jwt.NewNumericDate(time.Now()),                                                // 令牌生效时间
+			Issuer:    "core-coach",                                                                  // 签发者
+		},
+	}
+	// 创建jwt 令牌对象
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	// 对令牌签名并返回
+	return token.SignedString([]byte(cfg.Secret))
+}

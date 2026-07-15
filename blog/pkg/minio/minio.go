@@ -44,12 +44,12 @@ func NewClient(cfg config.MinioConfig) (*Client, error) {
 		}
 	}
 
-	baseURL := cfg.BaseURL
-	if baseURL == "" {
-		scheme := "http"
-		if cfg.UseSSL {
-			scheme = "https"
-		}
+	scheme := "http"
+	if cfg.UseSSL {
+		scheme = "https"
+	}
+	baseURL := scheme + "://" + cfg.BaseURL
+	if cfg.BaseURL == "" {
 		baseURL = scheme + "://" + cfg.Endpoint
 	}
 

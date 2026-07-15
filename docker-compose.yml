@@ -62,7 +62,7 @@ services:
 
   # ===================== MinIO =====================
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: minio/minio:RELEASE.2022-01-04T07-41-07Z
     container_name: blog-minio
     restart: unless-stopped
     environment:
@@ -100,8 +100,7 @@ services:
       CORE_COACH_DATABASE_REDIS_PORT: 6379
       # MinIO 连接地址（内部 Docker 网络）
       CORE_COACH_MINIO_ENDPOINT: minio:9000
-      # ★ 请将以下地址改为服务器的公网 IP 或域名，用于生成浏览器可访问的文件 URL
-      # CORE_COACH_MINIO_BASE_URL: "http://your-server-ip:9000"
+      # base_url 直接在 config.yaml 中配置，此处不再通过环境变量覆盖
     depends_on:
       mysql:
         condition: service_healthy

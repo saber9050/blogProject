@@ -69,7 +69,7 @@ func SendVerificationEmail(toEmail, token string) error {
         <p><a href="%s">点击确认</a></p>
         <p>如果不是您本人操作，请忽略此邮件。</p>
         <br>
-        <p>核心力量团队</p>
+        <p>个人博客</p>
     `, toEmail, confirmLink)
 
 	plainBody := fmt.Sprintf(

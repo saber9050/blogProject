@@ -193,7 +193,7 @@ func (s *userService) UpdateEmail(userID uint, req *request.UpdateUserEmailReque
 		return nil, errors.New(errors.CodeConflict, "该邮箱已经被绑定")
 	}
 	// 生成token
-	token, err := jwt.GenerateToken(user.ID, req.NewEmail, uint(user.RoleID))
+	token, err := jwt.GenerateTokenExpire(user.ID, req.NewEmail, uint(user.RoleID), 300)
 	if err != nil {
 		logger.Error("生成Token失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "生成Token失败", err)
