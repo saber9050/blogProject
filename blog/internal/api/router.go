@@ -15,6 +15,7 @@ import (
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
 	commentSvc "blog/internal/service/comment"
+	llmSvc "blog/internal/service/llm"
 	tagSvc "blog/internal/service/tag"
 	user2 "blog/internal/service/user"
 
@@ -43,12 +44,13 @@ func NewRouter(
 	categoryService categorySvc.CategoryService,
 	tagService tagSvc.TagService,
 	aboutService aboutSvc.AboutService,
+	llmService llmSvc.LLMService,
 ) *Router {
 	return &Router{
 		authCtrl:       auth.NewController(authSvc),
 		userCtrl:       user.NewController(userSvc),
 		articleCtrl:    article.NewArticleController(articleService),
-		adminCtrl:      admin.NewAdminController(userSvc, articleService, categoryService, tagService, commentSvc),
+		adminCtrl:      admin.NewAdminController(userSvc, articleService, categoryService, tagService, commentSvc, llmService),
 		commentCtrl:    comment.NewController(commentSvc),
 		categoryCtrl:   category.NewCategoryController(categoryService),
 		tagCtrl:        tag.NewTagController(tagService),

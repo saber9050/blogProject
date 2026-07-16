@@ -22,6 +22,11 @@ type UpdateArticleRequest struct {
 	Status   int8   `json:"status" binding:"oneof=0 1"`
 }
 
+// GenerateSummaryRequest 一键生成摘要请求
+type GenerateSummaryRequest struct {
+	Content string `json:"content" binding:"required"`
+}
+
 // TransferCategoryReq 一键转移分类请求
 type TransferCategoryReq struct {
 	FromTypeID uint `json:"from_type_id" binding:"required"`

@@ -15,6 +15,7 @@ func (ctrl *AdminController) RegisterRoutes(r *gin.RouterGroup) {
 	// 文章管理
 	r.GET("/articles", ctrl.ListArticles)
 	r.POST("/articles", ctrl.CreateArticle)
+	r.POST("/articles/generate-summary", ctrl.GenerateSummary)
 	r.PUT("/articles/transfer", ctrl.TransferArticleCategory)
 	r.PUT("/articles/:id", ctrl.UpdateArticle)
 	r.DELETE("/articles/:id", ctrl.DeleteArticle)

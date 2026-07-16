@@ -70,6 +70,12 @@ minio:
   use_ssl: false                            # 是否使用 SSL
   base_url:                                 # 文件访问 URL 基础地址（外部浏览器访问）
 
+# 本地 LLM 配置（用于一键生成摘要等 AI 功能）
+llm:
+  base_url: "http://localhost:11434"      # Ollama API 地址
+  model_name: "qwen2.5:0.5b"              # 模型名称
+  timeout_sec: 60                         # 请求超时秒数
+
 # 默认管理员配置
 default_admin:
   enabled: true               # 是否自动创建管理员（开启后检测不存在时自动创建）

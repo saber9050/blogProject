@@ -73,7 +73,12 @@
             <!-- 摘要 -->
             <div class="form-group">
               <label class="form-label">摘要</label>
-              <textarea v-model="form.summary" class="form-input form-textarea" rows="3" placeholder="请输入文章摘要"></textarea>
+              <div class="summary-wrapper">
+                <textarea v-model="form.summary" class="form-input form-textarea" rows="3" placeholder="请输入文章摘要"></textarea>
+                <button class="btn-generate" :disabled="generating || contentEmpty" @click="handleGenerateSummary">
+                  {{ generating ? '生成中...' : '一键生成摘要' }}
+                </button>
+              </div>
             </div>
 
             <!-- 状态 -->
@@ -119,6 +124,7 @@ const form = reactive({
 const originalData = ref<Record<string, any> | null>(null)
 const submitted = ref(false)
 const saving = ref(false)
+const generating = ref(false)
 
 // ---------- 分类 & 标签 ----------
 interface CatTagItem {
@@ -302,6 +308,23 @@ const destroyEditor = () => {
   if (editorInstance) {
     try { editorInstance.destroy() } catch {}
     editorInstance = null
+  }
+}
+
+const handleGenerateSummary = async () => {
+  if (contentEmpty.value || generating.value) return
+  generating.value = true
+  try {
+    const res = await api.post('/admin/articles/generate-summary', {
+      content: form.content
+    })
+    form.summary = res.data?.data?.summary || ''
+    showToast('摘要生成成功', 'success')
+  } catch (err: any) {
+    console.error('生成摘要失败:', err)
+    showToast(err?.response?.data?.message || '生成摘要失败', 'error')
+  } finally {
+    generating.value = false
   }
 }
 
@@ -575,6 +598,38 @@ select.form-input {
 .tag-empty {
   font-size: 12px;
   color: #999;
+}
+
+/* ---------- 摘要生成 ---------- */
+.summary-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-generate {
+  align-self: flex-start;
+  padding: 6px 16px;
+  font-size: 12px;
+  background: #fff;
+  border: 1px solid #1677ff;
+  color: #1677ff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-generate:hover:not(:disabled) {
+  background: #1677ff;
+  color: #fff;
+}
+
+.btn-generate:disabled {
+  border-color: #d9d9d9;
+  color: #999;
+  cursor: not-allowed;
+  background: #f5f5f5;
 }
 
 /* ---------- 封面 ---------- */

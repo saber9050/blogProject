@@ -16,6 +16,7 @@ import (
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
 	commentSvc "blog/internal/service/comment"
+	llmSvc "blog/internal/service/llm"
 	tagSvc "blog/internal/service/tag"
 	userSvc "blog/internal/service/user"
 	"blog/pkg/config"
@@ -229,9 +230,10 @@ func (a *App) initDependencies() {
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
 	aboutSvc := aboutSvc.NewAboutService(aboutRepo, a.minioClient, uRepo)
+	lSvc := llmSvc.NewLLMService(a.cfg.LLM)
 
 	// 创建 Router
-	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc)
+	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc, lSvc)
 }
 
 // initRouter 初始化路由

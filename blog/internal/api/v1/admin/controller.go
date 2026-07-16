@@ -7,6 +7,7 @@ import (
 	articleSvc "blog/internal/service/article"
 	categorySvc "blog/internal/service/category"
 	commentSvc "blog/internal/service/comment"
+	llmSvc "blog/internal/service/llm"
 	tagSvc "blog/internal/service/tag"
 	userSvc "blog/internal/service/user"
 	"blog/pkg/errors"
@@ -23,6 +24,7 @@ type AdminController struct {
 	categoryService categorySvc.CategoryService
 	tagService      tagSvc.TagService
 	commentService  commentSvc.CommentService
+	llmService      llmSvc.LLMService
 }
 
 // NewAdminController 创建后台管理控制器
@@ -32,6 +34,7 @@ func NewAdminController(
 	categoryService categorySvc.CategoryService,
 	tagService tagSvc.TagService,
 	commentService commentSvc.CommentService,
+	llmService llmSvc.LLMService,
 ) *AdminController {
 	return &AdminController{
 		userService:     userService,
@@ -39,6 +42,7 @@ func NewAdminController(
 		categoryService: categoryService,
 		tagService:      tagService,
 		commentService:  commentService,
+		llmService:      llmService,
 	}
 }
 
@@ -224,6 +228,25 @@ func (ctrl *AdminController) TransferArticleCategory(c *gin.Context) {
 
 	response.SuccessWithMessage(c, "转移成功", gin.H{
 		"affected_count": affected,
+	})
+}
+
+// GenerateSummary 一键生成摘要
+func (ctrl *AdminController) GenerateSummary(c *gin.Context) {
+	var req request.GenerateSummaryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数错误")
+		return
+	}
+
+	summary, err := ctrl.llmService.GenerateSummary(req.Content)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"summary": summary,
 	})
 }
 
