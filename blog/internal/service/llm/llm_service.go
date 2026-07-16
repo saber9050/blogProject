@@ -1,54 +1,31 @@
 package llm
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"regexp"
 	"strings"
-	"time"
 
 	"blog/pkg/config"
+	"blog/pkg/errors"
 	"blog/pkg/logger"
+	"blog/pkg/ollama"
 
 	"go.uber.org/zap"
 )
 
-// ollamaGenerateRequest Ollama /api/generate 请求体
-type ollamaGenerateRequest struct {
-	Model     string `json:"model"`
-	Prompt    string `json:"prompt"`
-	Stream    bool   `json:"stream"`
-	KeepAlive string `json:"keep_alive,omitempty"`
-}
-
-// ollamaGenerateResponse Ollama /api/generate 响应体
-type ollamaGenerateResponse struct {
-	Response string `json:"response"`
-	Done     bool   `json:"done"`
-	Error    string `json:"error,omitempty"`
-}
-
 type llmServiceImpl struct {
-	cfg    config.LLMConfig
-	client *http.Client
+	ollamaClient *ollama.Client
 }
 
 // NewLLMService 创建 LLM 服务
 func NewLLMService(cfg config.LLMConfig) LLMService {
-	timeout := cfg.TimeoutSec
-	if timeout <= 0 {
-		timeout = 60
-	}
-
 	return &llmServiceImpl{
-		cfg: cfg,
-		client: &http.Client{
-			Timeout: time.Duration(timeout) * time.Second,
-		},
+		ollamaClient: ollama.NewClient(ollama.Config{
+			BaseURL:    cfg.BaseURL,
+			ModelName:  cfg.ModelName,
+			KeepAlive:  cfg.KeepAlive,
+			TimeoutSec: cfg.TimeoutSec,
+		}),
 	}
 }
 
@@ -70,7 +47,7 @@ func (s *llmServiceImpl) GenerateSummary(title string, content string) (string, 
 	// 1. 去除 HTML 标签，提取纯文本
 	plainText := stripHTMLTags(content)
 	if len(plainText) == 0 {
-		return "", fmt.Errorf("文章内容为空")
+		return "", errors.New(errors.CodeBadRequest, "文章内容为空")
 	}
 
 	// 2. 限制文本长度，避免超出模型上下文（按字符数截断，避免切碎 UTF-8 字符）
@@ -99,10 +76,10 @@ func (s *llmServiceImpl) GenerateSummary(title string, content string) (string, 
 摘要：`, title, plainText)
 
 	// 4. 调用 Ollama API
-	summary, err := s.callOllama(prompt)
+	summary, err := s.ollamaClient.Generate(prompt)
 	if err != nil {
 		logger.Error("调用 Ollama 生成摘要失败", zap.Error(err))
-		return "", fmt.Errorf("摘要生成失败: %w", err)
+		return "", err
 	}
 
 	// 5. 清理和截断（按字符数截断，避免切碎 UTF-8 字符）
@@ -115,59 +92,4 @@ func (s *llmServiceImpl) GenerateSummary(title string, content string) (string, 
 	}
 
 	return summary, nil
-}
-
-// callOllama 调用 Ollama 的 /api/generate 接口
-func (s *llmServiceImpl) callOllama(prompt string) (string, error) {
-	baseURL := s.cfg.BaseURL
-	if baseURL == "" {
-		baseURL = "http://localhost:11434"
-	}
-
-	reqBody := ollamaGenerateRequest{
-		Model:     s.cfg.ModelName,
-		Prompt:    prompt,
-		Stream:    false,
-		KeepAlive: s.cfg.KeepAlive,
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("序列化请求体失败: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.cfg.TimeoutSec)*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/generate", bytes.NewReader(bodyBytes))
-	if err != nil {
-		return "", fmt.Errorf("创建请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("请求 Ollama 失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("读取响应失败: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Ollama 返回异常状态码: %d, body: %s", resp.StatusCode, string(respBytes))
-	}
-
-	var result ollamaGenerateResponse
-	if err := json.Unmarshal(respBytes, &result); err != nil {
-		return "", fmt.Errorf("解析响应失败: %w", err)
-	}
-
-	if result.Error != "" {
-		return "", fmt.Errorf("Ollama 返回错误: %s", result.Error)
-	}
-
-	return result.Response, nil
 }

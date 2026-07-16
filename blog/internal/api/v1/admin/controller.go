@@ -245,8 +245,8 @@ func (ctrl *AdminController) GenerateSummary(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, gin.H{
-		"summary": summary,
+	response.Success(c, &response2.GenerateSummaryResponse{
+		Summary: summary,
 	})
 }
 

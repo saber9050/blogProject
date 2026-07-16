@@ -37,6 +37,11 @@ type TagAdminResponse struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// GenerateSummaryResponse 一键生成摘要响应
+type GenerateSummaryResponse struct {
+	Summary string `json:"summary"`
+}
+
 // PaginatedResponse 分页响应
 type PaginatedResponse struct {
 	List     interface{} `json:"list"`
