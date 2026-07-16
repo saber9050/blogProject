@@ -72,18 +72,22 @@ func (s *llmServiceImpl) GenerateSummary(content string) (string, error) {
 		return "", fmt.Errorf("文章内容为空")
 	}
 
-	// 2. 限制文本长度，避免超出模型上下文
-	if len(plainText) > 6000 {
-		plainText = plainText[:6000]
+	// 2. 限制文本长度，避免超出模型上下文（按字符数截断，避免切碎 UTF-8 字符）
+	runes := []rune(plainText)
+	if len(runes) > 8000 {
+		plainText = string(runes[:8000])
 	}
 
 	// 3. 构造 prompt
 	prompt := fmt.Sprintf(`请为以下文章生成一段简洁的摘要，要求：
-- 不超过200字
+- 不超过100字
 - 概括文章核心内容
 - 语言简洁通顺
 - 不要出现"本文"、"文章"等开头
 - 不要出现任何表情符号
+- 只输出一段文本
+- 输出格式参考如下：
+在开发一个即时通讯聊天室时，为了增强系统的灵活性、稳定性以及扩展性，我们结合了多种缓存和排行榜功能。Redis被用于提升性能并实现特定的功能如用户信息缓存、历史消息缓存、异步消息队列和活跃度排行榜等。
 
 文章内容：
 %s
@@ -97,12 +101,13 @@ func (s *llmServiceImpl) GenerateSummary(content string) (string, error) {
 		return "", fmt.Errorf("摘要生成失败: %w", err)
 	}
 
-	// 5. 清理和截断
+	// 5. 清理和截断（按字符数截断，避免切碎 UTF-8 字符）
 	summary = strings.TrimSpace(summary)
 	summary = strings.Trim(summary, `"'「」""''`)
 	summary = strings.TrimSpace(summary)
-	if len(summary) > 500 {
-		summary = summary[:500]
+	sRunes := []rune(summary)
+	if len(sRunes) > 255 {
+		summary = string(sRunes[:255])
 	}
 
 	return summary, nil

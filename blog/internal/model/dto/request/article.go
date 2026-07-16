@@ -6,7 +6,7 @@ type CreateArticleRequest struct {
 	TypeID   uint   `json:"type_id" binding:"required"`
 	TagIDs   []uint `json:"tag_ids"`
 	CoverURL string `json:"cover_url"`
-	Summary  string `json:"summary" binding:"max=500"`
+	Summary  string `json:"summary" binding:"max=255"`
 	Content  string `json:"content" binding:"required"`
 	Status   int8   `json:"status" binding:"oneof=0 1"`
 }
@@ -17,7 +17,7 @@ type UpdateArticleRequest struct {
 	TypeID   uint   `json:"type_id"`
 	TagIDs   []uint `json:"tag_ids"`
 	CoverURL string `json:"cover_url"`
-	Summary  string `json:"summary" binding:"max=500"`
+	Summary  string `json:"summary" binding:"max=255"`
 	Content  string `json:"content"`
 	Status   int8   `json:"status" binding:"oneof=0 1"`
 }
