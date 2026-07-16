@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"blog/internal/model/dto/response"
 	"fmt"
 	"regexp"
 	"strings"
@@ -43,11 +44,11 @@ func stripHTMLTags(html string) string {
 }
 
 // GenerateSummary 根据文章标题和内容生成摘要
-func (s *llmServiceImpl) GenerateSummary(title string, content string) (string, error) {
+func (s *llmServiceImpl) GenerateSummary(title string, content string) (*response.GenerateSummaryResponse, error) {
 	// 1. 去除 HTML 标签，提取纯文本
 	plainText := stripHTMLTags(content)
 	if len(plainText) == 0 {
-		return "", errors.New(errors.CodeBadRequest, "文章内容为空")
+		return nil, errors.New(errors.CodeBadRequest, "文章内容为空")
 	}
 
 	// 2. 限制文本长度，避免超出模型上下文（按字符数截断，避免切碎 UTF-8 字符）
@@ -79,7 +80,7 @@ func (s *llmServiceImpl) GenerateSummary(title string, content string) (string, 
 	summary, err := s.ollamaClient.Generate(prompt)
 	if err != nil {
 		logger.Error("调用 Ollama 生成摘要失败", zap.Error(err))
-		return "", err
+		return nil, err
 	}
 
 	// 5. 清理和截断（按字符数截断，避免切碎 UTF-8 字符）
@@ -91,5 +92,5 @@ func (s *llmServiceImpl) GenerateSummary(title string, content string) (string, 
 		summary = string(sRunes[:255])
 	}
 
-	return summary, nil
+	return &response.GenerateSummaryResponse{Summary: summary}, nil
 }

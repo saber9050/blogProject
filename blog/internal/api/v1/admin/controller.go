@@ -239,15 +239,13 @@ func (ctrl *AdminController) GenerateSummary(c *gin.Context) {
 		return
 	}
 
-	summary, err := ctrl.llmService.GenerateSummary(req.Title, req.Content)
+	result, err := ctrl.llmService.GenerateSummary(req.Title, req.Content)
 	if err != nil {
 		response.BizError(c, err)
 		return
 	}
 
-	response.Success(c, &response2.GenerateSummaryResponse{
-		Summary: summary,
-	})
+	response.Success(c, result)
 }
 
 // UploadImage 上传文章图片,返回完整路径
