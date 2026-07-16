@@ -316,6 +316,7 @@ const handleGenerateSummary = async () => {
   generating.value = true
   try {
     const res = await api.post('/admin/articles/generate-summary', {
+      title: form.title,
       content: form.content
     })
     form.summary = res.data?.data?.summary || ''

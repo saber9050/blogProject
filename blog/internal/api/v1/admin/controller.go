@@ -239,7 +239,7 @@ func (ctrl *AdminController) GenerateSummary(c *gin.Context) {
 		return
 	}
 
-	summary, err := ctrl.llmService.GenerateSummary(req.Content)
+	summary, err := ctrl.llmService.GenerateSummary(req.Title, req.Content)
 	if err != nil {
 		response.BizError(c, err)
 		return

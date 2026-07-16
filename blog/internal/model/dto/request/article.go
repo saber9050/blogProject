@@ -24,6 +24,7 @@ type UpdateArticleRequest struct {
 
 // GenerateSummaryRequest 一键生成摘要请求
 type GenerateSummaryRequest struct {
+	Title   string `json:"title" binding:"required"`
 	Content string `json:"content" binding:"required"`
 }
 

@@ -65,8 +65,8 @@ func stripHTMLTags(html string) string {
 	return text
 }
 
-// GenerateSummary 根据文章内容生成摘要
-func (s *llmServiceImpl) GenerateSummary(content string) (string, error) {
+// GenerateSummary 根据文章标题和内容生成摘要
+func (s *llmServiceImpl) GenerateSummary(title string, content string) (string, error) {
 	// 1. 去除 HTML 标签，提取纯文本
 	plainText := stripHTMLTags(content)
 	if len(plainText) == 0 {
@@ -79,21 +79,24 @@ func (s *llmServiceImpl) GenerateSummary(content string) (string, error) {
 		plainText = string(runes[:8000])
 	}
 
-	// 3. 构造 prompt
+	// 3. 构造 prompt（包含标题和内容）
 	prompt := fmt.Sprintf(`请为以下文章生成一段简洁的摘要，要求：
 - 不超过100字
 - 概括文章核心内容
 - 语言简洁通顺
 - 不要出现"本文"、"文章"等开头
 - 不要出现任何表情符号
-- 只输出一段文本
-- 输出格式参考如下：
-在开发一个即时通讯聊天室时，为了增强系统的灵活性、稳定性以及扩展性，我们结合了多种缓存和排行榜功能。Redis被用于提升性能并实现特定的功能如用户信息缓存、历史消息缓存、异步消息队列和活跃度排行榜等。
+- 只输出一段话的文本
+- 不要有任何形式的分段和分条回答
+- 生成完摘要后审查是否超过了150词，如果超过重新按照要求生成
+
+文章标题：
+%s
 
 文章内容：
 %s
 
-摘要：`, plainText)
+摘要：`, title, plainText)
 
 	// 4. 调用 Ollama API
 	summary, err := s.callOllama(prompt)
