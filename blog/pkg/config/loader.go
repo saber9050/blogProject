@@ -62,6 +62,9 @@ func Load(configPath string) (*Config, error) {
 	if val := os.Getenv("LLM_MODEL_NAME"); val != "" {
 		config.LLM.ModelName = val
 	}
+	if val := os.Getenv("LLM_KEEP_ALIVE"); val != "" {
+		config.LLM.KeepAlive = val
+	}
 	globalConfig = config
 	return config, nil
 }

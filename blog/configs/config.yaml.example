@@ -75,6 +75,7 @@ llm:
   base_url: "http://localhost:11434"      # Ollama API 地址
   model_name: "qwen2.5:0.5b"              # 模型名称
   timeout_sec: 60                         # 请求超时秒数
+  keep_alive: "30m"                       # 模型保持内存时间（如 30m、1h、-1 永久），空则用 Ollama 默认 5m
 
 # 默认管理员配置
 default_admin:

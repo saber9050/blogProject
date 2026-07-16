@@ -19,9 +19,10 @@ import (
 
 // ollamaGenerateRequest Ollama /api/generate 请求体
 type ollamaGenerateRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-	Stream bool   `json:"stream"`
+	Model     string `json:"model"`
+	Prompt    string `json:"prompt"`
+	Stream    bool   `json:"stream"`
+	KeepAlive string `json:"keep_alive,omitempty"`
 }
 
 // ollamaGenerateResponse Ollama /api/generate 响应体
@@ -121,9 +122,10 @@ func (s *llmServiceImpl) callOllama(prompt string) (string, error) {
 	}
 
 	reqBody := ollamaGenerateRequest{
-		Model:  s.cfg.ModelName,
-		Prompt: prompt,
-		Stream: false,
+		Model:     s.cfg.ModelName,
+		Prompt:    prompt,
+		Stream:    false,
+		KeepAlive: s.cfg.KeepAlive,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

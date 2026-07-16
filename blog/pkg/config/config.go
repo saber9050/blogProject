@@ -94,6 +94,7 @@ type LLMConfig struct {
 	BaseURL    string `mapstructure:"base_url"`    // Ollama API 地址，默认 http://localhost:11434
 	ModelName  string `mapstructure:"model_name"`  // 模型名称，如 qwen2.5:0.5b
 	TimeoutSec int    `mapstructure:"timeout_sec"` // 请求超时秒数，默认 60
+	KeepAlive  string `mapstructure:"keep_alive"`  // 模型保持内存时间，如 "30m"、"1h"、"-1"（永久），空则用 Ollama 默认
 }
 
 // EmailConfig 邮件配置
