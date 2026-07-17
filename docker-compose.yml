@@ -60,6 +60,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # ===================== Ollama =====================
+  ollama:
+    image: ollama/ollama
+    container_name: blog-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - blog-network
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - "ollama serve & sleep 3 && ollama pull qwen2.5:0.5b && wait"
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   # ===================== MinIO =====================
   minio:
     image: minio/minio:RELEASE.2022-01-04T07-41-07Z
@@ -101,12 +122,18 @@ services:
       # MinIO 连接地址（内部 Docker 网络）
       CORE_COACH_MINIO_ENDPOINT: minio:9000
       # base_url 直接在 config.yaml 中配置，此处不再通过环境变量覆盖
+      # Ollama 连接地址（内部 Docker 网络）
+      LLM_BASE_URL: http://ollama:11434
+      LLM_MODEL_NAME: qwen2.5:0.5b
+      LLM_KEEP_ALIVE: 30m
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     networks:
       - blog-network
@@ -129,6 +156,7 @@ volumes:
   mysql_data:
   redis_data:
   minio_data:
+  ollama_data:
 
 networks:
   blog-network:
