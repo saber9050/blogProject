@@ -124,7 +124,7 @@ services:
       # base_url 直接在 config.yaml 中配置，此处不再通过环境变量覆盖
       # Ollama 连接地址（内部 Docker 网络）
       LLM_BASE_URL: http://ollama:11434
-      LLM_MODEL_NAME: qwen2.5:0.5b
+      LLM_MODEL_NAME: gemma3:270m
       LLM_KEEP_ALIVE: 30m
     depends_on:
       mysql:
