@@ -25,7 +25,7 @@ func GenerateToken(userID uint, username string, userRole uint) (string, error) 
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(cfg.ExpireHours) * time.Hour)), // 过期时间
 			IssuedAt:  jwt.NewNumericDate(time.Now()),                                                 // 令牌签发时间
 			NotBefore: jwt.NewNumericDate(time.Now()),                                                 // 令牌生效时间
-			Issuer:    "core-coach",                                                                   // 签发者
+			Issuer:    "blog-project",                                                                 // 签发者
 		},
 	}
 	// 创建jwt 令牌对象
@@ -80,7 +80,7 @@ func GenerateTokenExpire(userID uint, username string, userRole, expireSecond ui
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireSecond) * time.Second)), // 过期时间
 			IssuedAt:  jwt.NewNumericDate(time.Now()),                                                // 令牌签发时间
 			NotBefore: jwt.NewNumericDate(time.Now()),                                                // 令牌生效时间
-			Issuer:    "core-coach",                                                                  // 签发者
+			Issuer:    "blog-project",                                                                // 签发者
 		},
 	}
 	// 创建jwt 令牌对象
