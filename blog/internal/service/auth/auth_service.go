@@ -232,15 +232,23 @@ func (s *authService) Logout(token string) error {
 	if len(parts) != 2 || parts[0] != "Bearer" {
 		return nil
 	}
-	// 解析token，得到用户ID
+	// 解析token，得到用户ID 和 TID
 	claim, err := jwt.ParseToken(parts[1])
 	if err != nil {
 		return nil
 	}
 
-	// 删除Redis中的refresh token
-	if err := s.cache.DeleteRefreshToken(claim.UserID); err != nil {
-		logger.Error("登出删除refresh token失败", zap.Error(err))
+	// 仅当该 token 的会话仍是当前活跃会话时才删除
+	// 防止旧设备登出误删新设备的 refresh token
+	stored, err := s.cache.GetRefreshToken(claim.UserID)
+	if err != nil {
+		logger.Error("登出时获取 Refresh Token 失败", zap.Error(err))
+		return nil
+	}
+	if stored != "" && stored == claim.TID {
+		if err := s.cache.DeleteRefreshToken(claim.UserID); err != nil {
+			logger.Error("登出删除refresh token失败", zap.Error(err))
+		}
 	}
 	return nil
 }
@@ -359,11 +367,10 @@ func (s *authService) generateAuthTokens(userID uint, username string, roleID ui
 	}
 
 	return &response.LoginResponse{
-		UserName:     username,
-		UserID:       userID,
-		UserRoleID:   roleID,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken, // 仅用于 controller 设置 cookie，不序列化到 JSON
+		UserName:    username,
+		UserID:      userID,
+		UserRoleID:  roleID,
+		AccessToken: accessToken,
 	}, nil
 }
 
@@ -408,7 +415,6 @@ func (s *authService) RefreshToken(userID uint, username string, roleID uint, re
 	}
 
 	return &response.RefreshTokenResponse{
-		AccessToken:  accessToken,
-		RefreshToken: newRefreshToken,
+		AccessToken: accessToken,
 	}, nil
 }

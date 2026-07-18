@@ -51,8 +51,10 @@ func ParseToken(tokenString string) (*CustomClaims, error) {
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			// 过期也返回 claims，用于刷新流程
-			if claims, ok := token.Claims.(*CustomClaims); ok {
-				return claims, ErrTokenExpired
+			if token != nil {
+				if claims, ok := token.Claims.(*CustomClaims); ok {
+					return claims, ErrTokenExpired
+				}
 			}
 			return nil, ErrTokenExpired
 		}
