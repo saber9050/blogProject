@@ -112,12 +112,28 @@ npm run build
 ## Axios 拦截器
 
 ### 请求拦截器
-- 自动从 `localStorage` 读取 `token`，注入 `Authorization: Bearer` 请求头
+- 自动从 `localStorage` 读取 `token`（即 access_token），注入 `Authorization: Bearer` 请求头
 
-### 响应拦截器
-- 遇到 `401` 时清除 token
-- 若当前页面为受保护路径（`/admin`、`/profile`），重定向到 `/login`
-- 公开页面保持未登录状态，不清除用户数据
+### 响应拦截器 — 双 Token 自动刷新
+
+采用 **双 Token 机制**（Access Token + Refresh Token）：
+
+| 机制 | 说明 |
+|---|---|
+| Access Token | JWT，15 分钟有效期，内含 `tid` 字段（即 refresh token） |
+| Refresh Token | 随机字符串，同时是会话标识符，默认 3 天有效期，存 Redis |
+| 刷新触发 | 任意接口返回 401 时自动调用 `/auth/refresh` |
+
+**刷新流程**：
+1. 请求返回 401 → 检查是否为 `/auth/refresh` 接口自身（是则直接拒绝，避免循环）
+2. 若已有刷新请求进行中 → 将请求排队等待复用同一个刷新结果
+3. 否则发起刷新请求（带过期 access token），服务端解析 `tid` 验证并轮换
+4. 刷新成功 → 更新本地 `token` + 唤醒排队队列，重放原请求
+5. 刷新失败 → 清除本地凭证，弹出 `登录信息已过期，请重新登录` 提示，跳转登录页
+
+**并发安全**：
+- `isRefreshing` 互斥锁确保同一时间只有一个刷新请求
+- `failedQueue` 排队机制，多个并发 401 请求共享同一个刷新结果
 
 ## 后端 API 代理
 

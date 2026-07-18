@@ -26,7 +26,8 @@ database:
 # JWT 配置
 jwt:
   secret: "blog-project"
-  expire_hours: 24
+  access_expire_minutes: 15     # 访问token过期时间 单位：分钟
+  refresh_expire_hours: 72      # 刷新token过期时间 单位：小时
 
 # 日志配置
 log:
@@ -73,7 +74,7 @@ minio:
 # 本地 LLM 配置（用于一键生成摘要等 AI 功能）
 llm:
   base_url: "http://localhost:11434"      # Ollama API 地址
-  model_name: "qwen2.5:0.5b"              # 模型名称
+  model_name: "gemma3:270m"              # 模型名称
   timeout_sec: 60                         # 请求超时秒数
   keep_alive: "30m"                       # 模型保持内存时间（如 30m、1h、-1 永久），空则用 Ollama 默认 5m
 

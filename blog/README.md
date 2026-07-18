@@ -83,7 +83,8 @@ cp configs/config.yaml.example configs/config.yaml
 | `database.mysql` | MySQL 连接信息（含连接池大小） |
 | `database.redis` | Redis 连接信息（含 DB 编号、连接池大小） |
 | `jwt.secret` | JWT 签名密钥 |
-| `jwt.expire_hours` | Access Token 过期时间（小时） |
+| `jwt.access_expire_minutes` | Access Token 过期时间（分钟），默认 15 |
+| `jwt.refresh_expire_hours` | Refresh Token 过期时间（小时），默认 72 |
 | `log.*` | 日志级别、文件路径、轮转策略 |
 | `cors.*` | CORS 跨域配置 |
 | `email` | SMTP 邮件发送配置 |
@@ -118,11 +119,11 @@ go run main.go
 | POST | `/auth/register` | 注册 |
 | POST | `/auth/login` | 密码登录 |
 | POST | `/auth/email_login` | 邮箱验证码登录 |
-| POST | `/auth/logout` | 登出（JWT Redis 黑名单） |
-| GET | `/auth/captcha` | 图形验证码 |
-| POST | `/auth/send_email_code` | 发送邮箱验证码 |
-| POST | `/auth/forgot_password` | 忘记密码重置 |
+| GET | `/auth/image_captcha` | 图形验证码 |
+| POST | `/auth/captcha` | 发送邮箱验证码 |
 | POST | `/auth/reset_password` | 重置密码 |
+| POST | `/auth/logout` | 登出（TID 比对，仅清当前会话） |
+| POST | `/auth/refresh` | 刷新令牌（双 Token 轮换） |
 | GET | `/auth/is_exists_name` | 检查用户名是否已存在 |
 | GET | `/auth/is_exists_account` | 检查账号是否已存在 |
 
@@ -199,14 +200,15 @@ go run main.go
 | Recovery | panic 恢复，Zap 记录堆栈 |
 | Logger | HTTP 请求日志（方法、状态码、延迟、IP） |
 | CORS | 动态跨域配置，支持预检请求和凭据 |
-| Auth(roleID) | JWT 验证 + 角色鉴权 |
+| Auth(roleID) | JWT 验证 + TID 会话校验（单设备踢出）+ 角色鉴权 |
 | OptionalAuth() | 可选认证——有 token 注入用户上下文，无 token 也放行 |
 
 ## 主要功能
 
 - 用户注册/登录/密码重置（邮箱验证码）
-- 邮箱验证码登录 / JWT 黑名单登出
-- JWT 认证 + 角色鉴权（普通用户 / 管理员）
+- 邮箱验证码登录 / 双 Token 认证（Access Token + Refresh Token 自动轮换）
+- JWT 认证 + TID 会话校验（单设备踢出）+ 角色鉴权（普通用户 / 管理员）
+- Token 自动刷新：Access Token 过期后通过过期 JWT 中的 `tid` 字段提取 refresh token 进行轮换
 - 文章 CRUD + 富文本编辑
 - 随机一篇文章
 - 文章点赞/取消点赞
