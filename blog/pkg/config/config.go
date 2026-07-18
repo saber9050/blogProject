@@ -53,10 +53,10 @@ type RedisConfig struct {
 
 // JWTConfig JWT 配置
 type JWTConfig struct {
-	Secret             string `mapstructure:"secret"`
-	ExpireHours        int    `mapstructure:"expire_hours"`         // Access Token 过期时间（小时）
-	RefreshExpireHours int    `mapstructure:"refresh_expire_hours"` // Refresh Token 过期时间（小时）
-	RememberMeHours    int    `mapstructure:"remember_me_hours"`    // "记住我"模式过期时间（小时）
+	Secret              string `mapstructure:"secret"`
+	AccessExpireMinutes int    `mapstructure:"access_expire_minutes"` // Access Token 过期时间（分钟）
+	RefreshExpireHours  int    `mapstructure:"refresh_expire_hours"`  // Refresh Token 过期时间（小时）
+	RememberMeHours     int    `mapstructure:"remember_me_hours"`     // "记住我"模式过期时间（小时）
 }
 
 // LogConfig 日志配置

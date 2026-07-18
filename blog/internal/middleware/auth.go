@@ -1,10 +1,12 @@
 package middleware
 
 import (
+	"blog/internal/cache/auth"
 	"blog/pkg/jwt"
 	"blog/pkg/response"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,8 +20,61 @@ const (
 	ContextRoleID = "role_id"
 )
 
-// parseBearerToken 从 Authorization header 中解析并验证 JWT token
-func parseBearerToken(c *gin.Context) (*jwt.CustomClaims, error) {
+var (
+	authMw     *authMiddleware
+	authMwOnce sync.Once
+)
+
+// InitAuth 初始化认证中间件（应用启动时调用一次）
+func InitAuth(cache auth.AuthCache) {
+	authMwOnce.Do(func() {
+		authMw = &authMiddleware{cache: cache}
+	})
+}
+
+// authMiddleware 认证中间件
+type authMiddleware struct {
+	cache auth.AuthCache
+}
+
+// Auth JWT 认证中间件
+func Auth(userRole ...uint) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, err := authMw.parseBearerToken(c)
+		if err != nil {
+			response.Unauthorized(c, err.Error())
+			c.Abort()
+			return
+		}
+
+		if len(userRole) > 0 && userRole[0] != 0 && claims.UserRoleID != userRole[0] {
+			response.Unauthorized(c, "令牌类型不匹配")
+			c.Abort()
+			return
+		}
+
+		c.Set(ContextUserID, claims.GetUserID())
+		c.Set(ContextUsername, claims.GetUsername())
+		c.Set(ContextRoleID, claims.UserRoleID)
+		c.Next()
+	}
+}
+
+// OptionalAuth 可选认证中间件
+func OptionalAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, err := authMw.parseBearerToken(c)
+		if err == nil {
+			c.Set(ContextUserID, claims.GetUserID())
+			c.Set(ContextUsername, claims.GetUsername())
+			c.Set(ContextRoleID, claims.UserRoleID)
+		}
+		c.Next()
+	}
+}
+
+// parseBearerToken 从 Authorization header 解析并验证 JWT token
+func (m *authMiddleware) parseBearerToken(c *gin.Context) (*jwt.CustomClaims, error) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
 		return nil, fmt.Errorf("请提供认证令牌")
@@ -30,51 +85,25 @@ func parseBearerToken(c *gin.Context) (*jwt.CustomClaims, error) {
 		return nil, fmt.Errorf("令牌格式错误")
 	}
 
-	claims, err := jwt.ParseToken(parts[1])
+	tokenString := parts[1]
+	claims, err := jwt.ParseTokenStrict(tokenString)
 	if err != nil {
 		return nil, err
 	}
 
-	return claims, nil
-}
-
-// Auth JWT 认证中间件
-func Auth(userRole ...uint) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		claims, err := parseBearerToken(c)
+	// 检查会话有效性（单设备登录踢出）
+	// 新登录生成新refresh token覆盖Redis，旧JWT中的tid不匹配则被拒绝
+	if m.cache != nil {
+		stored, err := m.cache.GetRefreshToken(claims.UserID)
 		if err != nil {
-			response.Unauthorized(c, err.Error())
-			c.Abort()
-			return
+			return nil, fmt.Errorf("认证服务异常")
 		}
-
-		// 判断是否是管理员
-		if len(userRole) > 0 && userRole[0] != 0 && claims.UserRoleID != userRole[0] {
-			response.Unauthorized(c, "令牌类型不匹配")
-			c.Abort()
-			return
+		if stored != "" && stored != claims.TID {
+			return nil, fmt.Errorf("账号已在其他设备登录，请重新登录")
 		}
-
-		// 注入上下文信息
-		c.Set(ContextUserID, claims.GetUserID())
-		c.Set(ContextUsername, claims.GetUsername())
-		c.Set(ContextRoleID, claims.UserRoleID)
-
-		c.Next()
 	}
-}
 
-// OptionalAuth 可选认证中间件：有有效token就注入用户上下文，没有也放行
-func OptionalAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		claims, err := parseBearerToken(c)
-		if err == nil {
-			c.Set(ContextUserID, claims.GetUserID())
-			c.Set(ContextUsername, claims.GetUsername())
-			c.Set(ContextRoleID, claims.UserRoleID)
-		}
-		c.Next()
-	}
+	return claims, nil
 }
 
 // GetUserID 从上下文获取用户 ID

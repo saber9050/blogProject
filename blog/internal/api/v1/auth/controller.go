@@ -4,7 +4,10 @@ import (
 	"blog/internal/model/dto/request"
 	response2 "blog/internal/model/dto/response"
 	"blog/internal/service/auth"
+	"blog/pkg/jwt"
 	"blog/pkg/response"
+	"errors"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -49,6 +52,7 @@ func (c *Controller) Login(ctx *gin.Context) {
 		response.BizError(ctx, err)
 		return
 	}
+
 	response.Success(ctx, authResponse)
 }
 
@@ -66,6 +70,7 @@ func (c *Controller) EmailLogin(ctx *gin.Context) {
 		response.BizError(ctx, err)
 		return
 	}
+
 	response.Success(ctx, authResponse)
 }
 
@@ -127,7 +132,47 @@ func (c *Controller) Logout(ctx *gin.Context) {
 		response.BizError(ctx, err)
 		return
 	}
+
 	response.Success(ctx, nil)
+}
+
+// RefreshToken 刷新令牌
+func (c *Controller) RefreshToken(ctx *gin.Context) {
+	// 从Authorization header获取旧的access token（已过期）
+	authHeader := ctx.GetHeader("Authorization")
+	if authHeader == "" {
+		response.Unauthorized(ctx, "请提供 Access Token")
+		return
+	}
+
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		response.Unauthorized(ctx, "令牌格式错误")
+		return
+	}
+
+	// 解析旧access token（允许过期），从中提取 TID（即 refresh_token）
+	claims, err := jwt.ParseToken(parts[1])
+	if err != nil {
+		if !errors.Is(err, jwt.ErrTokenExpired) {
+			response.Unauthorized(ctx, "Access Token 无效")
+			return
+		}
+		// ErrTokenExpired 时 claims 仍被返回，继续刷新流程
+	}
+
+	authResponse, err := c.authService.RefreshToken(
+		claims.UserID,
+		claims.Username,
+		claims.UserRoleID,
+		claims.TID,
+	)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+
+	response.Success(ctx, authResponse)
 }
 
 // IsExistName 查验名称是否存在

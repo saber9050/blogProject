@@ -21,4 +21,10 @@ type AuthCache interface {
 	BlacklistToken(token string, expireSecond int64) error
 	// CheckBlacklist 检查 JWT TOKEN 是否在黑名单中
 	CheckBlacklist(token string) (bool, error)
+	// StoreRefreshToken 存储刷新令牌
+	StoreRefreshToken(userID uint, token string, expireSecond int64) error
+	// GetRefreshToken 获取刷新令牌（返回空字符串表示不存在或已过期）
+	GetRefreshToken(userID uint) (string, error)
+	// DeleteRefreshToken 删除刷新令牌
+	DeleteRefreshToken(userID uint) error
 }

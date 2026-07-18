@@ -3,6 +3,7 @@ package app
 import (
 	"blog/internal/api"
 	auth3 "blog/internal/cache/auth"
+	"blog/internal/middleware"
 	"blog/internal/model/entity"
 	"blog/internal/repository/about"
 	"blog/internal/repository/article"
@@ -225,6 +226,9 @@ func (a *App) initDependencies() {
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
 	uSvc := userSvc.NewUserService(uRepo, a.minioClient, authSvc, authCache)
+
+	// 初始化认证中间件
+	middleware.InitAuth(authCache)
 	aSvc := articleSvc.NewArticleService(aRepo, uRepo, catRepo, tRepo, cRepo, uSvc, a.minioClient)
 	cSvc := commentSvc.NewCommentService(cRepo, a.minioClient, uRepo)
 	catSvc := categorySvc.NewCategoryService(catRepo)

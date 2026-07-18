@@ -1,20 +1,19 @@
 package auth
 
 import (
-	auth2 "blog/internal/cache/auth"
+	cache "blog/internal/cache/auth"
 	"blog/internal/constant"
 	"blog/internal/model/dto/request"
 	"blog/internal/model/dto/response"
 	"blog/internal/repository/auth"
+	"blog/pkg/config"
 	"blog/pkg/email"
 	"blog/pkg/errors"
 	"blog/pkg/jwt"
 	"blog/pkg/logger"
 	"blog/pkg/utils"
-	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/mojocn/base64Captcha"
 	"go.uber.org/zap"
@@ -23,11 +22,11 @@ import (
 // authService 用户认证服务实现
 type authService struct {
 	authRepo auth.UserAuthRepository
-	cache    auth2.AuthCache
+	cache    cache.AuthCache
 }
 
 // NewAuthService 新建用户认证服务
-func NewAuthService(authRepo auth.UserAuthRepository, cache auth2.AuthCache) AuthService {
+func NewAuthService(authRepo auth.UserAuthRepository, cache cache.AuthCache) AuthService {
 	return &authService{
 		authRepo: authRepo,
 		cache:    cache,
@@ -74,11 +73,11 @@ func (s *authService) Register(req *request.RegisterRequest) error {
 
 // Login 登录
 func (s *authService) Login(req *request.LoginRequest) (*response.LoginResponse, error) {
-	//	验证图形验证码
+	// 验证图形验证码
 	if err := s.verifyImageCaptcha(req.CaptchaKey, req.CaptchaCode); err != nil {
 		return nil, err
 	}
-	//	验证账号
+	// 验证账号
 	user, err := s.authRepo.FindUserByAccount(req.Account)
 	if err != nil {
 		logger.Error("根据账号查找用户失败", zap.Error(err))
@@ -94,20 +93,8 @@ func (s *authService) Login(req *request.LoginRequest) (*response.LoginResponse,
 	if ok := utils.CheckPassword(req.Password, user.PasswordHash); !ok {
 		return nil, errors.New(errors.CodeBadRequest, "密码错误")
 	}
-	// 生成jwt token
-	roleID := uint(user.RoleID)
-	token, err := jwt.GenerateToken(user.ID, user.UserName, roleID)
-	if err != nil {
-		logger.Error("生成 JWT TOKEN 失败", zap.Error(err))
-		return nil, errors.NewWithErr(errors.CodeInternalError, "生成 JWT TOKEN 失败", err)
-	}
-	res := &response.LoginResponse{
-		UserName:   user.UserName,
-		UserID:     user.ID,
-		UserRoleID: roleID,
-		Token:      token,
-	}
-	return res, nil
+
+	return s.generateAuthTokens(user.ID, user.UserName, uint(user.RoleID))
 }
 
 // EmailLogin 邮箱登录
@@ -126,20 +113,8 @@ func (s *authService) EmailLogin(req *request.EmailLoginRequest) (*response.Logi
 	if user == nil {
 		return nil, errors.New(errors.CodeNotFound, "该邮箱不存在")
 	}
-	// 生成jwt token
-	roleID := uint(user.RoleID)
-	token, err := jwt.GenerateToken(user.ID, user.UserName, roleID)
-	if err != nil {
-		logger.Error("生成 JWT TOKEN 失败", zap.Error(err))
-		return nil, errors.NewWithErr(errors.CodeInternalError, "生成 JWT TOKEN 失败", err)
-	}
-	res := &response.LoginResponse{
-		UserName:   user.UserName,
-		UserID:     user.ID,
-		UserRoleID: roleID,
-		Token:      token,
-	}
-	return res, nil
+
+	return s.generateAuthTokens(user.ID, user.UserName, uint(user.RoleID))
 }
 
 // SendImageCaptcha 发送图形验证码
@@ -255,22 +230,17 @@ func (s *authService) ReSetPassword(req *request.ResetPasswordRequest) error {
 func (s *authService) Logout(token string) error {
 	parts := strings.SplitN(token, " ", 2)
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		fmt.Printf("令牌格式错误")
 		return nil
 	}
-	// 解析token，得到过期时间
+	// 解析token，得到用户ID
 	claim, err := jwt.ParseToken(parts[1])
 	if err != nil {
-		fmt.Printf("登出解析token失败:%s\n", err)
 		return nil
 	}
-	now := time.Now()
-	// 得到剩余时间
-	seconds := claim.ExpiresAt.Sub(now).Seconds()
-	// 加入黑名单（失败不阻断登出）
-	err = s.cache.BlacklistToken(token, int64(seconds))
-	if err != nil {
-		logger.Error("将token加入黑名单失败", zap.Error(err))
+
+	// 删除Redis中的refresh token
+	if err := s.cache.DeleteRefreshToken(claim.UserID); err != nil {
+		logger.Error("登出删除refresh token失败", zap.Error(err))
 	}
 	return nil
 }
@@ -362,4 +332,83 @@ func (s *authService) verifyPassword(password string) bool {
 		}
 	}
 	return false
+}
+
+// generateAuthTokens 生成双 Token（登录/邮箱登录共用）
+func (s *authService) generateAuthTokens(userID uint, username string, roleID uint) (*response.LoginResponse, error) {
+	// 生成 Refresh Token（同时也是会话标识 TID）
+	refreshToken, err := jwt.GenerateRefreshToken()
+	if err != nil {
+		logger.Error("生成 Refresh Token 失败", zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "生成 Refresh Token 失败", err)
+	}
+
+	// 生成 Access Token（TID 即 Refresh Token 值）
+	accessToken, _, err := jwt.GenerateToken(userID, username, roleID, refreshToken)
+	if err != nil {
+		logger.Error("生成 Access Token 失败", zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "生成 Access Token 失败", err)
+	}
+
+	// 存入 Redis（覆盖旧 token，实现单设备踢出）
+	cfg := config.Get().JWT
+	refreshTTL := int64(cfg.RefreshExpireHours) * 3600
+	if err := s.cache.StoreRefreshToken(userID, refreshToken, refreshTTL); err != nil {
+		logger.Error("存储 Refresh Token 失败", zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "存储 Refresh Token 失败", err)
+	}
+
+	return &response.LoginResponse{
+		UserName:     username,
+		UserID:       userID,
+		UserRoleID:   roleID,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken, // 仅用于 controller 设置 cookie，不序列化到 JSON
+	}, nil
+}
+
+// RefreshToken 刷新令牌
+// userID/username/roleID/refreshToken 从旧 access token 解析得到
+func (s *authService) RefreshToken(userID uint, username string, roleID uint, refreshToken string) (*response.RefreshTokenResponse, error) {
+	// 从Redis获取存储的refresh token
+	stored, err := s.cache.GetRefreshToken(userID)
+	if err != nil {
+		logger.Error("获取 Refresh Token 失败", zap.Error(err))
+		return nil, errors.New(errors.CodeInternalError, "认证服务异常")
+	}
+	if stored == "" {
+		return nil, errors.New(errors.CodeUnauthorized, "Refresh Token 已过期，请重新登录")
+	}
+
+	// 校验 refresh token 是否匹配
+	if stored != refreshToken {
+		return nil, errors.New(errors.CodeUnauthorized, "Refresh Token 无效，请重新登录")
+	}
+
+	// 生成新的 refresh token（同时也是新会话标识 TID）
+	newRefreshToken, err := jwt.GenerateRefreshToken()
+	if err != nil {
+		logger.Error("刷新Token时生成 Refresh Token 失败", zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "生成 Refresh Token 失败", err)
+	}
+
+	// 生成新的 access token
+	accessToken, _, err := jwt.GenerateToken(userID, username, roleID, newRefreshToken)
+	if err != nil {
+		logger.Error("刷新Token时生成 Access Token 失败", zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "生成 Access Token 失败", err)
+	}
+
+	// 更新Redis
+	cfg := config.Get().JWT
+	refreshTTL := int64(cfg.RefreshExpireHours) * 3600
+	if err := s.cache.StoreRefreshToken(userID, newRefreshToken, refreshTTL); err != nil {
+		logger.Error("刷新Token时存储 Refresh Token 失败", zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "存储 Refresh Token 失败", err)
+	}
+
+	return &response.RefreshTokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+	}, nil
 }

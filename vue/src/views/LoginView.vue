@@ -339,12 +339,12 @@ const handleAccountLogin = async () => {
   loading.value = true
   try {
     const response = await axios.post('/api/v1/auth/login', accountForm.value)
-    const { token } = response.data.data
-    localStorage.setItem('token', token)
+    const { access_token } = response.data.data
+    localStorage.setItem('token', access_token)
     // 获取完整用户信息并存储
     try {
       const userRes = await axios.get('/api/v1/user/info', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${access_token}` }
       })
       if (userRes.data.data) {
         localStorage.setItem('user', JSON.stringify(userRes.data.data))
@@ -375,12 +375,12 @@ const handleEmailLogin = async () => {
       captcha: emailForm.value.captcha,
       purpose: 'login'
     })
-    const { token } = response.data.data
-    localStorage.setItem('token', token)
+    const { access_token } = response.data.data
+    localStorage.setItem('token', access_token)
     // 获取完整用户信息并存储
     try {
       const userRes = await axios.get('/api/v1/user/info', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${access_token}` }
       })
       if (userRes.data.data) {
         localStorage.setItem('user', JSON.stringify(userRes.data.data))

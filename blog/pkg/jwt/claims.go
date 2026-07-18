@@ -7,6 +7,7 @@ type CustomClaims struct {
 	UserID     uint   `json:"user_id"`
 	Username   string `json:"username"`
 	UserRoleID uint   `json:"user_role_id"` // 1:admin 或 0:normal
+	TID        string `json:"tid"`          // Token ID，即 refresh token 值，用于双token校验
 	jwt.RegisteredClaims
 }
 

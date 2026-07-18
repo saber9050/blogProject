@@ -16,24 +16,46 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      // 清除token，但保留用户数据以便显示
-      localStorage.removeItem('token')
-      
-      const currentPath = window.location.pathname
-      // 需要认证的页面路径
-      const protectedPaths = ['/admin', '/profile']
-      const isProtectedPath = protectedPaths.some(path => currentPath.startsWith(path))
-      
-      // 如果当前在需要认证的页面，则重定向到登录页
-      if (isProtectedPath && currentPath !== '/login') {
-        window.location.href = '/login'
-      }
-      // 对于公开页面（如首页），不清除用户数据，让页面以未登录状态显示
+  async (err) => {
+    if (err.response?.status !== 401) {
+      return Promise.reject(err)
     }
-    return Promise.reject(err)
+
+    const originalRequest = err.config
+
+    // 刷新接口自身失败 或 已重试过 → 直接登出
+    if (originalRequest._retry || originalRequest.url === '/auth/refresh') {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      redirectToLogin()
+      return Promise.reject(err)
+    }
+
+    // 尝试用 Cookie 中的 refresh_token 刷新
+    originalRequest._retry = true
+    try {
+      const response = await api.post('/auth/refresh')
+      const { access_token } = response.data.data
+      localStorage.setItem('token', access_token)
+      // 用新 token 重试原请求
+      originalRequest.headers.Authorization = `Bearer ${access_token}`
+      return api(originalRequest)
+    } catch {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      redirectToLogin()
+      return Promise.reject(err)
+    }
   }
 )
+
+function redirectToLogin() {
+  const currentPath = window.location.pathname
+  const protectedPaths = ['/admin', '/profile']
+  const isProtectedPath = protectedPaths.some(path => currentPath.startsWith(path))
+  if (isProtectedPath && currentPath !== '/login') {
+    window.location.href = '/login'
+  }
+}
 
 export default api

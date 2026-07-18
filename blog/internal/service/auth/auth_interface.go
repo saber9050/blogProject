@@ -21,6 +21,8 @@ type AuthService interface {
 	ReSetPassword(req *request.ResetPasswordRequest) error
 	// Logout 登出服务
 	Logout(token string) error
+	// RefreshToken 刷新令牌
+	RefreshToken(userID uint, username string, roleID uint, refreshToken string) (*response.RefreshTokenResponse, error)
 	// IsExistsName 检测名称是否存在
 	IsExistsName(name string) (bool, error)
 	// IsExistsAccount 检测账号是否存在

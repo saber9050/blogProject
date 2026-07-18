@@ -44,6 +44,11 @@ func (c *loginCache) GetBlacklistKey(token string) string {
 	return fmt.Sprintf("blacklist:token:%s", token)
 }
 
+// GetRefreshTokenKey 获取刷新令牌的缓存键
+func (c *loginCache) GetRefreshTokenKey(userID uint) string {
+	return fmt.Sprintf("refresh:%d", userID)
+}
+
 // StoreCaptcha 存储图形验证码
 func (c *loginCache) StoreCaptcha(captchaKey, captchaCode string, expireSecond int64) error {
 	ctx := context.Background()
@@ -142,4 +147,35 @@ func (c *loginCache) CheckBlacklist(token string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// StoreRefreshToken 存储刷新令牌
+func (c *loginCache) StoreRefreshToken(userID uint, token string, expireSecond int64) error {
+	ctx := context.Background()
+	key := c.GetRefreshTokenKey(userID)
+
+	return c.redisClient.Set(ctx, key, token, time.Duration(expireSecond)*time.Second).Err()
+}
+
+// GetRefreshToken 获取刷新令牌
+func (c *loginCache) GetRefreshToken(userID uint) (string, error) {
+	ctx := context.Background()
+	key := c.GetRefreshTokenKey(userID)
+
+	data, err := c.redisClient.Get(ctx, key).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", nil
+		}
+		return "", err
+	}
+	return data, nil
+}
+
+// DeleteRefreshToken 删除刷新令牌
+func (c *loginCache) DeleteRefreshToken(userID uint) error {
+	ctx := context.Background()
+	key := c.GetRefreshTokenKey(userID)
+
+	return c.redisClient.Del(ctx, key).Err()
 }

@@ -2,6 +2,8 @@ package jwt
 
 import (
 	"blog/pkg/config"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -13,42 +15,50 @@ var (
 	ErrTokenExpired = errors.New("token 已过期")
 )
 
-// GenerateToken 生成 Token
-func GenerateToken(userID uint, username string, userRole uint) (string, error) {
+// GenerateToken 生成 Access Token（短有效期，分钟级）
+// tid 存储 refresh token
+func GenerateToken(userID uint, username string, userRole uint, tid string) (string, int64, error) {
 	cfg := config.Get().JWT
+	expireSeconds := int64(cfg.AccessExpireMinutes) * 60
 
 	claims := CustomClaims{
 		UserID:     userID,
 		Username:   username,
 		UserRoleID: userRole,
+		TID:        tid,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(cfg.ExpireHours) * time.Hour)), // 过期时间
-			IssuedAt:  jwt.NewNumericDate(time.Now()),                                                 // 令牌签发时间
-			NotBefore: jwt.NewNumericDate(time.Now()),                                                 // 令牌生效时间
-			Issuer:    "blog-project",                                                                 // 签发者
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireSeconds) * time.Second)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Issuer:    "blog-project",
 		},
 	}
-	// 创建jwt 令牌对象
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	// 对令牌签名并返回
-	return token.SignedString([]byte(cfg.Secret))
+	tokenString, err := token.SignedString([]byte(cfg.Secret))
+	if err != nil {
+		return "", 0, err
+	}
+	return tokenString, expireSeconds, nil
 }
 
-// ParseToken 解析 JWT Token
+// ParseToken 解析 JWT Token（允许过期，用于刷新流程获取claims）
 func ParseToken(tokenString string) (*CustomClaims, error) {
 	cfg := config.Get().JWT
-	// 解析令牌
 	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(cfg.Secret), nil
 	})
 
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
+			// 过期也返回 claims，用于刷新流程
+			if claims, ok := token.Claims.(*CustomClaims); ok {
+				return claims, ErrTokenExpired
+			}
 			return nil, ErrTokenExpired
 		}
 		return nil, ErrTokenInvalid
 	}
-	// 若令牌有效
+
 	if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
 		return claims, nil
 	}
@@ -56,35 +66,43 @@ func ParseToken(tokenString string) (*CustomClaims, error) {
 	return nil, ErrTokenInvalid
 }
 
-// RefreshToken 刷新 Token
-func RefreshToken(tokenString string) (string, error) {
-	// 解析原有令牌
+// ParseTokenStrict 严格解析 JWT Token（过期直接返回错误）
+func ParseTokenStrict(tokenString string) (*CustomClaims, error) {
 	claims, err := ParseToken(tokenString)
 	if err != nil {
-		return "", err
+		// 如果是因为过期而返回的 claims，这里拒绝
+		if errors.Is(err, ErrTokenExpired) {
+			return nil, ErrTokenExpired
+		}
+		return nil, err
 	}
-	// 用原有数据生成新令牌
-	return GenerateToken(claims.UserID, claims.Username, claims.UserRoleID)
+	return claims, nil
 }
 
-// GenerateTokenExpire 生成指定过期时间 Token 单位秒
-// 用于短时间（例如5分钟）的临时token
-func GenerateTokenExpire(userID uint, username string, userRole, expireSecond uint) (string, error) {
-	cfg := config.Get().JWT
+// GenerateRefreshToken 生成随机 Refresh Token
+func GenerateRefreshToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
 
+// GenerateTokenExpire 生成指定过期时间 Token（单位秒）
+// 用于短时间临时token（如邮箱确认链接）
+func GenerateTokenExpire(userID uint, username string, userRole uint, expireSecond uint) (string, error) {
+	cfg := config.Get().JWT
 	claims := CustomClaims{
 		UserID:     userID,
 		Username:   username,
 		UserRoleID: userRole,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireSecond) * time.Second)), // 过期时间
-			IssuedAt:  jwt.NewNumericDate(time.Now()),                                                // 令牌签发时间
-			NotBefore: jwt.NewNumericDate(time.Now()),                                                // 令牌生效时间
-			Issuer:    "blog-project",                                                                // 签发者
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireSecond) * time.Second)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Issuer:    "blog-project",
 		},
 	}
-	// 创建jwt 令牌对象
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	// 对令牌签名并返回
 	return token.SignedString([]byte(cfg.Secret))
 }
