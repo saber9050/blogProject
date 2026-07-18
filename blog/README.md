@@ -16,6 +16,7 @@
 | 存储 | MinIO（图片/文件） |
 | 邮件 | gomail |
 | 验证码 | base64Captcha |
+| AI 摘要 | Ollama（本地模型） |
 
 ## 目录结构
 
@@ -52,6 +53,7 @@ blog/
 │   ├── jwt/             # JWT 令牌
 │   ├── logger/          # 日志
 │   ├── minio/           # MinIO 对象存储
+│   ├── ollama/          # Ollama 本地 LLM 客户端
 │   ├── response/        # 统一 HTTP 响应
 │   └── utils/           # 工具函数（密码哈希、RSA 加密等）
 ├── logs/                # 运行日志
@@ -67,6 +69,7 @@ blog/
 - MySQL 8.0+
 - Redis 7.0+
 - MinIO（可选，用于图片/文件存储）
+- Ollama（可选，用于 AI 生成摘要，默认地址 `http://localhost:11434`）
 
 ### 配置
 
@@ -90,8 +93,12 @@ cp configs/config.yaml.example configs/config.yaml
 | `email` | SMTP 邮件发送配置 |
 | `minio` | MinIO 对象存储配置 |
 | `default_admin` | 首次启动自动创建管理员 |
+| `llm.base_url` | Ollama API 地址（默认 `http://localhost:11434`） |
+| `llm.model_name` | 本地模型名称（如 `gemma3:270m`） |
+| `llm.timeout_sec` | 请求超时秒数（默认 60） |
+| `llm.keep_alive` | 模型保持内存时间（如 `30m`、`1h`） |
 
-支持环境变量覆盖敏感字段：`MYSQL_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`。
+支持环境变量覆盖敏感字段：`MYSQL_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`、`LLM_BASE_URL`、`LLM_MODEL_NAME`、`LLM_KEEP_ALIVE`。
 
 ### 运行
 
@@ -192,6 +199,7 @@ go run main.go
 | GET/DELETE | `/admin/comments` | 评论列表、批量删除 |
 | GET/POST/PUT/DELETE | `/admin/users` | 用户 CRUD |
 | POST | `/admin/upload` | 图片上传（MinIO） |
+| POST | `/admin/articles/generate-summary` | AI 生成文章摘要（Ollama 本地模型） |
 
 ## 中间件
 
@@ -222,6 +230,7 @@ go run main.go
 - 图形验证码 + 频率限制
 - 日志分级归档 + 轮转
 - 启动时自动创建默认管理员
+- AI 生成文章摘要（Ollama 本地模型，后台编辑器调用）
 
 ## API 文档
 
