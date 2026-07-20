@@ -2,7 +2,11 @@ package api
 
 import (
 	"blog/internal/api/v1/about"
-	"blog/internal/api/v1/admin"
+	adminArticle "blog/internal/api/v1/admin/article"
+	adminCategory "blog/internal/api/v1/admin/category"
+	adminComment "blog/internal/api/v1/admin/comment"
+	adminTag "blog/internal/api/v1/admin/tag"
+	adminUser "blog/internal/api/v1/admin/user"
 	"blog/internal/api/v1/article"
 	"blog/internal/api/v1/auth"
 	"blog/internal/api/v1/category"
@@ -24,15 +28,19 @@ import (
 
 // Router 路由
 type Router struct {
-	authCtrl       *auth.Controller
-	userCtrl       *user.Controller
-	articleCtrl    *article.ArticleController
-	adminCtrl      *admin.AdminController
-	commentCtrl    *comment.Controller
-	categoryCtrl   *category.CategoryController
-	tagCtrl        *tag.TagController
-	aboutCtrl      *about.AboutController
-	articleService articleSvc.ArticleService
+	authCtrl          *auth.Controller
+	userCtrl          *user.Controller
+	articleCtrl       *article.ArticleController
+	adminUserCtrl     *adminUser.UserController
+	adminArticleCtrl  *adminArticle.ArticleController
+	adminCategoryCtrl *adminCategory.CategoryController
+	adminTagCtrl      *adminTag.TagController
+	adminCommentCtrl  *adminComment.CommentController
+	commentCtrl       *comment.Controller
+	categoryCtrl      *category.CategoryController
+	tagCtrl           *tag.TagController
+	aboutCtrl         *about.AboutController
+	articleService    articleSvc.ArticleService
 }
 
 // NewRouter 创建路由
@@ -47,15 +55,19 @@ func NewRouter(
 	llmService llmSvc.LLMService,
 ) *Router {
 	return &Router{
-		authCtrl:       auth.NewController(authSvc),
-		userCtrl:       user.NewController(userSvc),
-		articleCtrl:    article.NewArticleController(articleService),
-		adminCtrl:      admin.NewAdminController(userSvc, articleService, categoryService, tagService, commentSvc, llmService),
-		commentCtrl:    comment.NewController(commentSvc),
-		categoryCtrl:   category.NewCategoryController(categoryService),
-		tagCtrl:        tag.NewTagController(tagService),
-		aboutCtrl:      about.NewAboutController(aboutService),
-		articleService: articleService,
+		authCtrl:          auth.NewController(authSvc),
+		userCtrl:          user.NewController(userSvc),
+		articleCtrl:       article.NewArticleController(articleService),
+		adminUserCtrl:     adminUser.NewUserController(userSvc),
+		adminArticleCtrl:  adminArticle.NewArticleController(articleService, llmService),
+		adminCategoryCtrl: adminCategory.NewCategoryController(categoryService),
+		adminTagCtrl:      adminTag.NewTagController(tagService),
+		adminCommentCtrl:  adminComment.NewCommentController(commentSvc),
+		commentCtrl:       comment.NewController(commentSvc),
+		categoryCtrl:      category.NewCategoryController(categoryService),
+		tagCtrl:           tag.NewTagController(tagService),
+		aboutCtrl:         about.NewAboutController(aboutService),
+		articleService:    articleService,
 	}
 }
 
@@ -109,7 +121,11 @@ func (r *Router) Setup(engine *gin.Engine) {
 		adminGroup := v1.Group("/admin")
 		adminGroup.Use(middleware.Auth(1))
 		{
-			r.adminCtrl.RegisterRoutes(adminGroup)
+			r.adminUserCtrl.RegisterRoutes(adminGroup)
+			r.adminArticleCtrl.RegisterRoutes(adminGroup)
+			r.adminCategoryCtrl.RegisterRoutes(adminGroup)
+			r.adminTagCtrl.RegisterRoutes(adminGroup)
+			r.adminCommentCtrl.RegisterRoutes(adminGroup)
 		}
 	}
 }

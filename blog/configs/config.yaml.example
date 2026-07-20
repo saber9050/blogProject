@@ -64,12 +64,12 @@ email:
 
 # MinIO 配置
 minio:
-  endpoint:                                 # MinIO 服务地址
+  endpoint: "xxx:9000"                                # MinIO 服务地址
   access_key_id:                            # Access Key
   access_key_secret:                        # Secret Key
   bucket_name: "blog-project"               # Bucket 名称
   use_ssl: false                            # 是否使用 SSL
-  base_url:                                 # 文件访问 URL 基础地址（外部浏览器访问）
+  base_url: "xxx:9000"                                # 文件访问 URL 基础地址（外部浏览器访问）
 
 # 本地 LLM 配置（用于一键生成摘要等 AI 功能）
 llm:
