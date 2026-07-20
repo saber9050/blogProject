@@ -249,3 +249,18 @@ go run main.go
 | `admin_comment_api.md` | 后台评论管理 |
 | `admin_user_api.md` | 后台用户管理 |
 | `DEVELOPMENT.md` | 开发指南 |
+
+## 扩展开发
+
+如果你想在此基础上开发新功能，项目提供了分层架构和完整的开发示例。
+
+开发新功能的标准流程：
+
+1. **定义数据模型** — `internal/model/entity/` 创建 GORM 实体
+2. **创建 DTO** — `internal/model/dto/request/` 和 `internal/model/dto/response/` 定义请求/响应结构
+3. **实现 Repository** — `internal/repository/` 数据访问层
+4. **实现 Service** — `internal/service/` 业务逻辑层
+5. **创建 Controller + 路由** — `internal/api/v1/<name>/` 控制器和路由注册
+6. **注册到应用** — 更新 `internal/app/app.go` 依赖注入
+
+详细的分步示例（含完整代码）见 [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)。
