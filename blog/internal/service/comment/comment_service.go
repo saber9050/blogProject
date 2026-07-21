@@ -130,7 +130,9 @@ func (s *commentService) CreateComment(articleID, userID uint, req *request.Crea
 	if user == nil {
 		return nil, errors.New(errors.CodeNotFound, "用户不存在")
 	}
-
+	if user.Status == 0 {
+		return nil, errors.New(errors.CodeForbidden, "该用户已被封禁")
+	}
 	// 如果是回复，验证父评论存在且属于该文章
 	if req.ParentID != nil && *req.ParentID != 0 {
 		parent, err := s.commentRepo.GetCommentByID(*req.ParentID)

@@ -186,6 +186,9 @@ func (s *articleService) LikeArticle(articleID, userID uint) error {
 	if user == nil {
 		return errors.New(errors.CodeNotFound, "用户不存在")
 	}
+	if user.Status == 0 {
+		return errors.New(errors.CodeForbidden, "该用户已被封禁")
+	}
 
 	article, err := s.articleRepo.FindByID(articleID)
 	if err != nil {
@@ -220,6 +223,9 @@ func (s *articleService) UnlikeArticle(articleID, userID uint) error {
 	}
 	if user == nil {
 		return errors.New(errors.CodeNotFound, "用户不存在")
+	}
+	if user.Status == 0 {
+		return errors.New(errors.CodeForbidden, "该用户已被封禁")
 	}
 
 	article, err := s.articleRepo.FindByID(articleID)

@@ -413,6 +413,12 @@ func (s *userService) AdminDeleteUser(id uint) error {
 	if user == nil {
 		return errors.New(errors.CodeNotFound, "用户不存在")
 	}
+
+	// 删除 refresh token，使其无法再刷新 access token
+	if err := s.authCache.DeleteRefreshToken(id); err != nil {
+		logger.Error("删除用户 refresh token 失败", zap.Error(err))
+	}
+
 	// 删除头像
 	ctx := context.Background()
 	err = s.minio.Delete(ctx, user.AvatarURL)
