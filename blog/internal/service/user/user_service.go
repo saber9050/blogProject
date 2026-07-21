@@ -7,6 +7,7 @@ import (
 	"blog/internal/model/dto/response"
 	repo "blog/internal/repository/user"
 	"blog/internal/service/auth"
+	"blog/pkg/config"
 	"blog/pkg/email"
 	"blog/pkg/errors"
 	"blog/pkg/jwt"
@@ -121,6 +122,29 @@ func (s *userService) UpdateAvatar(userID uint, fileHeader *multipart.FileHeader
 	return &response.UpdateUserAvatarResponse{
 		AvatarURL: s.minio.GetFileURL(fileKey),
 	}, nil
+}
+
+// UpdatePassword 修改密码
+func (s *userService) UpdatePassword(req *request.ResetPasswordRequest, userID uint) error {
+	//	修改密码
+	err := s.authSvc.ReSetPassword(req)
+	if err != nil {
+		return err
+	}
+	// 覆盖旧的refresh token
+	refresh, err := jwt.GenerateRefreshToken()
+	if err != nil {
+		logger.Error("生成刷新token失败", zap.Error(err))
+		return errors.New(errors.CodeInternalError, "生成刷新token失败")
+	}
+	cfg := config.Get().JWT
+	refreshTTL := int64(cfg.RefreshExpireHours) * 3600
+	err = s.authCache.StoreRefreshToken(userID, refresh, refreshTTL)
+	if err != nil {
+		logger.Error("覆盖刷新token失败", zap.Error(err))
+		return errors.New(errors.CodeInternalError, "覆盖刷新token失败")
+	}
+	return nil
 }
 
 // UpLoadImage 上传图片文件

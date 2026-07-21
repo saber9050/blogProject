@@ -243,3 +243,45 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | is_exists | bool | true 表示已存在，false 表示不存在（可用） |
+
+### 8. 修改密码
+
+> POST /api/v1/user/password
+
+**认证**: 需要登录
+
+**请求参数** (JSON Body):
+
+```json
+{
+  "email": "string",
+  "captcha": "string",
+  "new_password": "string",
+  "ack": "string"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| email | string | 是 | 邮箱地址 |
+| captcha | string | 是 | 邮箱验证码，6位 |
+| new_password | string | 是 | 新密码 |
+| ack | string | 是 | 密码二次确认，需与 new_password 一致 |
+
+**成功响应**:
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "message": "成功修改密码"
+  }
+}
+```
+
+> **安全说明**：
+> - 入参与 `POST /api/v1/auth/reset_password` 完全一致，复用其全部校验逻辑（邮箱验证码核验、密码哈希等）
+> - 成功修改密码后，服务端额外生成新的 refresh token 覆盖 Redis，使当前会话的旧 access token 立即失效
+> - 后续任何需要认证的请求将返回 401，前端应清除本地 token 并跳转登录页
+> - 用户需使用新密码重新登录

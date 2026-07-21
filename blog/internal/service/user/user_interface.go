@@ -14,6 +14,8 @@ type UserService interface {
 	UpdateProfile(userID uint, req *request.UpdateUserProfileRequest) error
 	// UpdateAvatar 更换头像
 	UpdateAvatar(userID uint, fileHeader *multipart.FileHeader) (*response.UpdateUserAvatarResponse, error)
+	// UpdatePassword 修改密码
+	UpdatePassword(req *request.ResetPasswordRequest, userID uint) error
 	// UpdateEmail 更换邮箱确认
 	UpdateEmail(userID uint, req *request.UpdateUserEmailRequest) (*response.UpdateUserEmailResponse, error)
 	//	UpdateAdminEmail 修改邮箱

@@ -88,6 +88,30 @@ func (c *Controller) UpdateAvatar(ctx *gin.Context) {
 	response.Success(ctx, userResponse)
 }
 
+// UpdatePassword 修改密码
+func (c *Controller) UpdatePassword(ctx *gin.Context) {
+	userID := middleware.GetUserID(ctx)
+	if userID == 0 {
+		response.Unauthorized(ctx, "请先登录")
+		return
+	}
+
+	var req request.ResetPasswordRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(ctx, "请求参数错误")
+		return
+	}
+
+	err := c.userService.UpdatePassword(&req, userID)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, gin.H{
+		"message": "成功修改密码",
+	})
+}
+
 // UpdateEmailRequest 更换邮箱的确认请求
 func (c *Controller) UpdateEmailRequest(ctx *gin.Context) {
 	userID := middleware.GetUserID(ctx)

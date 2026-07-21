@@ -907,7 +907,7 @@ const handleChangePassword = async () => {
 
   passwordLoading.value = true
   try {
-    await api.post('/auth/reset_password', {
+    await api.post('/user/password', {
       email: userInfo.value.email,
       captcha: passwordForm.value.captcha,
       new_password: passwordForm.value.newPassword,
@@ -915,6 +915,9 @@ const handleChangePassword = async () => {
     })
     showToast('密码修改成功', 'success')
     closePasswordModal()
+    // 后端已使旧 token 失效，清除本地 token
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
     router.push('/login')
   } catch (error: any) {
     const msg = error.response?.data?.message || '修改密码失败，请稍后重试'
