@@ -91,18 +91,6 @@ func (m *authMiddleware) parseBearerToken(c *gin.Context) (*jwt.CustomClaims, er
 		return nil, err
 	}
 
-	// 检查会话有效性（单设备登录踢出）
-	// 新登录生成新refresh token覆盖Redis，旧JWT中的tid不匹配则被拒绝
-	if m.cache != nil {
-		stored, err := m.cache.GetRefreshToken(claims.UserID)
-		if err != nil {
-			return nil, fmt.Errorf("认证服务异常")
-		}
-		if stored != "" && stored != claims.TID {
-			return nil, fmt.Errorf("账号已在其他设备登录，请重新登录")
-		}
-	}
-
 	return claims, nil
 }
 
