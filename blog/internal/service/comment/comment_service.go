@@ -121,6 +121,16 @@ func (s *commentService) CreateComment(articleID, userID uint, req *request.Crea
 		return nil, errors.NewDefault(errors.CodeBadRequest)
 	}
 
+	// 校验用户是否存在
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		logger.Error("查找用户失败", zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查找用户失败", err)
+	}
+	if user == nil {
+		return nil, errors.New(errors.CodeNotFound, "用户不存在")
+	}
+
 	// 如果是回复，验证父评论存在且属于该文章
 	if req.ParentID != nil && *req.ParentID != 0 {
 		parent, err := s.commentRepo.GetCommentByID(*req.ParentID)

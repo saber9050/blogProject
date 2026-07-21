@@ -74,8 +74,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
 import { showToast } from '../utils/toast'
 
@@ -87,8 +87,9 @@ interface UserInfo {
 }
 
 const router = useRouter()
+const route = useRoute()
 const user = ref<UserInfo | null>(null)
-const blogName = ref('')
+const blogName = ref(localStorage.getItem('blogName') || '')
 const searchText = ref('')
 const dropdownOpen = ref(false)
 const randomLoading = ref(false)
@@ -109,11 +110,26 @@ const keepOpen = () => {
   if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
 }
 
-const emit = defineEmits<{ search: [q: string] }>()
-
 const doSearch = () => {
-  emit('search', searchText.value.trim())
+  const q = searchText.value.trim()
+  if (q) {
+    router.push({ path: '/', query: { q } })
+  } else {
+    router.push('/')
+  }
 }
+
+// 从 URL 同步搜索词到输入框（immediate 确保组件创建时也同步）
+watch(() => route.query.q, (q) => {
+  searchText.value = q || ''
+}, { immediate: true })
+
+// 清空搜索框时自动回到无搜索状态
+watch(searchText, (val) => {
+  if (!val.trim() && route.query.q) {
+    router.push('/')
+  }
+})
 
 const goRandomArticle = async () => {
   if (randomLoading.value) return
@@ -129,10 +145,6 @@ const goRandomArticle = async () => {
     randomLoading.value = false
   }
 }
-
-watch(searchText, (val) => {
-  emit('search', val.trim())
-})
 
 
 
@@ -173,6 +185,7 @@ onMounted(async () => {
     const aboutRes = await api.get('/about')
     if (aboutRes.data.data?.admin_name) {
       blogName.value = aboutRes.data.data.admin_name
+      localStorage.setItem('blogName', aboutRes.data.data.admin_name)
     }
   } catch { /* 忽略 */ }
 

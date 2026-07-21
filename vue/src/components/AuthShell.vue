@@ -11,7 +11,7 @@
             <button type="button" class="brand-mark" @click="goHome">
               <span class="brand-mark__icon">&#9998;</span>
               <span class="brand-mark__text">
-                <strong>{{ brandName }}</strong>
+                <strong>{{ localBrandName || brandName }}的博客</strong>
                 <small>{{ brandTagline }}</small>
               </span>
             </button>
@@ -31,7 +31,9 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import api from '../api'
 
 interface Props {
   panelTitle: string
@@ -39,8 +41,8 @@ interface Props {
   brandTagline?: string
 }
 
-withDefaults(defineProps<Props>(), {
-  brandName: '我的博客',
+const props = withDefaults(defineProps<Props>(), {
+  brandName: '',
   brandTagline: '现代创作空间'
 })
 
@@ -48,6 +50,19 @@ const router = useRouter()
 const goHome = () => {
   router.push('/login')
 }
+
+// 从 localStorage 恢复品牌名，避免闪烁
+const localBrandName = ref(localStorage.getItem('blogName') || props.brandName)
+
+onMounted(async () => {
+  try {
+    const aboutRes = await api.get('/about')
+    if (aboutRes.data.data?.admin_name) {
+      localBrandName.value = aboutRes.data.data.admin_name
+      localStorage.setItem('blogName', aboutRes.data.data.admin_name)
+    }
+  } catch { /* 忽略 */ }
+})
 </script>
 
 <style scoped>

@@ -177,6 +177,16 @@ func (s *articleService) GetDetail(id uint, userID uint) (*response.ArticleDetai
 
 // LikeArticle 点赞文章
 func (s *articleService) LikeArticle(articleID, userID uint) error {
+	// 校验用户是否存在
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		logger.Error("查找用户失败", zap.Error(err))
+		return errors.NewWithErr(errors.CodeInternalError, "查找用户失败", err)
+	}
+	if user == nil {
+		return errors.New(errors.CodeNotFound, "用户不存在")
+	}
+
 	article, err := s.articleRepo.FindByID(articleID)
 	if err != nil {
 		logger.Error("查找文章失败", zap.Error(err))
@@ -202,6 +212,16 @@ func (s *articleService) LikeArticle(articleID, userID uint) error {
 
 // UnlikeArticle 取消点赞
 func (s *articleService) UnlikeArticle(articleID, userID uint) error {
+	// 校验用户是否存在
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		logger.Error("查找用户失败", zap.Error(err))
+		return errors.NewWithErr(errors.CodeInternalError, "查找用户失败", err)
+	}
+	if user == nil {
+		return errors.New(errors.CodeNotFound, "用户不存在")
+	}
+
 	article, err := s.articleRepo.FindByID(articleID)
 	if err != nil {
 		logger.Error("查找文章失败", zap.Error(err))

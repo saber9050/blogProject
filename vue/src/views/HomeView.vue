@@ -1,6 +1,6 @@
 <template>
   <div class="home-page">
-    <NavBar @search="onSearch" />
+    <NavBar />
     <main class="page-shell">
       <div class="home-layout">
         <div class="home-main">
@@ -175,7 +175,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 
@@ -224,6 +224,7 @@ interface ArticleStats {
 }
 
 const router = useRouter()
+const route = useRoute()
 const articles = ref<Article[]>([])
 const sidebarArticles = ref<Article[]>([])  // 侧边栏最近文章
 const stats = ref<ArticleStats>({
@@ -475,10 +476,6 @@ const handleImgError = (e: Event) => {
   if (el) el.style.display = 'none'
 }
 
-const onSearch = (q: string) => {
-  searchQuery.value = q
-  resetAndLoad()
-}
 
 // 加载侧边栏最近文章（按时间排序，最新的在前面）
 const loadSidebarArticles = async () => {
@@ -551,8 +548,18 @@ onMounted(async () => {
   loadStats()
   // 加载侧边栏最近文章
   loadSidebarArticles()
+  // 从路由参数读取搜索词
+  if (route.query.q) {
+    searchQuery.value = route.query.q as string
+  }
   // 加载文章列表
   loadArticles()
+})
+
+// 监听路由搜索参数变化（用户在其他页面搜索跳转过来）
+watch(() => route.query.q, (q) => {
+  searchQuery.value = q || ''
+  resetAndLoad()
 })
 </script>
 

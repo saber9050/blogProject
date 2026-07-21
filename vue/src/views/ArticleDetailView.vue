@@ -26,7 +26,7 @@
 
         <!-- 评论区 -->
         <aside class="article-comments">
-          <div class="comments-header">评论 ({{ commentTotal }})</div>
+          <div class="comments-header">评论 ({{ article.comment_count }})</div>
 
           <div class="comments-list">
             <!-- 一级评论列表 -->
@@ -122,6 +122,13 @@
                 <div v-if="c._childrenHasMore" class="comment-load-more">
                   <button class="comment-btn" @click="loadMoreChildren(c)">
                     查看更多回复
+                  </button>
+                </div>
+
+                <!-- 收起二级评论 -->
+                <div class="comment-load-more">
+                  <button class="comment-btn" @click="toggleChildren(c)">
+                    收起回复
                   </button>
                 </div>
               </div>
