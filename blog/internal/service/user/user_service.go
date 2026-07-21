@@ -400,7 +400,20 @@ func (s *userService) AdminUpdateStatus(id uint, status int8) error {
 		return errors.New(errors.CodeNotFound, "用户不存在")
 	}
 
-	return s.userRepo.UpdateProfile(id, map[string]interface{}{"status": status})
+	err = s.userRepo.UpdateProfile(id, map[string]interface{}{"status": status})
+	if err != nil {
+		logger.Error("更新用户状态", zap.Error(err))
+		return errors.NewWithErr(errors.CodeInternalError, "更新用户状态", err)
+	}
+
+	if status == 0 {
+		// 删除 refresh token，使其无法再刷新 access token
+		if err := s.authCache.DeleteRefreshToken(id); err != nil {
+			logger.Error("删除用户 refresh token 失败", zap.Error(err))
+		}
+	}
+
+	return nil
 }
 
 // AdminDeleteUser 后台删除用户
