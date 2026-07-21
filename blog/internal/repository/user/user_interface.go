@@ -11,7 +11,7 @@ type UserRepository interface {
 	// IsExistsEmail 判断邮箱是否存在
 	IsExistsEmail(email string) (bool, error)
 	// ListByRole 根据角色获取用户列表
-	ListByRole(roleID int8, page, pageSize int) ([]*entity.User, int64, error)
+	ListByRole(roleID int8, page, pageSize int, keyword string, status *int, startTime, endTime string) ([]*entity.User, int64, error)
 	// Create 创建用户
 	Create(name, account, passwordHash string, status int8) error
 	// Delete 删除用户（软删除）

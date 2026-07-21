@@ -34,9 +34,28 @@ type AdminCommentRow struct {
 }
 
 // ListAllComments 分页查询所有未删除评论（后台管理）
-func (r *commentRepository) ListAllComments(page, pageSize int) ([]AdminCommentRow, int64, error) {
+func (r *commentRepository) ListAllComments(page, pageSize int, articleTitle, userName, startTime, endTime string) ([]AdminCommentRow, int64, error) {
+	// count with filters
+	countQuery := r.db.Model(&entity.Comment{}).
+		Joins("LEFT JOIN users ON users.id = comments.user_id").
+		Joins("LEFT JOIN articles ON articles.id = comments.article_id").
+		Where("comments.deleted_at IS NULL")
+
+	if articleTitle != "" {
+		countQuery = countQuery.Where("articles.title LIKE ?", "%"+articleTitle+"%")
+	}
+	if userName != "" {
+		countQuery = countQuery.Where("users.user_name LIKE ?", "%"+userName+"%")
+	}
+	if startTime != "" {
+		countQuery = countQuery.Where("comments.created_at >= ?", startTime)
+	}
+	if endTime != "" {
+		countQuery = countQuery.Where("comments.created_at <= ?", endTime)
+	}
+
 	var total int64
-	if err := r.db.Model(&entity.Comment{}).Where("deleted_at IS NULL").Count(&total).Error; err != nil {
+	if err := countQuery.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -45,12 +64,26 @@ func (r *commentRepository) ListAllComments(page, pageSize int) ([]AdminCommentR
 
 	offset := (page - 1) * pageSize
 	var rows []AdminCommentRow
-	err := r.db.Table("comments").
+	dataQuery := r.db.Table("comments").
 		Select("comments.id, comments.content, comments.article_id, comments.created_at, users.user_name, articles.title AS article_title").
 		Joins("LEFT JOIN users ON users.id = comments.user_id").
 		Joins("LEFT JOIN articles ON articles.id = comments.article_id").
-		Where("comments.deleted_at IS NULL").
-		Order("comments.created_at DESC").
+		Where("comments.deleted_at IS NULL")
+
+	if articleTitle != "" {
+		dataQuery = dataQuery.Where("articles.title LIKE ?", "%"+articleTitle+"%")
+	}
+	if userName != "" {
+		dataQuery = dataQuery.Where("users.user_name LIKE ?", "%"+userName+"%")
+	}
+	if startTime != "" {
+		dataQuery = dataQuery.Where("comments.created_at >= ?", startTime)
+	}
+	if endTime != "" {
+		dataQuery = dataQuery.Where("comments.created_at <= ?", endTime)
+	}
+
+	err := dataQuery.Order("comments.created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
 		Scan(&rows).Error

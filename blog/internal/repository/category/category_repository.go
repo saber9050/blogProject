@@ -31,7 +31,7 @@ func (r *categoryRepository) FindByID(id uint) (*entity.Category, error) {
 }
 
 // List 获取分页的分类列表（后台）
-func (r *categoryRepository) List(page, pageSize int, status *int, keyword string) ([]*entity.Category, int64, error) {
+func (r *categoryRepository) List(page, pageSize int, status *int, keyword, startTime, endTime string) ([]*entity.Category, int64, error) {
 	var list []*entity.Category
 	var total int64
 
@@ -41,6 +41,12 @@ func (r *categoryRepository) List(page, pageSize int, status *int, keyword strin
 	}
 	if keyword != "" {
 		query = query.Where("category_name LIKE ?", "%"+keyword+"%")
+	}
+	if startTime != "" {
+		query = query.Where("created_at >= ?", startTime)
+	}
+	if endTime != "" {
+		query = query.Where("created_at <= ?", endTime)
 	}
 
 	if err := query.Count(&total).Error; err != nil {

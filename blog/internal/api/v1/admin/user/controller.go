@@ -24,8 +24,17 @@ func NewUserController(userService userSvc.UserService) *UserController {
 func (ctrl *UserController) ListUsers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	keyword := c.Query("keyword")
+	startTime := c.Query("start_time")
+	endTime := c.Query("end_time")
 
-	list, total, err := ctrl.userService.ListNormalUsers(page, pageSize)
+	var status *int
+	if s := c.Query("status"); s != "" {
+		sInt, _ := strconv.Atoi(s)
+		status = &sInt
+	}
+
+	list, total, err := ctrl.userService.ListNormalUsers(page, pageSize, keyword, status, startTime, endTime)
 	if err != nil {
 		response.BizError(c, err)
 		return

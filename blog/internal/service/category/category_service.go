@@ -24,7 +24,7 @@ func NewCategoryService(categoryRepo repo.CategoryRepository) CategoryService {
 // ListPublic 获取所有启用的分类（前台）
 func (s *categoryService) ListPublic() ([]*response.CategoryPublicResponse, error) {
 	enabled := 1
-	list, _, err := s.categoryRepo.List(1, 10000, &enabled, "")
+	list, _, err := s.categoryRepo.List(1, 10000, &enabled, "", "", "")
 	if err != nil {
 		logger.Error("获取分类列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取分类列表失败", err)
@@ -40,8 +40,8 @@ func (s *categoryService) ListPublic() ([]*response.CategoryPublicResponse, erro
 }
 
 // List 获取分页的分类列表（后台）
-func (s *categoryService) List(page, pageSize int, status *int, keyword string) (*response.PaginatedResponse, error) {
-	list, total, err := s.categoryRepo.List(page, pageSize, status, keyword)
+func (s *categoryService) List(page, pageSize int, status *int, keyword, startTime, endTime string) (*response.PaginatedResponse, error) {
+	list, total, err := s.categoryRepo.List(page, pageSize, status, keyword, startTime, endTime)
 	if err != nil {
 		logger.Error("获取分类列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取分类列表失败", err)

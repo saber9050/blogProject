@@ -24,7 +24,7 @@ func NewTagService(tagRepo repo.TagRepository) TagService {
 // ListPublic 获取所有启用的标签（前台）
 func (s *tagService) ListPublic() ([]*response.TagPublicResponse, error) {
 	enabled := 1
-	list, _, err := s.tagRepo.List(1, 10000, &enabled, "")
+	list, _, err := s.tagRepo.List(1, 10000, &enabled, "", "", "")
 	if err != nil {
 		logger.Error("获取标签列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取标签列表失败", err)
@@ -40,8 +40,8 @@ func (s *tagService) ListPublic() ([]*response.TagPublicResponse, error) {
 }
 
 // List 获取分页的标签列表（后台）
-func (s *tagService) List(page, pageSize int, status *int, keyword string) (*response.PaginatedResponse, error) {
-	list, total, err := s.tagRepo.List(page, pageSize, status, keyword)
+func (s *tagService) List(page, pageSize int, status *int, keyword, startTime, endTime string) (*response.PaginatedResponse, error) {
+	list, total, err := s.tagRepo.List(page, pageSize, status, keyword, startTime, endTime)
 	if err != nil {
 		logger.Error("获取标签列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取标签列表失败", err)

@@ -16,7 +16,7 @@ type CommentService interface {
 	// DeleteComment 删除评论
 	DeleteComment(commentID, userID uint, roleID int8) error
 	// ListAdminComments 后台分页查询所有未删除评论
-	ListAdminComments(page, pageSize int) (*response.PaginatedResponse, error)
+	ListAdminComments(page, pageSize int, articleTitle, userName, startTime, endTime string) (*response.PaginatedResponse, error)
 	// BatchDeleteComment 批量删除评论，返回实际删除数量
 	BatchDeleteComment(ids []uint) (int64, error)
 }

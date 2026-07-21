@@ -44,7 +44,14 @@ func (ctrl *ArticleController) ListArticles(c *gin.Context) {
 
 	keyword := c.Query("keyword")
 
-	result, err := ctrl.articleService.AdminList(page, pageSize, status, categoryID, nil, keyword)
+	var tagIDs []uint
+	if tid := c.Query("tag_id"); tid != "" {
+		if id, err := strconv.ParseUint(tid, 10, 32); err == nil {
+			tagIDs = []uint{uint(id)}
+		}
+	}
+
+	result, err := ctrl.articleService.AdminList(page, pageSize, status, categoryID, tagIDs, keyword)
 	if err != nil {
 		response.BizError(c, err)
 		return

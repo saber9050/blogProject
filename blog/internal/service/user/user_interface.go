@@ -28,7 +28,7 @@ type UserService interface {
 	// 返回 fileKey , error
 	UpLoadImage(fileHeader *multipart.FileHeader) (string, error)
 	// ListNormalUsers 获取普通用户列表（后台）
-	ListNormalUsers(page, pageSize int) ([]*response.AdminUserResponse, int64, error)
+	ListNormalUsers(page, pageSize int, keyword string, status *int, startTime, endTime string) ([]*response.AdminUserResponse, int64, error)
 	// AdminCreateUser 后台创建用户
 	AdminCreateUser(req *request.AdminCreateUserRequest) (uint, error)
 	// AdminUpdateStatus 后台更新用户状态

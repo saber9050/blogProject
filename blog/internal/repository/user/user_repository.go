@@ -46,11 +46,25 @@ func (r *userRepository) IsExistsEmail(email string) (bool, error) {
 }
 
 // ListByRole 根据角色获取用户列表
-func (r *userRepository) ListByRole(roleID int8, page, pageSize int) ([]*entity.User, int64, error) {
+func (r *userRepository) ListByRole(roleID int8, page, pageSize int, keyword string, status *int, startTime, endTime string) ([]*entity.User, int64, error) {
 	var list []*entity.User
 	var total int64
 
 	query := r.db.Model(&entity.User{}).Where("role_id = ?", roleID)
+
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+	if keyword != "" {
+		query = query.Where("user_name LIKE ?", "%"+keyword+"%")
+	}
+	if startTime != "" {
+		query = query.Where("created_at >= ?", startTime)
+	}
+	if endTime != "" {
+		query = query.Where("created_at <= ?", endTime)
+	}
+
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

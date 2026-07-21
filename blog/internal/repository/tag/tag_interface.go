@@ -9,7 +9,7 @@ type TagRepository interface {
 	// FindByIDs 批量查找标签
 	FindByIDs(ids []uint) ([]*entity.Tag, error)
 	// List 获取分页的标签列表（后台）
-	List(page, pageSize int, status *int, keyword string) ([]*entity.Tag, int64, error)
+	List(page, pageSize int, status *int, keyword, startTime, endTime string) ([]*entity.Tag, int64, error)
 	// Create 创建标签
 	Create(tag *entity.Tag) error
 	// UpdateFields 更新标签的指定字段

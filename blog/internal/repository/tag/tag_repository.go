@@ -41,7 +41,7 @@ func (r *tagRepository) FindByIDs(ids []uint) ([]*entity.Tag, error) {
 }
 
 // List 获取分页的标签列表（后台）
-func (r *tagRepository) List(page, pageSize int, status *int, keyword string) ([]*entity.Tag, int64, error) {
+func (r *tagRepository) List(page, pageSize int, status *int, keyword, startTime, endTime string) ([]*entity.Tag, int64, error) {
 	var list []*entity.Tag
 	var total int64
 
@@ -51,6 +51,12 @@ func (r *tagRepository) List(page, pageSize int, status *int, keyword string) ([
 	}
 	if keyword != "" {
 		query = query.Where("tag_name LIKE ?", "%"+keyword+"%")
+	}
+	if startTime != "" {
+		query = query.Where("created_at >= ?", startTime)
+	}
+	if endTime != "" {
+		query = query.Where("created_at <= ?", endTime)
 	}
 
 	if err := query.Count(&total).Error; err != nil {

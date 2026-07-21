@@ -331,8 +331,8 @@ func randomName() string {
 }
 
 // ListNormalUsers 获取普通用户列表（后台）
-func (s *userService) ListNormalUsers(page, pageSize int) ([]*response.AdminUserResponse, int64, error) {
-	list, total, err := s.userRepo.ListByRole(0, page, pageSize)
+func (s *userService) ListNormalUsers(page, pageSize int, keyword string, status *int, startTime, endTime string) ([]*response.AdminUserResponse, int64, error) {
+	list, total, err := s.userRepo.ListByRole(0, page, pageSize, keyword, status, startTime, endTime)
 	if err != nil {
 		logger.Error("获取用户列表失败", zap.Error(err))
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "获取用户列表失败", err)

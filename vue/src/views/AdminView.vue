@@ -27,6 +27,18 @@
               <button class="btn-sm btn-sm--primary" @click="openModal('user')">+ 新增</button>
             </div>
           </div>
+          <div class="filter-bar">
+            <input v-model="userFilter.keyword" class="filter-input" placeholder="昵称" @keyup.enter="loadUsers(1)" />
+            <select v-model="userFilter.status" class="filter-select" @change="loadUsers(1)">
+              <option value="">全部状态</option>
+              <option value="1">正常</option>
+              <option value="0">封禁</option>
+            </select>
+            <input type="date" v-model="userFilter.startTime" class="filter-date" @change="loadUsers(1)" title="注册开始" />
+            <span class="filter-date-sep">~</span>
+            <input type="date" v-model="userFilter.endTime" class="filter-date" @change="loadUsers(1)" title="注册结束" />
+            <button class="btn-sm" @click="resetFilter(userFilter); loadUsers(1)">重置</button>
+          </div>
           <table class="admin-table">
             <thead>
               <tr>
@@ -82,6 +94,19 @@
               <button class="btn-sm" @click="transferModalVisible = true">一键转移</button>
               <button class="btn-sm btn-sm--primary" @click="goToArticleEditor('/admin/article/new')">+ 新增</button>
             </div>
+          </div>
+          <div class="filter-bar">
+            <input v-model="articleFilter.keyword" class="filter-input" placeholder="文章标题" @keyup.enter="loadArticles(1)" />
+            <select v-model="articleFilter.categoryId" class="filter-select" @change="loadArticles(1)">
+              <option value="">全部分类</option>
+              <option v-for="c in adminCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+            <select v-model="articleFilter.status" class="filter-select" @change="loadArticles(1)">
+              <option value="">全部状态</option>
+              <option value="1">已发布</option>
+              <option value="0">草稿</option>
+            </select>
+            <button class="btn-sm" @click="resetFilter(articleFilter); loadArticles(1)">重置</button>
           </div>
           <table class="admin-table">
             <thead>
@@ -150,6 +175,14 @@
               </template>
             </div>
           </div>
+          <div class="filter-bar">
+            <input v-model="commentFilter.articleTitle" class="filter-input" placeholder="所属文章" @keyup.enter="loadComments(1)" />
+            <input v-model="commentFilter.userName" class="filter-input" placeholder="评论者" @keyup.enter="loadComments(1)" />
+            <input type="date" v-model="commentFilter.startTime" class="filter-date" @change="loadComments(1)" title="开始时间" />
+            <span class="filter-date-sep">~</span>
+            <input type="date" v-model="commentFilter.endTime" class="filter-date" @change="loadComments(1)" title="结束时间" />
+            <button class="btn-sm" @click="resetFilter(commentFilter); loadComments(1)">重置</button>
+          </div>
           <table class="admin-table">
             <thead>
               <tr>
@@ -200,6 +233,18 @@
             <div class="admin-panel__actions">
               <button class="btn-sm btn-sm--primary" @click="openModal('category')">+ 新增</button>
             </div>
+          </div>
+          <div class="filter-bar">
+            <input v-model="categoryFilter.keyword" class="filter-input" placeholder="分类名称" @keyup.enter="loadCategories(1)" />
+            <select v-model="categoryFilter.status" class="filter-select" @change="loadCategories(1)">
+              <option value="">全部状态</option>
+              <option value="1">启用</option>
+              <option value="0">禁用</option>
+            </select>
+            <input type="date" v-model="categoryFilter.startTime" class="filter-date" @change="loadCategories(1)" title="创建开始" />
+            <span class="filter-date-sep">~</span>
+            <input type="date" v-model="categoryFilter.endTime" class="filter-date" @change="loadCategories(1)" title="创建结束" />
+            <button class="btn-sm" @click="resetFilter(categoryFilter); loadCategories(1)">重置</button>
           </div>
           <table class="admin-table">
             <thead>
@@ -254,6 +299,18 @@
             <div class="admin-panel__actions">
               <button class="btn-sm btn-sm--primary" @click="openModal('tag')">+ 新增</button>
             </div>
+          </div>
+          <div class="filter-bar">
+            <input v-model="tagFilter.keyword" class="filter-input" placeholder="标签名称" @keyup.enter="loadTags(1)" />
+            <select v-model="tagFilter.status" class="filter-select" @change="loadTags(1)">
+              <option value="">全部状态</option>
+              <option value="1">启用</option>
+              <option value="0">禁用</option>
+            </select>
+            <input type="date" v-model="tagFilter.startTime" class="filter-date" @change="loadTags(1)" title="创建开始" />
+            <span class="filter-date-sep">~</span>
+            <input type="date" v-model="tagFilter.endTime" class="filter-date" @change="loadTags(1)" title="创建结束" />
+            <button class="btn-sm" @click="resetFilter(tagFilter); loadTags(1)">重置</button>
           </div>
           <table class="admin-table">
             <thead>
@@ -491,6 +548,17 @@ const adminComments = ref<AdminCommentItem[]>([])
 const selectedCommentIds = ref<number[]>([])
 const batchMode = ref(false)
 
+// ---------- 筛选状态 ----------
+const userFilter = reactive({ keyword: '', status: '' as string, startTime: '', endTime: '' })
+const articleFilter = reactive({ keyword: '', status: '' as string, categoryId: '' as string })
+const commentFilter = reactive({ articleTitle: '', userName: '', startTime: '', endTime: '' })
+const categoryFilter = reactive({ keyword: '', status: '' as string, startTime: '', endTime: '' })
+const tagFilter = reactive({ keyword: '', status: '' as string, startTime: '', endTime: '' })
+
+const resetFilter = (filter: Record<string, any>) => {
+  Object.keys(filter).forEach(k => { filter[k] = '' })
+}
+
 // 分页状态
 const userPage = ref(1)
 const userPageSize = ref(10)
@@ -619,7 +687,12 @@ const handleBatchDeleteComments = async () => {
 const loadUsers = async (page = 1) => {
   userPage.value = page
   try {
-    const res = await api.get('/admin/users', { params: { page: userPage.value, page_size: userPageSize.value } })
+    const params: Record<string, any> = { page: userPage.value, page_size: userPageSize.value }
+    if (userFilter.keyword) params.keyword = userFilter.keyword
+    if (userFilter.status !== '') params.status = userFilter.status
+    if (userFilter.startTime) params.start_time = userFilter.startTime
+    if (userFilter.endTime) params.end_time = userFilter.endTime
+    const res = await api.get('/admin/users', { params })
     users.value = res.data.data?.list || []
     userTotal.value = res.data.data?.total || 0
   } catch (e) { console.error('加载用户失败:', e) }
@@ -628,7 +701,11 @@ const loadUsers = async (page = 1) => {
 const loadArticles = async (page = 1) => {
   articlePage.value = page
   try {
-    const res = await api.get('/admin/articles', { params: { page: articlePage.value, page_size: articlePageSize.value } })
+    const params: Record<string, any> = { page: articlePage.value, page_size: articlePageSize.value }
+    if (articleFilter.keyword) params.keyword = articleFilter.keyword
+    if (articleFilter.status !== '') params.status = articleFilter.status
+    if (articleFilter.categoryId) params.category_id = articleFilter.categoryId
+    const res = await api.get('/admin/articles', { params })
     adminArticles.value = res.data.data?.list || []
     articleTotal.value = res.data.data?.total || 0
   } catch (e) { console.error('加载文章失败:', e) }
@@ -637,7 +714,12 @@ const loadArticles = async (page = 1) => {
 const loadComments = async (page = 1) => {
   commentPage.value = page
   try {
-    const res = await api.get('/admin/comments', { params: { page: commentPage.value, page_size: commentPageSize.value } })
+    const params: Record<string, any> = { page: commentPage.value, page_size: commentPageSize.value }
+    if (commentFilter.articleTitle) params.article_title = commentFilter.articleTitle
+    if (commentFilter.userName) params.user_name = commentFilter.userName
+    if (commentFilter.startTime) params.start_time = commentFilter.startTime
+    if (commentFilter.endTime) params.end_time = commentFilter.endTime
+    const res = await api.get('/admin/comments', { params })
     adminComments.value = res.data.data?.list || []
     commentTotal.value = res.data.data?.total || 0
   } catch (e) { console.error('加载评论失败:', e) }
@@ -646,7 +728,12 @@ const loadComments = async (page = 1) => {
 const loadCategories = async (page = 1) => {
   categoryPage.value = page
   try {
-    const res = await api.get('/admin/categories', { params: { page: categoryPage.value, page_size: categoryPageSize.value } })
+    const params: Record<string, any> = { page: categoryPage.value, page_size: categoryPageSize.value }
+    if (categoryFilter.keyword) params.keyword = categoryFilter.keyword
+    if (categoryFilter.status !== '') params.status = categoryFilter.status
+    if (categoryFilter.startTime) params.start_time = categoryFilter.startTime
+    if (categoryFilter.endTime) params.end_time = categoryFilter.endTime
+    const res = await api.get('/admin/categories', { params })
     adminCategories.value = res.data.data?.list || []
     categoryTotal.value = res.data.data?.total || 0
   } catch (e) { console.error('加载分类失败:', e) }
@@ -655,7 +742,12 @@ const loadCategories = async (page = 1) => {
 const loadTags = async (page = 1) => {
   tagPage.value = page
   try {
-    const res = await api.get('/admin/tags', { params: { page: tagPage.value, page_size: tagPageSize.value } })
+    const params: Record<string, any> = { page: tagPage.value, page_size: tagPageSize.value }
+    if (tagFilter.keyword) params.keyword = tagFilter.keyword
+    if (tagFilter.status !== '') params.status = tagFilter.status
+    if (tagFilter.startTime) params.start_time = tagFilter.startTime
+    if (tagFilter.endTime) params.end_time = tagFilter.endTime
+    const res = await api.get('/admin/tags', { params })
     adminTags.value = res.data.data?.list || []
     tagTotal.value = res.data.data?.total || 0
   } catch (e) { console.error('加载标签失败:', e) }
@@ -1270,5 +1362,57 @@ select.modal__input { appearance: auto; }
   color: #333;
   background: #fff;
   cursor: pointer;
+}
+
+/* ---------- 筛选栏 ---------- */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-input {
+  width: 160px;
+  padding: 6px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.filter-input:focus {
+  border-color: #1677ff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(22,119,255,0.1);
+}
+
+.filter-select {
+  padding: 6px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.filter-date {
+  padding: 5px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.filter-date-sep {
+  color: #999;
+  font-size: 13px;
 }
 </style>

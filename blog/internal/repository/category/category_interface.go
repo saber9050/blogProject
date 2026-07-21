@@ -7,7 +7,7 @@ type CategoryRepository interface {
 	// FindByID 通过 ID 查找分类
 	FindByID(id uint) (*entity.Category, error)
 	// List 获取分页的分类列表（后台）
-	List(page, pageSize int, status *int, keyword string) ([]*entity.Category, int64, error)
+	List(page, pageSize int, status *int, keyword, startTime, endTime string) ([]*entity.Category, int64, error)
 	// Create 创建分类
 	Create(category *entity.Category) error
 	// UpdateFields 更新分类的指定字段

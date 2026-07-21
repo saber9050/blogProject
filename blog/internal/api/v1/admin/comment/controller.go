@@ -24,8 +24,12 @@ func NewCommentController(commentService commentSvc.CommentService) *CommentCont
 func (ctrl *CommentController) ListComments(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	articleTitle := c.Query("article_title")
+	userName := c.Query("user_name")
+	startTime := c.Query("start_time")
+	endTime := c.Query("end_time")
 
-	result, err := ctrl.commentService.ListAdminComments(page, pageSize)
+	result, err := ctrl.commentService.ListAdminComments(page, pageSize, articleTitle, userName, startTime, endTime)
 	if err != nil {
 		response.BizError(c, err)
 		return

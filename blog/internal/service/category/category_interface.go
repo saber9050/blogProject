@@ -10,7 +10,7 @@ type CategoryService interface {
 	// ListPublic 获取所有启用的分类（前台）
 	ListPublic() ([]*response.CategoryPublicResponse, error)
 	// List 获取分页的分类列表（后台）
-	List(page, pageSize int, status *int, keyword string) (*response.PaginatedResponse, error)
+	List(page, pageSize int, status *int, keyword, startTime, endTime string) (*response.PaginatedResponse, error)
 	// Create 创建分类
 	Create(req *request.CreateCategoryRequest) error
 	// Update 更新分类

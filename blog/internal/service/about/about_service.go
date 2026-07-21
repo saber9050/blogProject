@@ -36,7 +36,7 @@ func NewAboutService(
 // GetAboutInfo 获取关于页面完整信息
 func (s *aboutService) GetAboutInfo() (*response.AboutInfoResponse, error) {
 	// 获取管理员信息
-	list, _, err := s.userRepo.ListByRole(1, 1, 1)
+	list, _, err := s.userRepo.ListByRole(1, 1, 1, "", nil, "", "")
 	if err != nil {
 		logger.Error("获取管理员信息失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取管理员信息失败", err)

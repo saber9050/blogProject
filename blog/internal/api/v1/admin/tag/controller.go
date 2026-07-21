@@ -30,8 +30,10 @@ func (ctrl *TagController) ListTags(c *gin.Context) {
 		status = &sInt
 	}
 	keyword := c.Query("keyword")
+	startTime := c.Query("start_time")
+	endTime := c.Query("end_time")
 
-	result, err := ctrl.tagService.List(page, pageSize, status, keyword)
+	result, err := ctrl.tagService.List(page, pageSize, status, keyword, startTime, endTime)
 	if err != nil {
 		response.BizError(c, err)
 		return

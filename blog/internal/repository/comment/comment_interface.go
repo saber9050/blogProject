@@ -23,7 +23,7 @@ type CommentRepository interface {
 	// GetChildrenCounts 批量获取评论子评论数
 	GetChildrenCounts(parentIDs []uint) (map[uint]int, error)
 	// ListAllComments 分页查询所有未删除评论（后台管理，带文章标题和用户名）
-	ListAllComments(page, pageSize int) ([]AdminCommentRow, int64, error)
+	ListAllComments(page, pageSize int, articleTitle, userName, startTime, endTime string) ([]AdminCommentRow, int64, error)
 	// BatchDeleteComments 批量软删除评论
 	BatchDeleteComments(ids []uint) (int64, error)
 	// GetArticleIDsByCommentIDs 批量查询评论所属文章ID

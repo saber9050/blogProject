@@ -211,7 +211,7 @@ func (s *commentService) DeleteComment(commentID, userID uint, roleID int8) erro
 }
 
 // ListAdminComments 后台分页查询所有未删除评论
-func (s *commentService) ListAdminComments(page, pageSize int) (*response.PaginatedResponse, error) {
+func (s *commentService) ListAdminComments(page, pageSize int, articleTitle, userName, startTime, endTime string) (*response.PaginatedResponse, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -222,7 +222,7 @@ func (s *commentService) ListAdminComments(page, pageSize int) (*response.Pagina
 		pageSize = 50
 	}
 
-	rows, total, err := s.commentRepo.ListAllComments(page, pageSize)
+	rows, total, err := s.commentRepo.ListAllComments(page, pageSize, articleTitle, userName, startTime, endTime)
 	if err != nil {
 		logger.Error("查询评论列表失败", zap.Error(err))
 		return nil, fmt.Errorf("查询评论列表失败: %w", err)
