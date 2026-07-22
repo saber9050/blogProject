@@ -14,7 +14,7 @@
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {} // 具体数据，可能为对象或数组
 }
 ```
@@ -58,7 +58,7 @@ GET /categories
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": [
     {
       "id": 5,
@@ -104,8 +104,10 @@ GET /categories
 | page_size | uint | 否 | 每页数量，默认为 10，最大 50 | `10` |
 | status | int | 否 | 分类状态，1-启用，0-禁用，不传则返回所有状态 | `1` |
 | keyword | string | 否 | 搜索关键词，匹配分类名称 | `技术` |
+| start_time | string | 否 | 创建开始时间（ISO 8601 格式） | `2026-01-01T00:00:00Z` |
+| end_time | string | 否 | 创建结束时间（ISO 8601 格式） | `2026-12-31T23:59:59Z` |
 
-**排序排序**
+**排序规则**
 
 - 按分类创建时间倒序排列（最新创建的分类在前）
 
@@ -114,7 +116,7 @@ GET /categories
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "list": [
       {
@@ -142,7 +144,7 @@ GET /categories
 - `page`: 当前页码
 - `page_size`: 每页数量
 
-### 2. 新增分类
+### 3. 新增分类
 
 创建一个新的分类。
 
@@ -183,10 +185,8 @@ POST /categories
 ```json
 {
   "code": 0,
-  "message": "创建成功",
-  "data": {
-    "id": 5
-  }
+  "message": "成功",
+  "data": null
 }
 ```
 
@@ -200,7 +200,7 @@ POST /categories
 }
 ```
 
-### 3. 编辑分类
+### 4. 编辑分类
 
 更新指定分类的信息。
 
@@ -249,7 +249,7 @@ PUT /categories/{id}
 ```json
 {
   "code": 0,
-  "message": "更新成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -284,7 +284,7 @@ PUT /categories/{id}
 DELETE /categories/{id}
 ```
 
-**认证认证**：强制认证（需携带管理员 Token）
+**认证**：强制认证（需携带管理员 Token）
 
 **路径参数**
 
@@ -306,7 +306,7 @@ DELETE /categories/{id}
 ```json
 {
   "code": 0,
-  "message": "删除成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -350,7 +350,7 @@ GET /categories/count
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "count": 10
   }

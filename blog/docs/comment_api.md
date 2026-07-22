@@ -8,15 +8,15 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {}
 }
 ```
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| code | int | 状态码，200 表示成功 |
+| code | int | 状态码，0 表示成功 |
 | message | string | 响应消息 |
 | data | object/array | 响应数据（成功时返回） |
 
@@ -47,8 +47,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "list": [
       {
@@ -114,8 +114,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "list": [
       {
@@ -174,8 +174,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "id": 1,
     "content": "string",
@@ -214,8 +214,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": "删除成功"
 }
 ```

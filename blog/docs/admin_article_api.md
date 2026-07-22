@@ -15,7 +15,7 @@
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {} // 具体数据，可能为对象或数组
 }
 ```
@@ -50,8 +50,8 @@ GET /articles
 | page | uint | 否 | 页码，默认为 1 | `1` |
 | page_size | uint | 否 | 每页数量，默认为 10，最大 50 | `10` |
 | status | int | 否 | 文章状态，1-已发布，0-草稿，不传则返回所有状态 | `1` |
-| category)id | uint | 否 | 分类 ID，筛选指定分类的文章 | `5` |
-| tag_ids | string | 否 | 标签 ID 列表，多个用英文逗号分隔，筛选包含任意标签的文章 | `1,2,3` |
+| category_id | uint | 否 | 分类 ID，筛选指定分类的文章 | `5` |
+| tag_id | uint | 否 | 标签 ID，筛选包含该标签的文章 | `1` |
 | keyword | string | 否 | 搜索关键词，匹配文章标题或摘要 | `Go语言` |
 
 **排序规则**
@@ -63,7 +63,7 @@ GET /articles
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "list": [
       {
@@ -104,7 +104,7 @@ GET /articles
   - `status`: 文章状态，1-已发布，0-草稿
   - `views`: 浏览量
   - `like_count`: 点赞数
-  - `comment_count: 评论数
+  - `comment_count`: 评论数
   - `author_name`: 作者昵称
   - `category`: 分类对象（可能为空）
   - `tags`: 标签对象数组（可能为空数组）
@@ -167,7 +167,7 @@ POST /articles
 ```json
 {
   "code": 0,
-  "message": "创建成功",
+  "message": "成功",
   "data": {
     "id": 123
   }
@@ -250,7 +250,7 @@ PUT /articles/{id}
 ```json
 {
   "code": 0,
-  "message": "更新成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -303,7 +303,7 @@ DELETE /articles/{id}
 ```json
 {
   "code": 0,
-  "message": "删除成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -422,7 +422,7 @@ POST /upload
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "url": "http://minio.example.com:9000/bucket/all/20260101/abc123.jpg"
   }
@@ -478,7 +478,7 @@ POST /articles/generate-summary
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "summary": "这是由 AI 自动生成的文章摘要..."
   }

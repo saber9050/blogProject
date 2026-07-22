@@ -15,7 +15,7 @@
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {}
 }
 ```
@@ -49,6 +49,10 @@ GET /comments
 |--------|------|------|------|------|
 | page | uint | 否 | 页码，默认为 1 | `1` |
 | page_size | uint | 否 | 每页数量，默认为 10，最大 50 | `10` |
+| article_title | string | 否 | 搜索关键词，匹配所属文章标题 | `Go并发编程` |
+| user_name | string | 否 | 搜索关键词，匹配评论者昵称 | `张三` |
+| start_time | string | 否 | 评论开始时间（ISO 8601 格式） | `2026-01-01T00:00:00Z` |
+| end_time | string | 否 | 评论结束时间（ISO 8601 格式） | `2026-12-31T23:59:59Z` |
 
 **排序规则**
 
@@ -59,7 +63,7 @@ GET /comments
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "list": [
       {

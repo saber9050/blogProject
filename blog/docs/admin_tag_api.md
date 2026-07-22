@@ -14,7 +14,7 @@
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {} // 具体数据，可能为对象或数组
 }
 ```
@@ -58,7 +58,7 @@ GET /tags
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": [
     {
       "id": 1,
@@ -106,6 +106,8 @@ GET /tags
 | page_size | uint | 否 | 每页数量，默认为 10，最大 50 | `10` |
 | status | int | 否 | 标签状态，1-启用，0-禁用，不传则返回所有状态 | `1` |
 | keyword | string | 否 | 搜索关键词，匹配标签名称 | `Go` |
+| start_time | string | 否 | 创建开始时间（ISO 8601 格式） | `2026-01-01T00:00:00Z` |
+| end_time | string | 否 | 创建结束时间（ISO 8601 格式） | `2026-12-31T23:59:59Z` |
 
 **排序规则**
 
@@ -116,7 +118,7 @@ GET /tags
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "list": [
       {
@@ -185,10 +187,8 @@ POST /tags
 ```json
 {
   "code": 0,
-  "message": "创建成功",
-  "data": {
-    "id": 1
-  }
+  "message": "成功",
+  "data": null
 }
 ```
 
@@ -250,7 +250,7 @@ PUT /tags/{id}
 ```json
 {
   "code": 0,
-  "message": "更新成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -297,7 +297,7 @@ DELETE /tags/{id}
 ```json
 {
   "code": 0,
-  "message": "删除成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -331,7 +331,7 @@ GET /tags/count
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "count": 25
   }

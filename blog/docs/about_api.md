@@ -13,7 +13,7 @@
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {} // 具体数据，可能为对象或数组
 }
 ```
@@ -49,7 +49,7 @@ GET /about
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "admin_name": "管理员昵称",
     "avatar_url": "https://example.com/avatar.jpg",
@@ -139,7 +139,7 @@ PUT /about
 ```json
 {
   "code": 0,
-  "message": "更新成功",
+  "message": "成功",
   "data": null
 }
 ```

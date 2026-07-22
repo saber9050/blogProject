@@ -7,15 +7,15 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {}
 }
 ```
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| code | int | 状态码，200 表示成功 |
+| code | int | 状态码，0 表示成功 |
 | message | string | 响应消息 |
 | data | object/array | 响应数据（成功时返回） |
 
@@ -35,13 +35,13 @@
 
 **验证流程**：
 1. 客户端使用 `access_token` 正常请求接口
-2. 中间件解析 JWT → 取 `tid` → 查 Redis `refresh:{user_id}` → 比对 `tid == redis_value`
-3. 不匹配 → "账号已在其他设备登录"（单设备踢出）
-4. `access_token` 过期后，客户端调用刷新接口，带上旧 access token，服务端从中解析 `tid` 进行轮换
+2. 中间件仅验证 JWT 签名与过期时间，不额外校验 refresh token
+3. `access_token` 过期后，客户端调用刷新接口，带上旧 access token，服务端从中解析 `tid` 进行轮换
 
 **单设备踢出**：
 - 新登录生成新 refresh token 覆盖 Redis
-- 旧 access token 中的 `tid` 与 Redis 不匹配 → 中间件拒绝
+- 旧设备的 refresh token 失效，无法刷新 access token
+- 旧设备的 access token 在有效期内仍可使用，过期后无法续期
 - 旧设备必须重新登录
 
 **Refresh Token 轮换**：
@@ -62,8 +62,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "captcha_id": "xxx",
     "base_64": "base64编码的图片"
@@ -104,8 +104,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "message": "注册成功"
   }
@@ -140,8 +140,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "user_name": "string",
     "user_id": 1,
@@ -158,9 +158,9 @@
 | user_role_id | uint | 用户角色ID |
 | access_token | string | Access Token (JWT)，有效期 15 分钟，后续请求需在 `Authorization: Bearer <token>` 中携带 |
 
-> **注意**：如果该账号已有活跃会话（已在其他设备/浏览器登录），旧会话将被强制失效：
-> - Redis 中的旧 refresh token 被覆盖
-> - 旧设备任意请求返回 `账号已在其他设备登录`
+> **注意**：如果该账号已有活跃会话（已在其他设备/浏览器登录），旧会话将被限制：
+> - Redis 中的旧 refresh token 被覆盖，旧设备无法刷新 access token
+> - 旧设备的 access token 在有效期内仍可使用，过期后无法续期
 > - 被踢出的旧设备必须重新登录
 
 ---
@@ -187,7 +187,7 @@
 
 **成功响应**: 同 [账号密码登录](#3-账号密码登录)（JSON）
 
-> **注意**：踢出行为同账号密码登录 — 如果该账号已有活跃会话，旧设备立即失效。
+> **注意**：踢出行为同账号密码登录 — 如果该账号已有活跃会话，旧设备 access token 过期后失效。
 
 ---
 
@@ -213,8 +213,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "message": "已向你的邮箱发送验证码"
   }
@@ -247,8 +247,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "message": "成功修改密码"
   }
@@ -273,8 +273,8 @@
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": null
 }
 ```
@@ -301,8 +301,8 @@ Refresh token 从 Access Token 的 JWT claims 中 `tid` 字段提取，无需额
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "access_token": "new_jwt_token_string"
   }
@@ -335,8 +335,8 @@ Refresh token 从 Access Token 的 JWT claims 中 `tid` 字段提取，无需额
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "is_exists": true
   }
@@ -363,8 +363,8 @@ Refresh token 从 Access Token 的 JWT claims 中 `tid` 字段提取，无需额
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "message": "成功",
   "data": {
     "is_exists": true
   }

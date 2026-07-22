@@ -15,7 +15,7 @@
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {} // 具体数据，可能为对象或数组
 }
 ```
@@ -68,7 +68,7 @@ GET /articles
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "list": [
       {
@@ -141,7 +141,7 @@ GET /articles/{id}
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "id": 123,
     "title": "文章标题",
@@ -204,7 +204,7 @@ POST /articles/{id}/like
 ```json
 {
   "code": 0,
-  "message": "点赞成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -253,7 +253,7 @@ DELETE /articles/{id}/like
 ```json
 {
   "code": 0,
-  "message": "取消点赞成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -287,7 +287,7 @@ GET /articles/stats
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "article_count": 128,
     "total_views": 56000,
@@ -334,7 +334,7 @@ GET /articles/random
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "id": 123
   }

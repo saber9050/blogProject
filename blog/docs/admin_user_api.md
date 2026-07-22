@@ -15,7 +15,7 @@
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {} // 具体数据，可能为对象或数组
 }
 ```
@@ -48,13 +48,17 @@ GET /admin/users
 |--------|------|------|------|------|
 | page | uint | 否 | 页码，默认为 1 | `1` |
 | page_size | uint | 否 | 每页数量，默认为 10，最大 50 | `10` |
+| keyword | string | 否 | 搜索关键词，匹配用户昵称 | `张三` |
+| status | int | 否 | 用户状态，1-正常，0-封禁，不传则返回所有状态 | `1` |
+| start_time | string | 否 | 注册开始时间（ISO 8601 格式） | `2026-01-01T00:00:00Z` |
+| end_time | string | 否 | 注册结束时间（ISO 8601 格式） | `2026-12-31T23:59:59Z` |
 
 **响应**
 
 ```json
 {
   "code": 0,
-  "message": "success",
+  "message": "成功",
   "data": {
     "list": [
       {
@@ -129,7 +133,7 @@ POST /admin/users
 ```json
 {
   "code": 0,
-  "message": "创建成功",
+  "message": "成功",
   "data": {
     "id": 4
   }
@@ -189,7 +193,7 @@ PUT /admin/users/{id}
 ```json
 {
   "code": 0,
-  "message": "更新成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -217,7 +221,7 @@ DELETE /admin/users/{id}
 ```json
 {
   "code": 0,
-  "message": "删除成功",
+  "message": "成功",
   "data": null
 }
 ```
@@ -238,5 +242,6 @@ DELETE /admin/users/{id}
 3. 新增用户时，昵称和账号不能与已有用户重复。
 4. 编辑用户接口仅能修改 `status`（封禁/正常），不涉及昵称等个人信息。
 5. 删除用户为软删除（`gorm.DeletedAt`），数据不会从数据库中物理删除。
-6. 用户列表支持分页，`page_size` 最大为 50。
-7. 所有时间字段均使用 ISO 8601 格式（UTC 时区）。
+6. 用户列表支持通过 keyword、status、start_time、end_time 参数筛选用户。
+7. 用户列表支持分页，`page_size` 最大为 50。
+8. 所有时间字段均使用 ISO 8601 格式（UTC 时区）。

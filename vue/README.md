@@ -35,6 +35,7 @@ vue/
 │   │   ├── ForgotPasswordView.vue # 忘记密码
 │   │   ├── ArticleDetailView.vue  # 文章详情
 │   │   ├── AdminView.vue          # 管理后台
+│   │   ├── ArticleEditorView.vue  # 文章编辑器（新建/编辑）
 │   │   ├── ProfileView.vue        # 个人中心
 │   │   └── AboutView.vue          # 关于
 │   ├── router/
@@ -90,6 +91,8 @@ npm run build
 | `/forgot-password` | 忘记密码 | 密码重置 |
 | `/article/:id` | 文章详情 | 查看完整文章（含评论、点赞） |
 | `/admin` | 管理后台 | 文章/分类/评论/标签/用户管理（需管理员） |
+| `/admin/article/new` | 新建文章 | 管理员写文章 |
+| `/admin/article/:id/edit` | 编辑文章 | 管理员编辑已有文章 |
 | `/profile` | 个人中心 | 个人信息修改、头像更换、邮箱变更 |
 | `/about` | 关于 | 关于页面 |
 | `/*`（未匹配） | 重定向 | 所有未匹配路径重定向到首页 |

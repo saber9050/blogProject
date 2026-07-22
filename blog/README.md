@@ -138,7 +138,7 @@ go run main.go
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/user/profile` | 获取个人信息 |
+| GET | `/user/info` | 获取个人信息 |
 | POST | `/user/profile` | 编辑个人信息 |
 | POST | `/user/avatar` | 更换头像（MinIO 上传） |
 | POST | `/user/password` | 修改密码 |
@@ -196,7 +196,9 @@ go run main.go
 | PUT | `/admin/articles/transfer` | 文章分类一键转移 |
 | GET/POST/PUT/DELETE | `/admin/categories` | 分类 CRUD |
 | GET/POST/PUT/DELETE | `/admin/tags` | 标签 CRUD |
-| GET/DELETE | `/admin/comments` | 评论列表、批量删除 |
+| GET | `/admin/comments` | 评论列表 |
+| DELETE | `/admin/comments` | 批量删除评论 |
+| DELETE | `/admin/comments/:id` | 单个删除评论 |
 | GET/POST/PUT/DELETE | `/admin/users` | 用户 CRUD |
 | POST | `/admin/upload` | 图片上传（MinIO） |
 | POST | `/admin/articles/generate-summary` | AI 生成文章摘要（Ollama 本地模型） |
@@ -208,14 +210,14 @@ go run main.go
 | Recovery | panic 恢复，Zap 记录堆栈 |
 | Logger | HTTP 请求日志（方法、状态码、延迟、IP） |
 | CORS | 动态跨域配置，支持预检请求和凭据 |
-| Auth(roleID) | JWT 验证 + TID 会话校验（单设备踢出）+ 角色鉴权 |
+| Auth(roleID) | JWT 验证 + 角色鉴权 |
 | OptionalAuth() | 可选认证——有 token 注入用户上下文，无 token 也放行 |
 
 ## 主要功能
 
 - 用户注册/登录/密码重置（邮箱验证码）
 - 邮箱验证码登录 / 双 Token 认证（Access Token + Refresh Token 自动轮换）
-- JWT 认证 + TID 会话校验（单设备踢出）+ 角色鉴权（普通用户 / 管理员）
+- JWT 认证 + 角色鉴权（普通用户 / 管理员），Refresh Token 校验实现单设备踢出
 - Token 自动刷新：Access Token 过期后通过过期 JWT 中的 `tid` 字段提取 refresh token 进行轮换
 - 文章 CRUD + 富文本编辑
 - 随机一篇文章
