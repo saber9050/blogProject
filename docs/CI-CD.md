@@ -98,10 +98,94 @@ cat ~/.ssh/blog_deploy
 
 ### 5. 保护 main 分支（强烈建议）
 
-Settings → Branches → Add rule → Branch name: `main`
-勾选 **Require status checks to pass before merging**，选中 `后端 Go`、`前端 Vue`、`镜像可构建性校验`。
-
 这样 PR 不绿就合不进去，CI 才真正成为质量门禁，而不是摆设。
+
+**方式一：网页操作**
+
+> GitHub 界面默认为英文，下面括号里是英文原文，照着找即可。
+> 本仓库已经用命令行建好了一条规则，想直接看结果跳到「查看已有规则」。
+
+**A. 查看 / 修改已有规则**
+
+1. 打开仓库首页，点顶部 **Settings**（要有管理员权限才看得到）
+2. 左侧菜单 **Code and automation** → **Branches**
+3. 页面往下滑到 **Branch protection rules** 区域（在 Rulesets 下方，是旧版入口）
+4. 点 `main` 那条规则右侧的 **Edit**
+5. 改完拉到底点 **Save changes**
+
+**B. 从零新建一条规则**
+
+1. 仓库 → **Settings** → **Branches**
+2. **Branch protection rules** 区域 → **Add branch rule**（有些账号显示为 Add classic branch rule）
+3. **Branch name pattern** 填 `main`
+4. 勾选 **Require status checks to pass before merging**
+5. 勾选 **Require branches to be up to date before merging**
+   —— 不加这条，别人能拿过期的旧代码合并进来
+6. 在下方搜索框里依次输入并勾选这三个（就是 `ci.yml` 里的 job name）：
+   - `后端 Go`
+   - `前端 Vue`
+   - `镜像可构建性校验`
+7. 可选：勾 **Do not allow bypassing the above settings** 表示管理员也不能绕过。
+   个人项目建议**不勾**，给自己留个应急通道
+8. 页面最下方 **Create** / **Save changes**
+
+**C. 用新版 Rulesets（GitHub 现在的推荐入口，可选）**
+
+路径是 Settings → **Rules** → **Rulesets** → **New ruleset** → **New branch ruleset**。
+注意：Rulesets 里要求的状态检查只能从**已经跑过**的检查里选，
+所以必须先让 CI 至少成功跑一次，否则下拉框里搜不到 `后端 Go`。
+这也是上面 B 方案（旧版入口）更省事的原因——它可以手工填写检查名。
+
+**不要勾的选项**
+
+| 选项 | 为什么别勾 |
+|---|---|
+| Require a pull request before merging | 会连你自己直接 push main 也一起禁掉，CD 就触发不了了 |
+| Require approvals | PR 作者不能 approve 自己的 PR，个人项目等于把自己锁在门外 |
+| Require linear history | 需要 rebase 功底，容易把日常提交搞乱 |
+
+**方式二：命令行（已按此配置执行）**
+
+```bash
+gh api -X PUT repos/saber9050/blogProject/branches/main/protection \
+  --input - <<'EOF'
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": ["后端 Go", "前端 Vue", "镜像可构建性校验"]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+EOF
+```
+
+查看 / 撤销：
+
+```bash
+gh api repos/saber9050/blogProject/branches/main/protection
+gh api -X DELETE repos/saber9050/blogProject/branches/main/protection/required_status_checks
+```
+
+**怎么验证它真的生效**
+
+1. 从 `develop` 往 `main` 提一个 PR（哪怕只改一个 README 标点）
+2. 打开 PR 页面，拉到最下面的合并区
+3. CI 还在跑时，你会看到黄色圆点和
+   `Some checks haven't completed yet`，Merge 按钮是灰的
+4. CI 全绿后变成 `All checks have passed`，按钮才变绿可点
+5. 想看反例：临时把某个测试改成必然失败再提 PR，按钮会一直灰着并显示
+   `Required checks must pass before merging` —— 这就是门禁在起作用
+
+**两个注意点**
+
+- 首次配置后提第一个 PR 时，检查项会显示「Expected — Waiting for a status to be reported」。
+  这是正常的：GitHub 在等这个检查第一次上报。CI 跑完就变绿。
+- 本规则只约束**通过 PR 合并**进 main，不阻止你本地 `git push origin main`。
+  所以「develop → main 合并后推送 → 触发 CD」的流程不受影响。
 
 ## 三、日常使用
 
@@ -143,6 +227,8 @@ docker compose -f docker-compose.prod.yml up -d blog-backend blog-frontend
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
+| `denied: unknown manifest class for application/vnd.oci.empty.v1+json` | Buildx 默认附带 provenance/SBOM 证明清单，阿里云 ACR **个人版**不支持该 OCI 类型 | 已在 `cd.yml` 加 `provenance: false` + `sbom: false`；若自建流水线请务必加上 |
+| `denied: requested access to the resource is denied` | ACR 用户名/密码错，或命名空间不存在 | 用 `docker login` 在本机先验证；注意 ACR 密码是独立设置的，**不是**阿里云登录密码 |
 | CD 没触发 | `main` 不是默认分支，或 CI 没跑完 | 检查 Actions 里 CI 是否为绿色 |
 | `docker pull` 超时 | 服务器没配镜像加速 | 重跑 `setup-server.sh` |
 | 部署后 502 | 后端健康检查未通过 | `docker logs blog-backend` 看启动日志 |

@@ -66,11 +66,18 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
+      # provenance / sbom 说明：
+      #   Buildx 默认会额外推送 provenance 与 SBOM 证明清单
+      #   （媒体类型 application/vnd.oci.empty.v1+json），
+      #   阿里云 ACR 个人版不认这种 OCI 类型，会报
+      #   "denied: unknown manifest class ..."，因此必须关掉。
       - name: 构建并推送后端镜像
         uses: docker/build-push-action@v5
         with:
           context: ./blog
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/blog-backend:${{ env.TAG }}
             ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/blog-backend:latest
@@ -82,6 +89,8 @@ jobs:
         with:
           context: ./vue
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/blog-frontend:${{ env.TAG }}
             ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/blog-frontend:latest
