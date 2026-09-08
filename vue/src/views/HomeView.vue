@@ -558,7 +558,8 @@ onMounted(async () => {
 
 // 监听路由搜索参数变化（用户在其他页面搜索跳转过来）
 watch(() => route.query.q, (q) => {
-  searchQuery.value = q || ''
+  // route.query 的值可能是数组（?q=a&q=b），统一取第一项
+  searchQuery.value = (Array.isArray(q) ? q[0] : q) || ''
   resetAndLoad()
 })
 </script>

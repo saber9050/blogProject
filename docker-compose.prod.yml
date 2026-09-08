@@ -1,0 +1,157 @@
+# 生产环境编排文件（CI/CD 专用）
+#
+# 与 docker-compose.yml 的区别：
+#   1. 使用 ACR 上已构建好的镜像（image），不在服务器上现场构建（2C4G 扛不住）
+#   2. 为每个服务设置内存上限，避免 OOM 拖垮整台机器
+#   3. 敏感信息全部来自 .env，不写死在仓库里
+#
+# 用法：
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: blog-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_PASSWORD}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4
+    networks:
+      - blog-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # 2C4G 机器上 MySQL 是内存大户，必须设上限
+    mem_limit: 1g
+    mem_reservation: 512m
+
+  redis:
+    image: redis:7-alpine
+    container_name: blog-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 200mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - blog-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+
+  ollama:
+    image: ollama/ollama
+    container_name: blog-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - blog-network
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - "ollama serve & sleep 3 && ollama pull ${LLM_MODEL_NAME:-gemma3:270m} && wait"
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    mem_limit: 1g
+
+  minio:
+    image: minio/minio:RELEASE.2022-01-04T07-41-07Z
+    container_name: blog-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ACCESS_KEY}"
+      MINIO_ROOT_PASSWORD: "${MINIO_SECRET_KEY}"
+      TZ: Asia/Shanghai
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - blog-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 512m
+
+  blog-backend:
+    image: ${ACR_REGISTRY}/${ACR_NAMESPACE}/blog-backend:${IMAGE_TAG:-latest}
+    container_name: blog-backend
+    restart: unless-stopped
+    ports:
+      - "9527:9527"
+    environment:
+      CORE_COACH_DATABASE_MYSQL_HOST: mysql
+      CORE_COACH_DATABASE_MYSQL_PORT: 3306
+      CORE_COACH_DATABASE_REDIS_HOST: redis
+      CORE_COACH_DATABASE_REDIS_PORT: 6379
+      CORE_COACH_MINIO_ENDPOINT: minio:9000
+      LLM_BASE_URL: http://ollama:11434
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-gemma3:270m}
+      LLM_KEEP_ALIVE: 30m
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - blog-network
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:9527/api/v1/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 512m
+
+  blog-frontend:
+    image: ${ACR_REGISTRY}/${ACR_NAMESPACE}/blog-frontend:${IMAGE_TAG:-latest}
+    container_name: blog-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - blog-backend
+    networks:
+      - blog-network
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost/" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 128m
+
+volumes:
+  mysql_data:
+  redis_data:
+  ollama_data:
+  minio_data:
+
+networks:
+  blog-network:
+    driver: bridge
