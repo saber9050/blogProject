@@ -2,7 +2,9 @@
 .gitignore
 logs/*
 !logs/.gitkeep
-configs/*.example
+# 真实配置含密码/密钥，禁止打进镜像；运行时由宿主机挂载覆盖
+configs/config.yaml
+configs/config2.yaml
 vendor/
 tmp/
 node_modules/

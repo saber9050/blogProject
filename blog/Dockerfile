@@ -32,7 +32,12 @@ WORKDIR /app
 COPY --from=builder /build/blog-server .
 COPY --from=builder /build/configs ./configs
 
-RUN mkdir -p /app/logs
+# 兜底：真实 config.yaml 已被 .dockerignore 排除（含密钥，不入镜像），
+# 这里用模板补一份，保证镜像自身可启动、CI 冒烟测试能跑。
+# 生产环境由 docker-compose 挂载宿主机的 configs/config.yaml 覆盖。
+RUN cd /app/configs \
+    && if [ ! -f config.yaml ]; then cp config.yaml.example config.yaml; fi \
+    && mkdir -p /app/logs
 
 EXPOSE 9527
 

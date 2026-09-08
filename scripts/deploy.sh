@@ -26,6 +26,15 @@ cd "$DEPLOY_DIR" || fail "部署目录不存在：$DEPLOY_DIR"
 [ -f "$COMPOSE_FILE" ] || fail "缺少 $COMPOSE_FILE"
 [ -f ".env" ] || fail "缺少 .env（请先复制 .env.example 并填写）"
 
+# 后端配置文件：含数据库密码等密钥，不入镜像，必须存在于宿主机
+# 缺失时后端会 panic: Config File "config" Not Found —— 提前拦截，避免走完整个部署再回滚
+if [ ! -f "configs/config.yaml" ]; then
+  fail "缺少 configs/config.yaml。请在 $DEPLOY_DIR 下创建：
+    mkdir -p $DEPLOY_DIR/configs
+    把 blog/configs/config.yaml.example 复制为 configs/config.yaml 并填好真实值
+    （mysql/redis/minio 的 host 保持 127.0.0.1 即可，会被 compose 里的环境变量覆盖）"
+fi
+
 # 记录当前版本，用于回滚
 PREVIOUS_TAG=$(grep -E '^IMAGE_TAG=' .env 2>/dev/null | cut -d= -f2 || echo "latest")
 log "当前版本：$PREVIOUS_TAG → 目标版本：$IMAGE_TAG"
@@ -66,6 +75,10 @@ if check_health "后端" "http://127.0.0.1:9527/api/v1/health" \
   log "部署成功：$IMAGE_TAG"
 else
   log "健康检查失败，开始回滚到 $PREVIOUS_TAG"
+  # 打印后端日志，方便直接在 Actions 里定位崩溃原因
+  log "----- blog-backend 最近日志 -----"
+  docker compose -f "$COMPOSE_FILE" logs --tail=50 blog-backend 2>&1 || true
+  log "---------------------------------"
   IMAGE_TAG="$PREVIOUS_TAG" docker compose -f "$COMPOSE_FILE" up -d \
     blog-backend blog-frontend
   fail "部署失败并已回滚"

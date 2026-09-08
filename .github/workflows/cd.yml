@@ -97,6 +97,28 @@ jobs:
           cache-from: type=gha,scope=blog-frontend
           cache-to: type=gha,scope=blog-frontend,mode=max
 
+      # 冒烟测试：镜像自检，避免"构建成功但一启动就崩"的镜像被推上生产。
+      # 校验二进制存在且可执行、配置文件已随镜像打包（缺失会导致
+      # panic: Config File "config" Not Found）。
+      - name: 镜像冒烟测试
+        run: |
+          set -e
+          BACKEND_IMAGE="${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/blog-backend:${{ env.TAG }}"
+          FRONTEND_IMAGE="${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/blog-frontend:${{ env.TAG }}"
+
+          echo "检查后端镜像 $BACKEND_IMAGE"
+          docker run --rm --entrypoint /bin/sh "$BACKEND_IMAGE" -c '
+            test -x /app/blog-server  || { echo "缺少可执行文件 /app/blog-server"; exit 1; }
+            test -f /app/configs/config.yaml || { echo "缺少配置文件 /app/configs/config.yaml"; exit 1; }
+            echo "后端镜像自检通过"
+          '
+
+          echo "检查前端镜像 $FRONTEND_IMAGE"
+          docker run --rm --entrypoint /bin/sh "$FRONTEND_IMAGE" -c '
+            test -f /usr/share/nginx/html/index.html || { echo "缺少 index.html"; exit 1; }
+            echo "前端镜像自检通过"
+          '
+
   # ---------- SSH 到 ECS 执行部署 ----------
   deploy:
     name: 部署到 ECS
