@@ -113,6 +113,10 @@ services:
     restart: unless-stopped
     ports:
       - "9527:9527"
+    # 配置外挂：真实 config.yaml 已被 .dockerignore 排除（密钥不进镜像），
+    # 运行时挂载宿主机文件，改配置改完重启容器即可，无需重新构建镜像
+    volumes:
+      - ./blog/configs/config.yaml:/app/configs/config.yaml:ro
     environment:
       # 覆盖数据库连接地址（内部 Docker 网络）
       CORE_COACH_DATABASE_MYSQL_HOST: mysql

@@ -102,12 +102,25 @@ services:
     restart: unless-stopped
     ports:
       - "9527:9527"
+    # 真实配置只存在于服务器上（含数据库密码 / JWT 密钥 / SMTP 授权码），
+    # 不进镜像、不进 git，通过只读挂载注入。
+    volumes:
+      - ./configs/config.yaml:/app/configs/config.yaml:ro
     environment:
+      # 容器网络内用服务名互访，覆盖配置文件里的 IP
       CORE_COACH_DATABASE_MYSQL_HOST: mysql
       CORE_COACH_DATABASE_MYSQL_PORT: 3306
+      CORE_COACH_DATABASE_MYSQL_USERNAME: ${MYSQL_USER:-root}
+      CORE_COACH_DATABASE_MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       CORE_COACH_DATABASE_REDIS_HOST: redis
       CORE_COACH_DATABASE_REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CORE_COACH_MINIO_ENDPOINT: minio:9000
+      CORE_COACH_MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
+      CORE_COACH_MINIO_ACCESS_KEY_SECRET: ${MINIO_SECRET_KEY}
+      CORE_COACH_MINIO_BASE_URL: ${MINIO_PUBLIC_URL:-http://127.0.0.1:9000}
+      JWT_SECRET: ${JWT_SECRET:-blog-project}
       LLM_BASE_URL: http://ollama:11434
       LLM_MODEL_NAME: ${LLM_MODEL_NAME:-gemma3:270m}
       LLM_KEEP_ALIVE: 30m

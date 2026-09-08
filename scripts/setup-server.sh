@@ -64,7 +64,7 @@ fi
 
 # ---------- 4. 创建部署目录 ----------
 log "创建部署目录 $DEPLOY_DIR"
-mkdir -p "$DEPLOY_DIR"
+mkdir -p "$DEPLOY_DIR/configs"
 cd "$DEPLOY_DIR"
 
 # ---------- 5. 提示 ----------
@@ -72,11 +72,16 @@ cat <<EOF
 
 $(echo -e '\033[0;32m')初始化完成$(echo -e '\033[0m')
 
-接下来请手动完成 3 件事：
+接下来请手动完成 4 件事：
 
   1) 把仓库中的 docker-compose.prod.yml 和 .env 放到 $DEPLOY_DIR
        scp docker-compose.prod.yml root@<你的IP>:$DEPLOY_DIR/
        scp .env                    root@<你的IP>:$DEPLOY_DIR/
+
+  1.1) 放后端配置文件（密钥不进镜像，必须放在服务器上）
+       scp blog/configs/config.yaml.example root@<你的IP>:$DEPLOY_DIR/configs/config.yaml
+       然后 vi $DEPLOY_DIR/configs/config.yaml 填真实值
+       （mysql/redis/minio 的 host 会被 compose 环境变量覆盖，可留占位）
 
   2) 在阿里云控制台「安全组」放行端口：80、9527、9000、9001
      （3306/6379 建议不要对公网开放）
