@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 
 // https://vitejs.dev/config/
@@ -14,6 +14,14 @@ export default defineConfig({
         // 不重写路径，直接转发（关键！）
         rewrite: (path) => path
       }
+    }
+  },
+  test: {
+    environment: 'happy-dom',
+    include: ['tests/**/*.spec.ts'],
+    coverage: {
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.{ts,vue}']
     }
   }
 })

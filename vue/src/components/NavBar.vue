@@ -121,7 +121,8 @@ const doSearch = () => {
 
 // 从 URL 同步搜索词到输入框（immediate 确保组件创建时也同步）
 watch(() => route.query.q, (q) => {
-  searchText.value = q || ''
+  // route.query 的值可能是数组（?q=a&q=b），统一取第一项
+  searchText.value = (Array.isArray(q) ? q[0] : q) || ''
 }, { immediate: true })
 
 // 清空搜索框时自动回到无搜索状态

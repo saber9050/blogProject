@@ -6,6 +6,8 @@ configs/*.example
 vendor/
 tmp/
 node_modules/
+coverage.out
+coverage.html
 *.out
 *.test
 *.exe

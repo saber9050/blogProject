@@ -11,6 +11,7 @@
 
 - [后端 README — 技术栈、配置、API 路由、中间件](./blog/README.md)
 - [前端 README — 技术栈、目录结构、页面路由、Axios 拦截器](./vue/README.md)
+- [CI/CD 流水线说明 — 自动测试与部署到阿里云 ECS](./docs/CI-CD.md)
 
 ## 项目架构概览
 
@@ -26,6 +27,17 @@
 - **后端**：Go + Gin + GORM + JWT + Redis + MinIO
 
 详情见各子项目 README。
+
+## CI/CD
+
+项目已接入 GitHub Actions，push 到 `main` 且测试全绿后，自动构建镜像推送到阿里云 ACR，
+再 SSH 到 ECS 完成滚动更新与健康检查，失败自动回滚。
+
+```text
+push → CI（vet / gofmt / go test -race / vue-tsc / vitest / build）→ 构建镜像 → ACR → ECS 部署
+```
+
+完整配置步骤、Secrets 清单与排错手册见 [docs/CI-CD.md](./docs/CI-CD.md)。
 
 ## Docker 部署
 
