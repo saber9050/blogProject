@@ -18,3 +18,9 @@ coverage.out
 coverage.html
 vue/coverage
 node_modules/
+
+# 忽略私有文件
+docs/private
+
+# 忽略workbuddy
+.workbuddy
