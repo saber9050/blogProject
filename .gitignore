@@ -17,4 +17,11 @@ blog/configs/config2.yaml
 coverage.out
 coverage.html
 vue/coverage
+vue/dist
 node_modules/
+
+# 忽略私有文件
+docs/private
+
+# 忽略workbuddy
+.workbuddy

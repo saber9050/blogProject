@@ -115,6 +115,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 校验 compose 文件语法
+        # 编排文件对密钥类变量用了 ${VAR:?} 必填语法（不给弱口令兜底），
+        # CI 环境没有 .env，这里补一份一次性假值，仅用于语法校验。
+        env:
+          MYSQL_PASSWORD: ci-placeholder
+          MINIO_SECRET_KEY: ci-placeholder
         run: docker compose -f docker-compose.yml config --quiet
 
       - name: 设置 Buildx
