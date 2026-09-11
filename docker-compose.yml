@@ -28,7 +28,8 @@ services:
     container_name: blog-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: "${MYSQL_PASSWORD:-123456}"
+      # 不设兜底值：宁可启动失败并给出明确提示，也不要静默使用弱口令/泄露的口令
+      MYSQL_ROOT_PASSWORD: "${MYSQL_PASSWORD:?请先 cp .env.example .env 并设置 MYSQL_PASSWORD}"
       MYSQL_DATABASE: "${MYSQL_DATABASE:-blog-project}"
       TZ: Asia/Shanghai
     ports:
@@ -88,7 +89,7 @@ services:
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: "${MINIO_ACCESS_KEY:-admin}"
-      MINIO_ROOT_PASSWORD: "${MINIO_SECRET_KEY:-1223349392Zxp}"
+      MINIO_ROOT_PASSWORD: "${MINIO_SECRET_KEY:?请先 cp .env.example .env 并设置 MINIO_SECRET_KEY}"
       TZ: Asia/Shanghai
     ports:
       - "9000:9000"   # API
