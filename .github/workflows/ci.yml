@@ -142,3 +142,102 @@ jobs:
           tags: blog-frontend:ci
           cache-from: type=gha,scope=blog-frontend
           cache-to: type=gha,scope=blog-frontend,mode=max
+
+  # ========== 集成测试：起真实 MySQL，验证 SQL、索引与约束的真实行为 ==========
+  integration:
+    name: 集成测试
+    runs-on: ubuntu-latest
+    needs: [backend]        # 单测先过，避免白起一次数据库
+    defaults:
+      run:
+        working-directory: blog
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-test-password
+          MYSQL_DATABASE: blog_test
+        ports:
+          - 3306:3306
+        # 健康检查不能省：容器起来 ≠ MySQL 能接受连接。
+        # 少了它，测试会在数据库尚未初始化完成时开始，然后随机失败——
+        # 偶发失败比没有测试更糟，它会训练你忽略红灯。
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-test-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: blog/go.mod
+          cache-dependency-path: blog/go.sum
+
+      - name: 等待 MySQL 就绪
+        run: |
+          if ! command -v mysqladmin >/dev/null 2>&1; then
+            echo "运行器未自带 mysqladmin，退化为固定等待 20 秒"
+            sleep 20
+            exit 0
+          fi
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -pci-test-password --silent 2>/dev/null; then
+              echo "MySQL 已就绪（第 ${i} 次探测）"
+              exit 0
+            fi
+            echo "等待 MySQL 就绪... (${i}/30)"
+            sleep 3
+          done
+          echo "MySQL 在 90 秒内仍未就绪"
+          exit 1
+
+      - name: 集成测试
+        env:
+          # 库名只是前缀，每个测试包会自动拼上自己的 schema（blog_test_auth 等），
+          # 这样 `go test ./...` 并行执行不同包时不会互相清表。
+          TEST_MYSQL_DSN: root:ci-test-password@tcp(127.0.0.1:3306)/blog_test?charset=utf8mb4&parseTime=True&loc=Local
+        run: go test -v -count=1 -tags=integration ./internal/repository/...
+
+  # ========== 安全扫描：密钥泄露 + 依赖漏洞 ==========
+  security:
+    name: 安全扫描
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 默认只拉最新一个 commit，而密钥扫描必须覆盖全量历史才有意义——
+          # 密钥泄露绝大多数发生在历史提交里，改动当前文件并不会让它消失。
+          fetch-depth: 0
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: blog/go.mod
+          cache-dependency-path: blog/go.sum
+
+      - name: 密钥泄露扫描
+        # 用 go install 固定版本，避免镜像 tag 漂移。
+        # 想更快可以换成 Docker：
+        #   docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest git --redact /repo
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.30.1
+          "$(go env GOPATH)/bin/gitleaks" git --verbose --redact --no-banner .
+
+      - name: 后端依赖漏洞扫描
+        # govulncheck 会做"可达性分析"：只报真正被代码调用到的漏洞路径，
+        # 因此噪音很低，适合作为阻断项。
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          cd blog
+          govulncheck ./...
+
+      - name: 前端依赖漏洞扫描（仅报告，不阻断）
+        # 当前告警集中在 vite / vitest / vue-tsc 等构建期依赖上，
+        # 官方修复需要跨大版本升级（vue-tsc 3.x 是破坏性变更），
+        # 在依赖整体升级之前不让它卡住流水线；输出仍会完整打印在日志里供查阅。
+        run: |
+          cd vue
+          npm audit --audit-level=high || true

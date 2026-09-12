@@ -9,9 +9,11 @@
         │
         ▼
 ┌────────────────── CI（每次 push / PR）──────────────────┐
-│  backend    go vet → gofmt → go test -race → go build   │
-│  frontend   npm ci → vue-tsc → vitest → npm run build   │
-│  docker     compose 语法校验 → 两个 Dockerfile 试构建   │
+│  backend      go vet → gofmt → go test -race → go build │
+│  frontend     npm ci → vue-tsc → vitest → npm run build │
+│  integration  起真实 MySQL → 仓储层集成测试（21 个用例） │
+│  docker       compose 语法校验 → 两个 Dockerfile 试构建  │
+│  security     密钥泄露扫描 → 依赖漏洞扫描                │
 └─────────────────────────────────────────────────────────┘
         │  仅 main 分支 且 CI 全绿
         ▼
