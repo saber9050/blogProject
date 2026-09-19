@@ -357,6 +357,11 @@
             </select>
           </div>
         </section>
+
+        <!-- ========== AI 模型配置 ========== -->
+        <section v-if="activeTab === 'ai'" class="admin-panel">
+          <AIModelPanel />
+        </section>
       </main>
     </div>
 
@@ -487,6 +492,7 @@ import { ref, reactive, computed, onMounted, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
+import AIModelPanel from '../components/AIModelPanel.vue'
 import { showToast } from '../utils/toast'
 
 // ---------- 类型 ----------
@@ -537,7 +543,8 @@ const tabs = [
   { key: 'articles', label: '文章管理', icon: '📝' },
   { key: 'comments', label: '评论管理', icon: '💬' },
   { key: 'categories', label: '分类管理', icon: '📁' },
-  { key: 'tags', label: '标签管理', icon: '🏷️' }
+  { key: 'tags', label: '标签管理', icon: '🏷️' },
+  { key: 'ai', label: 'AI 模型', icon: '🤖' }
 ]
 
 const users = ref<UserItem[]>([])

@@ -13,7 +13,6 @@ type Config struct {
 	Minio    MinioConfig        `mapstructure:"minio"`
 	Crypto   CryptoConfig       `mapstructure:"crypto"`
 	Admin    DefaultAdminConfig `mapstructure:"default_admin"`
-	LLM      LLMConfig          `mapstructure:"llm"`
 }
 
 // AppConfig 应用配置
@@ -89,14 +88,8 @@ type CozeConfig struct {
 	TimeoutSec int    `mapstructure:"timeout_sec"`
 }
 
-// LLMConfig 本地 LLM 模型配置
-type LLMConfig struct {
-	BaseURL    string `mapstructure:"base_url"`    // Ollama API 地址，默认 http://localhost:11434
-	ModelName  string `mapstructure:"model_name"`  // 模型名称，如 qwen2.5:0.5b
-	TimeoutSec int    `mapstructure:"timeout_sec"` // 请求超时秒数，默认 60
-	KeepAlive  string `mapstructure:"keep_alive"`  // 模型保持内存时间，如 "30m"、"1h"、"-1"（永久），空则用 Ollama 默认
-}
-
+// 大模型配置不再走配置文件：由后台「AI 模型」页维护、存库（表 ai_model_configs）。
+// 未配置时，需要用到模型的接口会返回「请先配置模型」。
 // EmailConfig 邮件配置
 type EmailConfig struct {
 	Host     string `mapstructure:"host"`

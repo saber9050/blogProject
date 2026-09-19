@@ -52,27 +52,6 @@ services:
       retries: 5
     mem_limit: 256m
 
-  ollama:
-    image: ollama/ollama
-    container_name: blog-ollama
-    restart: unless-stopped
-    volumes:
-      - ollama_data:/root/.ollama
-    ports:
-      - "11434:11434"
-    networks:
-      - blog-network
-    entrypoint: [ "/bin/sh", "-c" ]
-    command:
-      - "ollama serve & sleep 3 && ollama pull ${LLM_MODEL_NAME:-gemma3:270m} && wait"
-    healthcheck:
-      test: [ "CMD", "ollama", "list" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    mem_limit: 1g
-
   minio:
     image: minio/minio:RELEASE.2022-01-04T07-41-07Z
     container_name: blog-minio
@@ -121,9 +100,6 @@ services:
       CORE_COACH_MINIO_ACCESS_KEY_SECRET: ${MINIO_SECRET_KEY}
       CORE_COACH_MINIO_BASE_URL: ${MINIO_PUBLIC_URL:-http://127.0.0.1:9000}
       JWT_SECRET: ${JWT_SECRET:-blog-project}
-      LLM_BASE_URL: http://ollama:11434
-      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-gemma3:270m}
-      LLM_KEEP_ALIVE: 30m
     depends_on:
       mysql:
         condition: service_healthy
@@ -162,7 +138,6 @@ services:
 volumes:
   mysql_data:
   redis_data:
-  ollama_data:
   minio_data:
 
 networks:

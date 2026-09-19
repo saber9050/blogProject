@@ -56,15 +56,6 @@ func Load(configPath string) (*Config, error) {
 	if val := os.Getenv("CRYPTO_RSA_PRIVATE_KEY"); val != "" {
 		config.Crypto.RSAPrivateKey = val
 	}
-	if val := os.Getenv("LLM_BASE_URL"); val != "" {
-		config.LLM.BaseURL = val
-	}
-	if val := os.Getenv("LLM_MODEL_NAME"); val != "" {
-		config.LLM.ModelName = val
-	}
-	if val := os.Getenv("LLM_KEEP_ALIVE"); val != "" {
-		config.LLM.KeepAlive = val
-	}
 	globalConfig = config
 	return config, nil
 }

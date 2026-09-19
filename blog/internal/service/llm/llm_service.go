@@ -1,33 +1,55 @@
 package llm
 
 import (
-	"blog/internal/model/dto/response"
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
-	"blog/pkg/config"
+	"blog/internal/model/dto/response"
+	llmconfigSvc "blog/internal/service/llmconfig"
 	"blog/pkg/errors"
+	"blog/pkg/llmclient"
 	"blog/pkg/logger"
-	"blog/pkg/ollama"
 
 	"go.uber.org/zap"
 )
 
 type llmServiceImpl struct {
-	ollamaClient *ollama.Client
+	resolver llmconfigSvc.Service
+
+	mu     sync.Mutex
+	key    string
+	client *llmclient.Client
 }
 
 // NewLLMService 创建 LLM 服务
-func NewLLMService(cfg config.LLMConfig) LLMService {
-	return &llmServiceImpl{
-		ollamaClient: ollama.NewClient(ollama.Config{
-			BaseURL:    cfg.BaseURL,
-			ModelName:  cfg.ModelName,
-			KeepAlive:  cfg.KeepAlive,
-			TimeoutSec: cfg.TimeoutSec,
-		}),
+func NewLLMService(resolver llmconfigSvc.Service) LLMService {
+	return &llmServiceImpl{resolver: resolver}
+}
+
+// getClient 解析当前生效配置并返回客户端（按配置内容缓存，配置变更后自动重建）
+func (s *llmServiceImpl) getClient() (*llmclient.Client, error) {
+	cfg, _, err := s.resolver.ResolveActive()
+	if err != nil {
+		return nil, err
 	}
+
+	key := configKey(cfg)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.client == nil || s.key != key {
+		s.client = llmclient.NewClient(cfg)
+		s.key = key
+	}
+	return s.client, nil
+}
+
+// configKey 生成配置指纹，用于缓存失效判断
+func configKey(cfg llmclient.Config) string {
+	return fmt.Sprintf("%s|%s|%s|%d|%d|%v",
+		cfg.BaseURL, cfg.Model, cfg.APIKey, cfg.TimeoutSec, cfg.MaxTokens, cfg.Temperature)
 }
 
 // stripHTMLTags 去除 HTML 标签，提取纯文本
@@ -76,10 +98,19 @@ func (s *llmServiceImpl) GenerateSummary(title string, content string) (*respons
 
 摘要：`, title, plainText)
 
-	// 4. 调用 Ollama API
-	summary, err := s.ollamaClient.Generate(prompt)
+	// 4. 调用模型
+	client, err := s.getClient()
 	if err != nil {
-		logger.Error("调用 Ollama 生成摘要失败", zap.Error(err))
+		// 未配置模型属于可预期状态，记 warn 即可（错误信息会原样返回给调用方）
+		logger.Warn("获取模型客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	summary, err := client.Chat(context.Background(), []llmclient.Message{
+		{Role: "user", Content: prompt},
+	})
+	if err != nil {
+		logger.Error("调用 LLM 生成摘要失败", zap.Error(err))
 		return nil, err
 	}
 

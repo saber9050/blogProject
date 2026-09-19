@@ -23,5 +23,8 @@ node_modules/
 # 忽略私有文件
 docs/private
 
+# 忽略私有升级方案（毕设设计文档，不入库）
+docs/up
+
 # 忽略workbuddy
 .workbuddy
