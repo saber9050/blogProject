@@ -13,7 +13,6 @@ type Config struct {
 	Minio    MinioConfig        `mapstructure:"minio"`
 	Crypto   CryptoConfig       `mapstructure:"crypto"`
 	Admin    DefaultAdminConfig `mapstructure:"default_admin"`
-	LLM      LLMConfig          `mapstructure:"llm"`
 }
 
 // AppConfig 应用配置
@@ -89,16 +88,8 @@ type CozeConfig struct {
 	TimeoutSec int    `mapstructure:"timeout_sec"`
 }
 
-// LLMConfig 大模型配置（OpenAI 兼容协议，作兜底；实际生效配置由后台维护并存库）
-type LLMConfig struct {
-	BaseURL     string  `mapstructure:"base_url"`    // chat completions 基址，到 /v1 为止
-	APIKey      string  `mapstructure:"api_key"`     // 服务商密钥（敏感，走 env）
-	Model       string  `mapstructure:"model"`       // 模型名，如 deepseek-chat
-	TimeoutSec  int     `mapstructure:"timeout_sec"` // 单次请求超时秒数，默认 30
-	MaxTokens   int     `mapstructure:"max_tokens"`  // 单次生成上限
-	Temperature float64 `mapstructure:"temperature"` // 采样温度
-}
-
+// 大模型配置不再走配置文件：由后台「AI 模型」页维护、存库（表 ai_model_configs）。
+// 未配置时，需要用到模型的接口会返回「请先配置模型」。
 // EmailConfig 邮件配置
 type EmailConfig struct {
 	Host     string `mapstructure:"host"`

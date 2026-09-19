@@ -101,7 +101,8 @@ func (s *llmServiceImpl) GenerateSummary(title string, content string) (*respons
 	// 4. 调用模型
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error("获取模型客户端失败", zap.Error(err))
+		// 未配置模型属于可预期状态，记 warn 即可（错误信息会原样返回给调用方）
+		logger.Warn("获取模型客户端失败", zap.Error(err))
 		return nil, err
 	}
 

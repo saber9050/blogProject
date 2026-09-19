@@ -22,6 +22,6 @@ type Service interface {
 	Delete(id uint) error
 	// Activate 设为当前使用
 	Activate(id uint) error
-	// ResolveActive 解析当前生效配置（库→兜底 config.yaml）
+	// ResolveActive 解析当前生效配置（仅取库中「当前使用」项；未配置时返回「请先配置模型」）
 	ResolveActive() (llmclient.Config, uint, error)
 }

@@ -105,10 +105,6 @@ services:
       CORE_COACH_DATABASE_REDIS_PORT: 6379
       # MinIO 连接地址（内部 Docker 网络）
       CORE_COACH_MINIO_ENDPOINT: minio:9000
-      # 大模型（OpenAI 兼容协议）；api_key 优先由此环境变量注入
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
-      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
     depends_on:
       mysql:
         condition: service_healthy

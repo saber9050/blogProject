@@ -100,9 +100,6 @@ services:
       CORE_COACH_MINIO_ACCESS_KEY_SECRET: ${MINIO_SECRET_KEY}
       CORE_COACH_MINIO_BASE_URL: ${MINIO_PUBLIC_URL:-http://127.0.0.1:9000}
       JWT_SECRET: ${JWT_SECRET:-blog-project}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
-      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
     depends_on:
       mysql:
         condition: service_healthy

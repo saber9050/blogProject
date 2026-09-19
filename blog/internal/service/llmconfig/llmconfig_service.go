@@ -10,7 +10,6 @@ import (
 	"blog/internal/model/dto/response"
 	"blog/internal/model/entity"
 	repo "blog/internal/repository/llmconfig"
-	"blog/pkg/config"
 	"blog/pkg/errors"
 	"blog/pkg/llmclient"
 	"blog/pkg/logger"
@@ -24,17 +23,19 @@ const (
 	defaultTemperature = 0.3
 	testTimeoutCapSec  = 15 // 测试连接超时上限，避免拖太久
 	testMaxTokens      = 16 // 测试连接只生成极少量 token
+
+	// MsgModelNotConfigured 未配置可用模型时的提示
+	MsgModelNotConfigured = "请先配置模型"
 )
 
 // llmConfigService 模型配置服务实现
 type llmConfigService struct {
-	repo   repo.Repository
-	llmCfg config.LLMConfig // 兜底配置（config.yaml 的 llm 段）
+	repo repo.Repository
 }
 
 // NewLLMConfigService 创建模型配置服务实例
-func NewLLMConfigService(r repo.Repository, llmCfg config.LLMConfig) Service {
-	return &llmConfigService{repo: r, llmCfg: llmCfg}
+func NewLLMConfigService(r repo.Repository) Service {
+	return &llmConfigService{repo: r}
 }
 
 // List 配置列表（密钥脱敏）
@@ -259,7 +260,7 @@ func (s *llmConfigService) Activate(id uint) error {
 	return nil
 }
 
-// ResolveActive 解析当前生效配置（库→兜底 config.yaml）
+// ResolveActive 解析当前生效配置（仅取库中“当前使用”的配置；未配置则报错）
 func (s *llmConfigService) ResolveActive() (llmclient.Config, uint, error) {
 	m, err := s.repo.FindActive()
 	if err != nil {
@@ -267,16 +268,8 @@ func (s *llmConfigService) ResolveActive() (llmclient.Config, uint, error) {
 		return llmclient.Config{}, 0, errors.NewWithErr(errors.CodeInternalError, "读取模型配置失败", err)
 	}
 	if m == nil {
-		// 兜底：使用 config.yaml 的 llm 段
-		c := s.llmCfg
-		return llmclient.Config{
-			BaseURL:     c.BaseURL,
-			APIKey:      c.APIKey,
-			Model:       c.Model,
-			TimeoutSec:  withDefaultInt(c.TimeoutSec, defaultTimeoutSec),
-			MaxTokens:   withDefaultInt(c.MaxTokens, defaultMaxTokens),
-			Temperature: withDefaultFloat(c.Temperature, defaultTemperature),
-		}, 0, nil
+		// 未配置 / 全部禁用 / 未指定「当前使用」→ 明确提示，不再回退静态配置
+		return llmclient.Config{}, 0, errors.New(errors.CodeBadRequest, MsgModelNotConfigured)
 	}
 	return llmclient.Config{
 		BaseURL:     m.BaseURL,

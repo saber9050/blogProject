@@ -240,7 +240,7 @@ func (a *App) initDependencies() {
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
 	aboutSvc := aboutSvc.NewAboutService(aboutRepo, a.minioClient, uRepo)
-	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo, a.cfg.LLM)
+	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo)
 	lSvc := llmSvc.NewLLMService(llmCfgSvc)
 
 	// 创建 Router

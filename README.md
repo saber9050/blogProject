@@ -76,9 +76,8 @@ cp blog/configs/config.yaml.example blog/configs/config.yaml
 | `MINIO_ACCESS_KEY` | MinIO 账号 |
 | `MINIO_SECRET_KEY` | MinIO 密码，请改为强密码 |
 | `MINIO_PUBLIC_URL` | 浏览器访问图片的地址，如 `http://<服务器IP>:9000` |
-| `LLM_API_KEY` | 大模型服务商密钥（AI 摘要等使用） |
-| `LLM_BASE_URL` | 大模型 API 基址，默认 `https://api.deepseek.com/v1` |
-| `LLM_MODEL` | 模型名，默认 `deepseek-chat` |
+
+> 大模型**不在 `.env` / `config.yaml` 里配置**：部署后登录后台「AI 模型」页维护（存库，需测试连接通过才能保存）。未配置时，需要模型的接口会返回「请先配置模型」。
 
 然后按需修改 `blog/configs/config.yaml`，至少要改 `app.host` 和 `email` 相关项。
 
@@ -127,7 +126,6 @@ Docker 部署时，需要调整 `config.yaml` 中的这几处（其余保持默�
 | `database.redis.host` | `redis` | 使用 Compose 内部服务名 |
 | `minio.endpoint` | `minio:9000` | 容器内部连接地址 |
 | `minio.base_url` | `http://<服务器IP>:9000` | 图片的公网访问地址 |
-| `llm.base_url` | `https://api.deepseek.com/v1` | 大模型 API 基址（后台「AI 模型」页可覆盖） |
 | `app.host` | `<服务器IP>` | 邮件链接等场景使用 |
 
 > 其中 `mysql` / `redis` / `minio:9000` 这几项已在 compose 中通过环境变量覆盖，
@@ -144,9 +142,6 @@ Docker 部署时，需要调整 `config.yaml` 中的这几处（其余保持默�
 | `CORE_COACH_DATABASE_REDIS_HOST` | `redis` | Redis 服务名 |
 | `CORE_COACH_DATABASE_REDIS_PORT` | `6379` | Redis 端口 |
 | `CORE_COACH_MINIO_ENDPOINT` | `minio:9000` | MinIO 内部地址 |
-| `LLM_API_KEY` | 来自 `.env` | 大模型服务商密钥 |
-| `LLM_BASE_URL` | `https://api.deepseek.com/v1` | 大模型 API 基址 |
-| `LLM_MODEL` | `deepseek-chat` | 大模型名称 |
 
 生产环境使用的 `docker-compose.prod.yml` 在此基础上额外注入 `MYSQL_USER`、`MYSQL_PASSWORD`、
 `REDIS_PASSWORD`、`JWT_SECRET` 以及 MinIO 相关凭证，全部来自服务器上的 `.env`。

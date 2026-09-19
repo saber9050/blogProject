@@ -69,7 +69,7 @@ blog/
 - MySQL 8.0+
 - Redis 7.0+
 - MinIO（可选，用于图片/文件存储）
-- 大模型 API Key（AI 摘要等用；可在后台「AI 模型」页配置，或由 `LLM_API_KEY` 环境变量注入）
+- 大模型（AI 摘要等用）**在后台「AI 模型」页配置**，不走配置文件
 
 ### 配置
 
@@ -93,16 +93,11 @@ cp configs/config.yaml.example configs/config.yaml
 | `email` | SMTP 邮件发送配置 |
 | `minio` | MinIO 对象存储配置 |
 | `default_admin` | 首次启动自动创建管理员 |
-| `llm.base_url` | 大模型 API 基址，到 `/v1` 为止（如 `https://api.deepseek.com/v1`） |
-| `llm.api_key` | 服务商密钥（建议留空，由 `LLM_API_KEY` 注入） |
-| `llm.model` | 模型名（如 `deepseek-chat`） |
-| `llm.timeout_sec` | 单次请求超时秒数（默认 30） |
-| `llm.max_tokens` | 单次生成上限（默认 2048） |
-| `llm.temperature` | 采样温度（默认 0.3） |
 
-> `llm` 段仅作**兜底**：后台「AI 模型」页维护并入库的配置优先，若库中无启用配置才回退到这里。
+> 大模型**不通过配置文件配置**：请在后台「AI 模型」页维护（存库，需测试连接通过才能保存）。
+> 未配置任何模型时，调用需要模型的接口（如一键生成摘要）会返回「请先配置模型」。
 
-支持环境变量覆盖敏感字段：`MYSQL_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`、`LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`。
+支持环境变量覆盖敏感字段：`MYSQL_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`。
 
 ### 运行
 
