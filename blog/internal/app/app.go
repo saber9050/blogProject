@@ -10,6 +10,7 @@ import (
 	"blog/internal/repository/auth"
 	"blog/internal/repository/category"
 	commentRepo "blog/internal/repository/comment"
+	llmconfigRepo "blog/internal/repository/llmconfig"
 	"blog/internal/repository/tag"
 	userRepo "blog/internal/repository/user"
 	aboutSvc "blog/internal/service/about"
@@ -18,6 +19,7 @@ import (
 	categorySvc "blog/internal/service/category"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
+	llmconfigSvc "blog/internal/service/llmconfig"
 	tagSvc "blog/internal/service/tag"
 	userSvc "blog/internal/service/user"
 	"blog/pkg/config"
@@ -149,6 +151,9 @@ func (a *App) initDatabase() error {
 
 		// 关于页面
 		&entity.About{},
+
+		// 大模型配置
+		&entity.AIModelConfig{},
 	); err != nil {
 		logger.Warn("数据库迁移警告", zap.Error(err))
 	} else {
@@ -222,6 +227,7 @@ func (a *App) initDependencies() {
 	catRepo := category.NewCategoryRepository(a.mysqlDB)
 	tRepo := tag.NewTagRepository(a.mysqlDB)
 	aboutRepo := about.NewAboutRepository(a.mysqlDB)
+	llmCfgRepo := llmconfigRepo.NewLLMConfigRepository(a.mysqlDB)
 
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
@@ -234,10 +240,11 @@ func (a *App) initDependencies() {
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
 	aboutSvc := aboutSvc.NewAboutService(aboutRepo, a.minioClient, uRepo)
-	lSvc := llmSvc.NewLLMService(a.cfg.LLM)
+	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo, a.cfg.LLM)
+	lSvc := llmSvc.NewLLMService(llmCfgSvc)
 
 	// 创建 Router
-	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc, lSvc)
+	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc, lSvc, llmCfgSvc)
 }
 
 // initRouter 初始化路由

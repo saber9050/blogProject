@@ -89,12 +89,14 @@ type CozeConfig struct {
 	TimeoutSec int    `mapstructure:"timeout_sec"`
 }
 
-// LLMConfig 本地 LLM 模型配置
+// LLMConfig 大模型配置（OpenAI 兼容协议，作兜底；实际生效配置由后台维护并存库）
 type LLMConfig struct {
-	BaseURL    string `mapstructure:"base_url"`    // Ollama API 地址，默认 http://localhost:11434
-	ModelName  string `mapstructure:"model_name"`  // 模型名称，如 qwen2.5:0.5b
-	TimeoutSec int    `mapstructure:"timeout_sec"` // 请求超时秒数，默认 60
-	KeepAlive  string `mapstructure:"keep_alive"`  // 模型保持内存时间，如 "30m"、"1h"、"-1"（永久），空则用 Ollama 默认
+	BaseURL     string  `mapstructure:"base_url"`    // chat completions 基址，到 /v1 为止
+	APIKey      string  `mapstructure:"api_key"`     // 服务商密钥（敏感，走 env）
+	Model       string  `mapstructure:"model"`       // 模型名，如 deepseek-chat
+	TimeoutSec  int     `mapstructure:"timeout_sec"` // 单次请求超时秒数，默认 30
+	MaxTokens   int     `mapstructure:"max_tokens"`  // 单次生成上限
+	Temperature float64 `mapstructure:"temperature"` // 采样温度
 }
 
 // EmailConfig 邮件配置

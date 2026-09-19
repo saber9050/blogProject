@@ -5,6 +5,7 @@ import (
 	adminArticle "blog/internal/api/v1/admin/article"
 	adminCategory "blog/internal/api/v1/admin/category"
 	adminComment "blog/internal/api/v1/admin/comment"
+	adminLLMConfig "blog/internal/api/v1/admin/llmconfig"
 	adminTag "blog/internal/api/v1/admin/tag"
 	adminUser "blog/internal/api/v1/admin/user"
 	"blog/internal/api/v1/article"
@@ -20,6 +21,7 @@ import (
 	categorySvc "blog/internal/service/category"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
+	llmconfigSvc "blog/internal/service/llmconfig"
 	tagSvc "blog/internal/service/tag"
 	user2 "blog/internal/service/user"
 
@@ -36,6 +38,7 @@ type Router struct {
 	adminCategoryCtrl *adminCategory.CategoryController
 	adminTagCtrl      *adminTag.TagController
 	adminCommentCtrl  *adminComment.CommentController
+	adminLLMCtrl      *adminLLMConfig.Controller
 	commentCtrl       *comment.Controller
 	categoryCtrl      *category.CategoryController
 	tagCtrl           *tag.TagController
@@ -53,6 +56,7 @@ func NewRouter(
 	tagService tagSvc.TagService,
 	aboutService aboutSvc.AboutService,
 	llmService llmSvc.LLMService,
+	llmConfigService llmconfigSvc.Service,
 ) *Router {
 	return &Router{
 		authCtrl:          auth.NewController(authSvc),
@@ -63,6 +67,7 @@ func NewRouter(
 		adminCategoryCtrl: adminCategory.NewCategoryController(categoryService),
 		adminTagCtrl:      adminTag.NewTagController(tagService),
 		adminCommentCtrl:  adminComment.NewCommentController(commentSvc),
+		adminLLMCtrl:      adminLLMConfig.NewController(llmConfigService),
 		commentCtrl:       comment.NewController(commentSvc),
 		categoryCtrl:      category.NewCategoryController(categoryService),
 		tagCtrl:           tag.NewTagController(tagService),
@@ -126,6 +131,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 			r.adminCategoryCtrl.RegisterRoutes(adminGroup)
 			r.adminTagCtrl.RegisterRoutes(adminGroup)
 			r.adminCommentCtrl.RegisterRoutes(adminGroup)
+			r.adminLLMCtrl.RegisterRoutes(adminGroup)
 		}
 	}
 }

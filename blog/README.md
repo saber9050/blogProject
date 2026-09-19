@@ -16,7 +16,7 @@
 | 存储 | MinIO（图片/文件） |
 | 邮件 | gomail |
 | 验证码 | base64Captcha |
-| AI 摘要 | Ollama（本地模型） |
+| AI 能力 | 大模型（OpenAI 兼容协议，后台可配置） |
 
 ## 目录结构
 
@@ -53,7 +53,7 @@ blog/
 │   ├── jwt/             # JWT 令牌
 │   ├── logger/          # 日志
 │   ├── minio/           # MinIO 对象存储
-│   ├── ollama/          # Ollama 本地 LLM 客户端
+│   ├── llmclient/       # 大模型客户端（OpenAI 兼容 chat/completions）
 │   ├── response/        # 统一 HTTP 响应
 │   └── utils/           # 工具函数（密码哈希、RSA 加密等）
 ├── logs/                # 运行日志
@@ -69,7 +69,7 @@ blog/
 - MySQL 8.0+
 - Redis 7.0+
 - MinIO（可选，用于图片/文件存储）
-- Ollama（可选，用于 AI 生成摘要，默认地址 `http://localhost:11434`）
+- 大模型 API Key（AI 摘要等用；可在后台「AI 模型」页配置，或由 `LLM_API_KEY` 环境变量注入）
 
 ### 配置
 
@@ -93,12 +93,16 @@ cp configs/config.yaml.example configs/config.yaml
 | `email` | SMTP 邮件发送配置 |
 | `minio` | MinIO 对象存储配置 |
 | `default_admin` | 首次启动自动创建管理员 |
-| `llm.base_url` | Ollama API 地址（默认 `http://localhost:11434`） |
-| `llm.model_name` | 本地模型名称（如 `gemma3:270m`） |
-| `llm.timeout_sec` | 请求超时秒数（默认 60） |
-| `llm.keep_alive` | 模型保持内存时间（如 `30m`、`1h`） |
+| `llm.base_url` | 大模型 API 基址，到 `/v1` 为止（如 `https://api.deepseek.com/v1`） |
+| `llm.api_key` | 服务商密钥（建议留空，由 `LLM_API_KEY` 注入） |
+| `llm.model` | 模型名（如 `deepseek-chat`） |
+| `llm.timeout_sec` | 单次请求超时秒数（默认 30） |
+| `llm.max_tokens` | 单次生成上限（默认 2048） |
+| `llm.temperature` | 采样温度（默认 0.3） |
 
-支持环境变量覆盖敏感字段：`MYSQL_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`、`LLM_BASE_URL`、`LLM_MODEL_NAME`、`LLM_KEEP_ALIVE`。
+> `llm` 段仅作**兜底**：后台「AI 模型」页维护并入库的配置优先，若库中无启用配置才回退到这里。
+
+支持环境变量覆盖敏感字段：`MYSQL_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`、`LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`。
 
 ### 运行
 
@@ -201,7 +205,10 @@ go run main.go
 | DELETE | `/admin/comments/:id` | 单个删除评论 |
 | GET/POST/PUT/DELETE | `/admin/users` | 用户 CRUD |
 | POST | `/admin/upload` | 图片上传（MinIO） |
-| POST | `/admin/articles/generate-summary` | AI 生成文章摘要（Ollama 本地模型） |
+| POST | `/admin/articles/generate-summary` | AI 生成文章摘要（使用后台配置的模型） |
+| GET/POST/PUT/DELETE | `/admin/llm-configs` | 大模型配置 CRUD |
+| POST | `/admin/llm-configs/test` | 测试模型连接（不落库） |
+| POST | `/admin/llm-configs/:id/activate` | 设为当前使用 |
 
 ## 中间件
 
@@ -232,7 +239,8 @@ go run main.go
 - 图形验证码 + 频率限制
 - 日志分级归档 + 轮转
 - 启动时自动创建默认管理员
-- AI 生成文章摘要（Ollama 本地模型，后台编辑器调用）
+- AI 生成文章摘要（使用后台配置的大模型，后台编辑器调用）
+- 大模型配置管理（后台「AI 模型」页：CRUD + 测试连接 + 设为当前使用；配置测试通过才允许入库）
 
 ## API 文档
 

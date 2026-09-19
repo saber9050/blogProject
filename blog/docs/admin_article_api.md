@@ -467,7 +467,7 @@ POST /articles/generate-summary
 1. 验证用户是否为管理员，非管理员返回 403
 2. 接收 `title` 和 `content` 参数
 3. 对于已去除 HTML 标签的纯文本内容，如果超过 8000 字符，截断到 8000 字符
-4. 构造 prompt（包含文章标题与内容），调用本地部署的 LLM 模型 API（如 Ollama、LM Studio 等）
+4. 构造 prompt（包含文章标题与内容），通过 OpenAI 兼容接口调用当前生效的大模型配置（后台「AI 模型」页维护并入库；库中无启用配置时回退到 `config.yaml` 的 `llm` 段）
 5. 模型返回摘要文本
 6. 清理摘要，截断不超过 255 字符，返回给前端
 

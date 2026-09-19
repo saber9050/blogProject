@@ -28,9 +28,9 @@
 ```
 
 生产环境（Docker）下前端由 Nginx 托管并监听 `80`，同时把 `/api` 反向代理到后端 `9527`；
-后端与 MySQL / Redis / MinIO / Ollama 通过 `blog-network` 内部网络以服务名互访，数据库端口不对公网开放。
+后端与 MySQL / Redis / MinIO 通过 `blog-network` 内部网络以服务名互访，数据库端口不对公网开放。
 
-- **后端**：Go + Gin + GORM + JWT（双 Token）+ Redis + MinIO + Ollama
+- **后端**：Go + Gin + GORM + JWT（双 Token）+ Redis + MinIO
 - **前端**：Vue 3 + TypeScript + Vite + Pinia + Vue Router + Axios + wangEditor
 
 详情见各子项目 README。
@@ -76,7 +76,9 @@ cp blog/configs/config.yaml.example blog/configs/config.yaml
 | `MINIO_ACCESS_KEY` | MinIO 账号 |
 | `MINIO_SECRET_KEY` | MinIO 密码，请改为强密码 |
 | `MINIO_PUBLIC_URL` | 浏览器访问图片的地址，如 `http://<服务器IP>:9000` |
-| `LLM_MODEL_NAME` | Ollama 模型名，默认 `gemma3:270m` |
+| `LLM_API_KEY` | 大模型服务商密钥（AI 摘要等使用） |
+| `LLM_BASE_URL` | 大模型 API 基址，默认 `https://api.deepseek.com/v1` |
+| `LLM_MODEL` | 模型名，默认 `deepseek-chat` |
 
 然后按需修改 `blog/configs/config.yaml`，至少要改 `app.host` 和 `email` 相关项。
 
@@ -94,7 +96,7 @@ docker compose logs -f
 
 ### 服务清单
 
-`docker-compose.yml` 包含 **6 个服务**：
+`docker-compose.yml` 包含 **5 个服务**：
 
 | 服务 | 镜像 | 端口 | 说明 |
 |---|---|---|---|
@@ -103,7 +105,6 @@ docker compose logs -f
 | `mysql` | `mysql:8.0` | `3306` | 持久化数据库 |
 | `redis` | `redis:7-alpine` | `6379` | 缓存 + Refresh Token 存储 |
 | `minio` | `minio/minio` | `9000 / 9001` | 对象存储（文章图片等） |
-| `ollama` | `ollama/ollama` | `11434` | 本地 LLM（一键生成摘要） |
 
 ### 访问地址
 
@@ -126,10 +127,10 @@ Docker 部署时，需要调整 `config.yaml` 中的这几处（其余保持默�
 | `database.redis.host` | `redis` | 使用 Compose 内部服务名 |
 | `minio.endpoint` | `minio:9000` | 容器内部连接地址 |
 | `minio.base_url` | `http://<服务器IP>:9000` | 图片的公网访问地址 |
-| `llm.base_url` | `http://ollama:11434` | 容器内部连接 Ollama |
+| `llm.base_url` | `https://api.deepseek.com/v1` | 大模型 API 基址（后台「AI 模型」页可覆盖） |
 | `app.host` | `<服务器IP>` | 邮件链接等场景使用 |
 
-> 其中 `mysql` / `redis` / `minio:9000` / `ollama:11434` 这几项已在 compose 中通过环境变量覆盖，
+> 其中 `mysql` / `redis` / `minio:9000` 这几项已在 compose 中通过环境变量覆盖，
 > 即使 `config.yaml` 里写的是 `127.0.0.1` 也能正常工作；`minio.base_url` 和 `app.host` 因为要暴露给浏览器，必须手改。
 
 ## 环境变量
@@ -143,9 +144,9 @@ Docker 部署时，需要调整 `config.yaml` 中的这几处（其余保持默�
 | `CORE_COACH_DATABASE_REDIS_HOST` | `redis` | Redis 服务名 |
 | `CORE_COACH_DATABASE_REDIS_PORT` | `6379` | Redis 端口 |
 | `CORE_COACH_MINIO_ENDPOINT` | `minio:9000` | MinIO 内部地址 |
-| `LLM_BASE_URL` | `http://ollama:11434` | Ollama API 地址 |
-| `LLM_MODEL_NAME` | `gemma3:270m` | LLM 模型 |
-| `LLM_KEEP_ALIVE` | `30m` | 模型常驻内存时长 |
+| `LLM_API_KEY` | 来自 `.env` | 大模型服务商密钥 |
+| `LLM_BASE_URL` | `https://api.deepseek.com/v1` | 大模型 API 基址 |
+| `LLM_MODEL` | `deepseek-chat` | 大模型名称 |
 
 生产环境使用的 `docker-compose.prod.yml` 在此基础上额外注入 `MYSQL_USER`、`MYSQL_PASSWORD`、
 `REDIS_PASSWORD`、`JWT_SECRET` 以及 MinIO 相关凭证，全部来自服务器上的 `.env`。
