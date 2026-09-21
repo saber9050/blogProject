@@ -8,8 +8,8 @@
     </div>
 
     <p class="ai-panel__tip">
-      大模型走 OpenAI 兼容协议。配置需先「测试连接」通过才能保存；系统使用「当前使用」的那一条，
-      未配置时回退到配置文件中的 llm 段。
+      大模型走 OpenAI 兼容协议。新增配置需先「测试连接」通过才能保存；编辑仅可修改超时、最大 token、
+      温度与状态，保存不再测试连接。系统使用「当前使用」的那一条，未配置时回退到配置文件中的 llm 段。
     </p>
 
     <table class="ai-table">
@@ -67,26 +67,39 @@
 
           <div class="modal__body">
             <div class="modal__field">
-              <label class="modal__label"><span class="required-mark">*</span>Base URL</label>
-              <input v-model="form.base_url" class="modal__input" placeholder="openai格式，如 https://api.xxx.com/v1" />
+              <label class="modal__label">
+                <span v-if="editingId === null" class="required-mark">*</span>Base URL
+              </label>
+              <input
+                v-model="form.base_url"
+                class="modal__input"
+                :disabled="editingId !== null"
+                placeholder="openai格式，如 https://api.xxx.com/v1"
+              />
             </div>
 
-            <div class="modal__field">
-              <label class="modal__label">
-                <span v-if="editingId === null" class="required-mark">*</span>API Key
-              </label>
+            <div v-if="editingId === null" class="modal__field">
+              <label class="modal__label"><span class="required-mark">*</span>API Key</label>
               <input
                 v-model="form.api_key"
                 class="modal__input"
                 type="password"
-                :placeholder="editingId === null ? '请输入密钥' : '留空表示不修改'"
+                placeholder="请输入密钥"
                 autocomplete="new-password"
               />
             </div>
 
             <div class="modal__field">
-              <label class="modal__label"><span class="required-mark">*</span>模型 id</label>
-              <input v-model="form.model" class="modal__input" placeholder="如：deepseek-chat" maxlength="128" />
+              <label class="modal__label">
+                <span v-if="editingId === null" class="required-mark">*</span>模型 id
+              </label>
+              <input
+                v-model="form.model"
+                class="modal__input"
+                :disabled="editingId !== null"
+                placeholder="如：deepseek-chat"
+                maxlength="128"
+              />
             </div>
 
             <div class="modal__row">
@@ -112,7 +125,7 @@
                   <option :value="0">禁用</option>
                 </select>
               </div>
-              <div class="modal__field modal__field--check">
+              <div v-if="editingId === null" class="modal__field modal__field--check">
                 <label class="modal__checkbox">
                   <input type="checkbox" v-model="form.is_default" />
                   设为当前使用
@@ -125,7 +138,7 @@
           <div class="modal__footer">
             <button class="btn btn--cancel" @click="closeModal">取消</button>
             <button class="btn btn--primary" :disabled="!canSave || saving" @click="save">
-              {{ saving ? '测试连接并保存…' : '保存' }}
+              {{ saveLabel }}
             </button>
           </div>
         </div>
@@ -189,11 +202,15 @@ const form = reactive({
   is_default: false
 })
 
-// 保存时后端会先测试连接、通过才入库，这里只做必填校验
+// 新增：base_url、api_key、model 均填完后才可保存；编辑：仅改运行参数与状态，随时可保存
 const canSave = computed(() => {
-  if (!form.base_url.trim() || !form.model.trim()) return false
-  if (editingId.value === null) return form.api_key.trim() !== ''
-  return true
+  if (editingId.value !== null) return true
+  return !!(form.base_url.trim() && form.api_key.trim() && form.model.trim())
+})
+
+const saveLabel = computed(() => {
+  if (saving.value) return editingId.value === null ? '测试连接并保存…' : '保存中…'
+  return '保存'
 })
 
 const errMsg = (err: any, fallback: string) => err?.response?.data?.message || fallback
@@ -274,21 +291,26 @@ const testRow = async (row: ModelConfig) => {
 
 const save = async () => {
   saving.value = true
-  const payload: Record<string, any> = {
-    base_url: form.base_url.trim(),
-    model: form.model.trim(),
-    timeout_sec: form.timeout_sec,
-    max_tokens: form.max_tokens,
-    temperature: form.temperature,
-    status: form.status,
-    is_default: form.is_default
-  }
   try {
     if (editingId.value === null) {
-      await api.post('/admin/llm-configs', { ...payload, api_key: form.api_key.trim() })
+      await api.post('/admin/llm-configs', {
+        base_url: form.base_url.trim(),
+        api_key: form.api_key.trim(),
+        model: form.model.trim(),
+        timeout_sec: form.timeout_sec,
+        max_tokens: form.max_tokens,
+        temperature: form.temperature,
+        status: form.status,
+        is_default: form.is_default
+      })
       showToast('配置已保存', 'success')
     } else {
-      await api.put(`/admin/llm-configs/${editingId.value}`, { ...payload, api_key: form.api_key.trim() })
+      await api.put(`/admin/llm-configs/${editingId.value}`, {
+        timeout_sec: form.timeout_sec,
+        max_tokens: form.max_tokens,
+        temperature: form.temperature,
+        status: form.status
+      })
       showToast('配置已更新', 'success')
     }
     closeModal()
@@ -556,6 +578,19 @@ onMounted(load)
 .btn--danger:hover {
   background: #ff7875;
   border-color: #ff7875;
+}
+
+.btn--primary:disabled {
+  background: var(--primary-400);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.modal__input:disabled {
+  background: rgba(148, 163, 184, 0.12);
+  color: #888;
+  cursor: not-allowed;
 }
 
 .modal__footer {

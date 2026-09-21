@@ -16,7 +16,7 @@ type Service interface {
 	Test(req *request.TestLLMConfigRequest) (*response.TestConnectionResponse, error)
 	// Create 新建配置（内部复测，未通过则拒绝入库）
 	Create(req *request.CreateLLMConfigRequest) (*response.LLMConfigResponse, error)
-	// Update 更新配置（内部复测）
+	// Update 更新配置（仅修改运行参数与状态，不测试连接）
 	Update(id uint, req *request.UpdateLLMConfigRequest) error
 	// Delete 删除配置
 	Delete(id uint) error

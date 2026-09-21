@@ -77,7 +77,7 @@ func (ctrl *Controller) Create(c *gin.Context) {
 	response.Success(c, result)
 }
 
-// Update 更新配置（内部复测）
+// Update 更新配置（仅修改运行参数与状态，不测试连接）
 func (ctrl *Controller) Update(c *gin.Context) {
 	id, err := parseID(c)
 	if err != nil {

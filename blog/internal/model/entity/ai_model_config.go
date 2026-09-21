@@ -12,7 +12,7 @@ type AIModelConfig struct {
 	TimeoutSec  int     `gorm:"default:30;comment:单次超时秒" json:"timeout_sec"`
 	MaxTokens   int     `gorm:"default:2048;comment:最大生成token" json:"max_tokens"`
 	Temperature float64 `gorm:"default:0.3;comment:采样温度" json:"temperature"`
-	Status      int8    `gorm:"type:tinyint;not null;default:1;comment:状态:1启用,0禁用" json:"status"`
+	Status      int8    `gorm:"type:tinyint;not null;comment:状态:1启用,0禁用" json:"status"`
 	IsDefault   bool    `gorm:"default:false;comment:是否为当前使用" json:"is_default"`
 }
 
