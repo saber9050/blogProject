@@ -9,7 +9,7 @@
 
     <p class="ai-panel__tip">
       大模型走 OpenAI 兼容协议。新增配置需先「测试连接」通过才能保存；编辑仅可修改超时、最大 token、
-      温度与状态，保存不再测试连接。系统使用「当前使用」的那一条，未配置时回退到配置文件中的 llm 段。
+      温度与状态，保存不再测试连接。使用 AI 功能（如文章「一键生成摘要」）时，选择要使用的模型配置。
     </p>
 
     <table class="ai-table">
@@ -20,7 +20,6 @@
           <th>Base URL</th>
           <th>密钥</th>
           <th>状态</th>
-          <th>当前使用</th>
           <th>操作</th>
         </tr>
       </thead>
@@ -36,16 +35,11 @@
             </span>
           </td>
           <td>
-            <span v-if="row.is_default" class="ai-badge ai-badge--default">当前</span>
-            <span v-else class="ai-table__muted">—</span>
-          </td>
-          <td>
             <div class="ai-actions">
               <button class="btn-sm" :disabled="busyId === row.id" @click="testRow(row)">
                 {{ busyId === row.id ? '测试中' : '测试' }}
               </button>
               <button class="btn-sm" @click="openEdit(row)">编辑</button>
-              <button class="btn-sm" :disabled="row.is_default || row.status !== 1" @click="activate(row)">设为当前</button>
               <button class="btn-sm btn-sm--danger" @click="remove(row)">删除</button>
             </div>
           </td>
@@ -125,12 +119,6 @@
                   <option :value="0">禁用</option>
                 </select>
               </div>
-              <div v-if="editingId === null" class="modal__field modal__field--check">
-                <label class="modal__checkbox">
-                  <input type="checkbox" v-model="form.is_default" />
-                  设为当前使用
-                </label>
-              </div>
             </div>
 
           </div>
@@ -177,7 +165,6 @@ interface ModelConfig {
   max_tokens: number
   temperature: number
   status: number
-  is_default: boolean
 }
 
 const list = ref<ModelConfig[]>([])
@@ -198,8 +185,7 @@ const form = reactive({
   timeout_sec: 30,
   max_tokens: 2048,
   temperature: 0.3,
-  status: 1,
-  is_default: false
+  status: 1
 })
 
 // 新增：base_url、api_key、model 均填完后才可保存；编辑：仅改运行参数与状态，随时可保存
@@ -241,8 +227,7 @@ const openCreate = () => {
     timeout_sec: 30,
     max_tokens: 2048,
     temperature: 0.3,
-    status: 1,
-    is_default: list.value.length === 0
+    status: 1
   })
   modalVisible.value = true
 }
@@ -251,13 +236,12 @@ const openEdit = (row: ModelConfig) => {
   editingId.value = row.id
   Object.assign(form, {
     base_url: row.base_url,
-    api_key: '', // 留空 = 不修改
+    api_key: '', // 编辑态不展示、也不允许改密钥
     model: row.model,
     timeout_sec: row.timeout_sec,
     max_tokens: row.max_tokens,
     temperature: row.temperature,
-    status: row.status,
-    is_default: row.is_default
+    status: row.status
   })
   modalVisible.value = true
 }
@@ -300,8 +284,7 @@ const save = async () => {
         timeout_sec: form.timeout_sec,
         max_tokens: form.max_tokens,
         temperature: form.temperature,
-        status: form.status,
-        is_default: form.is_default
+        status: form.status
       })
       showToast('配置已保存', 'success')
     } else {
@@ -319,16 +302,6 @@ const save = async () => {
     showToast(errMsg(err, '保存失败'), 'error')
   } finally {
     saving.value = false
-  }
-}
-
-const activate = async (row: ModelConfig) => {
-  try {
-    await api.post(`/admin/llm-configs/${row.id}/activate`)
-    showToast('已设为当前使用', 'success')
-    await load()
-  } catch (err: any) {
-    showToast(errMsg(err, '设置失败'), 'error')
   }
 }
 
@@ -421,10 +394,6 @@ onMounted(load)
   color: #666;
 }
 
-.ai-table__muted {
-  color: #bbb;
-}
-
 .ai-actions {
   display: flex;
   gap: 6px;
@@ -447,11 +416,6 @@ onMounted(load)
 .ai-badge--off {
   color: #888;
   background: rgba(148, 163, 184, 0.18);
-}
-
-.ai-badge--default {
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.14);
 }
 
 .ai-empty {
@@ -540,21 +504,6 @@ onMounted(load)
 
 .modal__input:focus {
   border-color: var(--primary-500);
-}
-
-.modal__field--check {
-  display: flex;
-  align-items: flex-end;
-}
-
-.modal__checkbox {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  color: #555;
-  padding-bottom: 8px;
-  cursor: pointer;
 }
 
 /* ===== 删除确认弹窗：与后台其他管理页样式保持一致 ===== */
