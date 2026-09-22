@@ -200,10 +200,9 @@ go run main.go
 | DELETE | `/admin/comments/:id` | 单个删除评论 |
 | GET/POST/PUT/DELETE | `/admin/users` | 用户 CRUD |
 | POST | `/admin/upload` | 图片上传（MinIO） |
-| POST | `/admin/articles/generate-summary` | AI 生成文章摘要（使用后台配置的模型） |
+| POST | `/admin/articles/generate-summary` | AI 生成文章摘要（请求体指定 `config_id`，选择使用哪条模型配置） |
 | GET/POST/PUT/DELETE | `/admin/llm-configs` | 大模型配置 CRUD |
 | POST | `/admin/llm-configs/test` | 测试模型连接（不落库） |
-| POST | `/admin/llm-configs/:id/activate` | 设为当前使用 |
 
 ## 中间件
 
@@ -234,8 +233,8 @@ go run main.go
 - 图形验证码 + 频率限制
 - 日志分级归档 + 轮转
 - 启动时自动创建默认管理员
-- AI 生成文章摘要（使用后台配置的大模型，后台编辑器调用）
-- 大模型配置管理（后台「AI 模型」页：CRUD + 测试连接 + 设为当前使用；配置测试通过才允许入库）
+- AI 生成文章摘要（后台编辑器调用；使用哪条模型配置由调用方在选择框中指定）
+- 大模型配置管理（后台「AI 模型」页：CRUD + 测试连接；新增配置测试通过才允许入库）
 
 ## API 文档
 
