@@ -145,7 +145,7 @@ func (ctrl *ArticleController) GenerateSummary(c *gin.Context) {
 		return
 	}
 
-	result, err := ctrl.llmService.GenerateSummary(req.Title, req.Content)
+	result, err := ctrl.llmService.GenerateSummary(req.ConfigID, req.Title, req.Content)
 	if err != nil {
 		response.BizError(c, err)
 		return

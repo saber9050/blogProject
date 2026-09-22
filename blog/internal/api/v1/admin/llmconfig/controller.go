@@ -113,21 +113,6 @@ func (ctrl *Controller) Delete(c *gin.Context) {
 	response.Success(c, nil)
 }
 
-// Activate 设为当前使用
-func (ctrl *Controller) Activate(c *gin.Context) {
-	id, err := parseID(c)
-	if err != nil {
-		response.BadRequest(c, "无效的配置ID")
-		return
-	}
-
-	if err := ctrl.llmConfigService.Activate(id); err != nil {
-		response.BizError(c, err)
-		return
-	}
-	response.Success(c, nil)
-}
-
 // parseID 解析路径参数 id
 func parseID(c *gin.Context) (uint, error) {
 	id64, err := strconv.ParseUint(c.Param("id"), 10, 32)

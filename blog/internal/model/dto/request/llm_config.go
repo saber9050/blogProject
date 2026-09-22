@@ -18,7 +18,6 @@ type CreateLLMConfigRequest struct {
 	MaxTokens   int     `json:"max_tokens"`
 	Temperature float64 `json:"temperature"`
 	Status      *int8   `json:"status" binding:"omitempty,oneof=0 1"` // 缺省视为启用
-	IsDefault   bool    `json:"is_default"`
 }
 
 // UpdateLLMConfigRequest 更新模型配置请求（仅允许修改运行参数与状态，base_url/api_key/model 不可改）

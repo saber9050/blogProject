@@ -29,9 +29,9 @@ func NewLLMService(resolver llmconfigSvc.Service) LLMService {
 	return &llmServiceImpl{resolver: resolver}
 }
 
-// getClient 解析当前生效配置并返回客户端（按配置内容缓存，配置变更后自动重建）
-func (s *llmServiceImpl) getClient() (*llmclient.Client, error) {
-	cfg, _, err := s.resolver.ResolveActive()
+// getClient 解析指定模型配置并返回客户端（按配置内容缓存，配置变更后自动重建）
+func (s *llmServiceImpl) getClient(configID uint) (*llmclient.Client, error) {
+	cfg, err := s.resolver.Resolve(configID)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +65,8 @@ func stripHTMLTags(html string) string {
 	return text
 }
 
-// GenerateSummary 根据文章标题和内容生成摘要
-func (s *llmServiceImpl) GenerateSummary(title string, content string) (*response.GenerateSummaryResponse, error) {
+// GenerateSummary 使用指定模型配置根据文章标题和内容生成摘要
+func (s *llmServiceImpl) GenerateSummary(configID uint, title string, content string) (*response.GenerateSummaryResponse, error) {
 	// 1. 去除 HTML 标签，提取纯文本
 	plainText := stripHTMLTags(content)
 	if len(plainText) == 0 {
@@ -99,7 +99,7 @@ func (s *llmServiceImpl) GenerateSummary(title string, content string) (*respons
 摘要：`, title, plainText)
 
 	// 4. 调用模型
-	client, err := s.getClient()
+	client, err := s.getClient(configID)
 	if err != nil {
 		// 未配置模型属于可预期状态，记 warn 即可（错误信息会原样返回给调用方）
 		logger.Warn("获取模型客户端失败", zap.Error(err))
