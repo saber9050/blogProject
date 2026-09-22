@@ -73,9 +73,20 @@
             <!-- 摘要 -->
             <div class="form-group">
               <label class="form-label">摘要</label>
+              <select v-model.number="summaryModelId" class="form-input summary-model-select">
+                <option :value="0" disabled>请选择 AI 模型</option>
+                <option v-for="m in enabledModelConfigs" :key="m.id" :value="m.id">{{ m.model }}</option>
+              </select>
+              <p v-if="!enabledModelConfigs.length" class="summary-hint">
+                暂无启用的 AI 模型，请先在后台「AI 模型」页添加并启用后再生成摘要。
+              </p>
               <div class="summary-wrapper">
                 <textarea v-model="form.summary" class="form-input form-textarea" rows="3" placeholder="请输入文章摘要"></textarea>
-                <button class="btn-generate" :disabled="generating || contentEmpty" @click="handleGenerateSummary">
+                <button
+                  class="btn-generate"
+                  :disabled="generating || contentEmpty || !summaryModelId"
+                  @click="handleGenerateSummary"
+                >
                   {{ generating ? '生成中...' : '一键生成摘要' }}
                 </button>
               </div>
@@ -125,6 +136,27 @@ const originalData = ref<Record<string, any> | null>(null)
 const submitted = ref(false)
 const saving = ref(false)
 const generating = ref(false)
+
+// ---------- AI 模型（用于一键生成摘要） ----------
+interface ModelOption {
+  id: number
+  model: string
+  status: number
+}
+const modelConfigs = ref<ModelOption[]>([])
+const summaryModelId = ref(0)
+const enabledModelConfigs = computed(() => modelConfigs.value.filter(m => m.status === 1))
+
+const loadModelConfigs = async () => {
+  try {
+    const res = await api.get('/admin/llm-configs')
+    modelConfigs.value = res.data?.data || []
+    const enabled = enabledModelConfigs.value
+    if (enabled.length) summaryModelId.value = enabled[0].id
+  } catch (e) {
+    console.error('加载 AI 模型配置失败:', e)
+  }
+}
 
 // ---------- 分类 & 标签 ----------
 interface CatTagItem {
@@ -312,10 +344,11 @@ const destroyEditor = () => {
 }
 
 const handleGenerateSummary = async () => {
-  if (contentEmpty.value || generating.value) return
+  if (contentEmpty.value || generating.value || !summaryModelId.value) return
   generating.value = true
   try {
     const res = await api.post('/admin/articles/generate-summary', {
+      config_id: summaryModelId.value,
       title: form.title,
       content: form.content
     })
@@ -412,6 +445,9 @@ onMounted(async () => {
   } catch (e) {
     console.error('加载分类/标签失败:', e)
   }
+
+  // 加载 AI 模型配置（供一键生成摘要选择）
+  await loadModelConfigs()
 
   // 编辑模式：加载文章详情
   if (isEdit.value && articleId.value) {
@@ -602,6 +638,17 @@ select.form-input {
 }
 
 /* ---------- 摘要生成 ---------- */
+.summary-model-select {
+  margin-bottom: 8px;
+}
+
+.summary-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #fa8c16;
+  line-height: 1.5;
+}
+
 .summary-wrapper {
   display: flex;
   flex-direction: column;

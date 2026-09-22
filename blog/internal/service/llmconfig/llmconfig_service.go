@@ -23,9 +23,6 @@ const (
 	defaultTemperature = 0.3
 	testTimeoutCapSec  = 15 // 测试连接超时上限，避免拖太久
 	testMaxTokens      = 16 // 测试连接只生成极少量 token
-
-	// MsgModelNotConfigured 未配置可用模型时的提示
-	MsgModelNotConfigured = "请先配置模型"
 )
 
 // llmConfigService 模型配置服务实现
@@ -129,20 +126,9 @@ func (s *llmConfigService) Create(req *request.CreateLLMConfigRequest) (*respons
 		MaxTokens:   cfg.MaxTokens,
 		Temperature: cfg.Temperature,
 		Status:      status,
-		IsDefault:   req.IsDefault,
 	}
 
-	if req.IsDefault {
-		if err := s.repo.Transaction(func(tx repo.Repository) error {
-			if err := tx.ClearDefault(); err != nil {
-				return err
-			}
-			return tx.Create(m)
-		}); err != nil {
-			logger.Error("创建模型配置失败", zap.Error(err))
-			return nil, errors.NewWithErr(errors.CodeInternalError, "创建模型配置失败", err)
-		}
-	} else if err := s.repo.Create(m); err != nil {
+	if err := s.repo.Create(m); err != nil {
 		logger.Error("创建模型配置失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "创建模型配置失败", err)
 	}
@@ -150,7 +136,7 @@ func (s *llmConfigService) Create(req *request.CreateLLMConfigRequest) (*respons
 	return toResponse(m), nil
 }
 
-// Update 更新配置（内部复测；APIKey 留空表示不修改）
+// Update 更新配置（仅修改运行参数与状态，不测试连接）
 func (s *llmConfigService) Update(id uint, req *request.UpdateLLMConfigRequest) error {
 	existing, err := s.repo.FindByID(id)
 	if err != nil {
@@ -161,53 +147,16 @@ func (s *llmConfigService) Update(id uint, req *request.UpdateLLMConfigRequest) 
 		return errors.New(errors.CodeNotFound, "配置不存在")
 	}
 
-	apiKey := strings.TrimSpace(req.APIKey)
-	if apiKey == "" {
-		apiKey = existing.APIKey
-	}
-
-	cfg := llmclient.Config{
-		BaseURL:     strings.TrimSpace(req.BaseURL),
-		APIKey:      apiKey,
-		Model:       strings.TrimSpace(req.Model),
-		TimeoutSec:  withDefaultInt(req.TimeoutSec, defaultTimeoutSec),
-		MaxTokens:   withDefaultInt(req.MaxTokens, defaultMaxTokens),
-		Temperature: withDefaultFloat(req.Temperature, defaultTemperature),
-	}
-
-	// 入库门禁：测试连接不通过则拒绝更新
-	if _, _, err := s.testConn(cfg); err != nil {
-		return errors.New(errors.CodeBadRequest, "配置不可用，测试连接失败："+friendlyErr(err))
-	}
-
 	status := existing.Status
 	if req.Status != nil {
 		status = *req.Status
 	}
 
 	fields := map[string]interface{}{
-		"name":        cfg.Model, // 配置名称自动取模型 id
-		"base_url":    cfg.BaseURL,
-		"api_key":     cfg.APIKey,
-		"model":       cfg.Model,
-		"timeout_sec": cfg.TimeoutSec,
-		"max_tokens":  cfg.MaxTokens,
-		"temperature": cfg.Temperature,
+		"timeout_sec": withDefaultInt(req.TimeoutSec, defaultTimeoutSec),
+		"max_tokens":  withDefaultInt(req.MaxTokens, defaultMaxTokens),
+		"temperature": withDefaultFloat(req.Temperature, defaultTemperature),
 		"status":      status,
-		"is_default":  req.IsDefault,
-	}
-
-	if req.IsDefault {
-		if err := s.repo.Transaction(func(tx repo.Repository) error {
-			if err := tx.ClearDefault(); err != nil {
-				return err
-			}
-			return tx.UpdateFields(id, fields)
-		}); err != nil {
-			logger.Error("更新模型配置失败", zap.Error(err))
-			return errors.NewWithErr(errors.CodeInternalError, "更新模型配置失败", err)
-		}
-		return nil
 	}
 
 	if err := s.repo.UpdateFields(id, fields); err != nil {
@@ -234,42 +183,18 @@ func (s *llmConfigService) Delete(id uint) error {
 	return nil
 }
 
-// Activate 设为当前使用
-func (s *llmConfigService) Activate(id uint) error {
+// Resolve 解析指定配置（必须是启用的；未找到或已禁用则报错）
+func (s *llmConfigService) Resolve(id uint) (llmclient.Config, error) {
 	m, err := s.repo.FindByID(id)
 	if err != nil {
-		logger.Error("读取待启用配置失败", zap.Error(err))
-		return errors.NewWithErr(errors.CodeInternalError, "读取配置失败", err)
+		logger.Error("读取模型配置失败", zap.Error(err))
+		return llmclient.Config{}, errors.NewWithErr(errors.CodeInternalError, "读取模型配置失败", err)
 	}
 	if m == nil {
-		return errors.New(errors.CodeNotFound, "配置不存在")
+		return llmclient.Config{}, errors.New(errors.CodeNotFound, "配置不存在")
 	}
 	if m.Status != 1 {
-		return errors.New(errors.CodeBadRequest, "该配置已禁用，请先启用")
-	}
-
-	if err := s.repo.Transaction(func(tx repo.Repository) error {
-		if err := tx.ClearDefault(); err != nil {
-			return err
-		}
-		return tx.SetDefault(id)
-	}); err != nil {
-		logger.Error("设为当前使用失败", zap.Error(err))
-		return errors.NewWithErr(errors.CodeInternalError, "设为当前使用失败", err)
-	}
-	return nil
-}
-
-// ResolveActive 解析当前生效配置（仅取库中“当前使用”的配置；未配置则报错）
-func (s *llmConfigService) ResolveActive() (llmclient.Config, uint, error) {
-	m, err := s.repo.FindActive()
-	if err != nil {
-		logger.Error("读取当前模型配置失败", zap.Error(err))
-		return llmclient.Config{}, 0, errors.NewWithErr(errors.CodeInternalError, "读取模型配置失败", err)
-	}
-	if m == nil {
-		// 未配置 / 全部禁用 / 未指定「当前使用」→ 明确提示，不再回退静态配置
-		return llmclient.Config{}, 0, errors.New(errors.CodeBadRequest, MsgModelNotConfigured)
+		return llmclient.Config{}, errors.New(errors.CodeBadRequest, "该模型配置已禁用，请先在「AI 模型」页启用")
 	}
 	return llmclient.Config{
 		BaseURL:     m.BaseURL,
@@ -278,7 +203,7 @@ func (s *llmConfigService) ResolveActive() (llmclient.Config, uint, error) {
 		TimeoutSec:  withDefaultInt(m.TimeoutSec, defaultTimeoutSec),
 		MaxTokens:   withDefaultInt(m.MaxTokens, defaultMaxTokens),
 		Temperature: withDefaultFloat(m.Temperature, defaultTemperature),
-	}, m.ID, nil
+	}, nil
 }
 
 // testConn 用最小代价验证连通性，返回回复文本与耗时
@@ -308,7 +233,6 @@ func toResponse(m *entity.AIModelConfig) *response.LLMConfigResponse {
 		MaxTokens:    m.MaxTokens,
 		Temperature:  m.Temperature,
 		Status:       m.Status,
-		IsDefault:    m.IsDefault,
 		CreatedAt:    m.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    m.UpdatedAt.Format(time.RFC3339),
 	}

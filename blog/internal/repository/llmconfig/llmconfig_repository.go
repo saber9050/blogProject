@@ -20,7 +20,7 @@ func NewLLMConfigRepository(db *gorm.DB) Repository {
 // List 获取全部配置
 func (r *llmConfigRepository) List() ([]*entity.AIModelConfig, error) {
 	var list []*entity.AIModelConfig
-	if err := r.db.Order("is_default DESC, id ASC").Find(&list).Error; err != nil {
+	if err := r.db.Order("id ASC").Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
@@ -30,19 +30,6 @@ func (r *llmConfigRepository) List() ([]*entity.AIModelConfig, error) {
 func (r *llmConfigRepository) FindByID(id uint) (*entity.AIModelConfig, error) {
 	var m entity.AIModelConfig
 	err := r.db.First(&m, id).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &m, nil
-}
-
-// FindActive 获取当前生效配置
-func (r *llmConfigRepository) FindActive() (*entity.AIModelConfig, error) {
-	var m entity.AIModelConfig
-	err := r.db.Where("is_default = ? AND status = ?", true, 1).First(&m).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -65,23 +52,4 @@ func (r *llmConfigRepository) UpdateFields(id uint, fields map[string]interface{
 // Delete 删除配置
 func (r *llmConfigRepository) Delete(id uint) error {
 	return r.db.Delete(&entity.AIModelConfig{}, id).Error
-}
-
-// ClearDefault 清空所有配置的默认标记
-func (r *llmConfigRepository) ClearDefault() error {
-	return r.db.Model(&entity.AIModelConfig{}).Where("is_default = ?", true).
-		Update("is_default", false).Error
-}
-
-// SetDefault 将指定配置设为默认
-func (r *llmConfigRepository) SetDefault(id uint) error {
-	return r.db.Model(&entity.AIModelConfig{}).Where("id = ?", id).
-		Update("is_default", true).Error
-}
-
-// Transaction 在事务中执行
-func (r *llmConfigRepository) Transaction(fn func(tx Repository) error) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		return fn(&llmConfigRepository{db: tx})
-	})
 }

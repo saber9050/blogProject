@@ -10,7 +10,6 @@ type LLMConfigResponse struct {
 	MaxTokens    int     `json:"max_tokens"`
 	Temperature  float64 `json:"temperature"`
 	Status       int8    `json:"status"`
-	IsDefault    bool    `json:"is_default"`
 	CreatedAt    string  `json:"created_at"`
 	UpdatedAt    string  `json:"updated_at"`
 }

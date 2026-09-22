@@ -16,12 +16,10 @@ type Service interface {
 	Test(req *request.TestLLMConfigRequest) (*response.TestConnectionResponse, error)
 	// Create 新建配置（内部复测，未通过则拒绝入库）
 	Create(req *request.CreateLLMConfigRequest) (*response.LLMConfigResponse, error)
-	// Update 更新配置（内部复测）
+	// Update 更新配置（仅修改运行参数与状态，不测试连接）
 	Update(id uint, req *request.UpdateLLMConfigRequest) error
 	// Delete 删除配置
 	Delete(id uint) error
-	// Activate 设为当前使用
-	Activate(id uint) error
-	// ResolveActive 解析当前生效配置（仅取库中「当前使用」项；未配置时返回「请先配置模型」）
-	ResolveActive() (llmclient.Config, uint, error)
+	// Resolve 解析指定配置（必须是启用的；未找到或已禁用则报错）
+	Resolve(id uint) (llmclient.Config, error)
 }
