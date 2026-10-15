@@ -98,9 +98,13 @@ services:
       CORE_COACH_MINIO_ENDPOINT: minio:9000
       CORE_COACH_MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
       CORE_COACH_MINIO_ACCESS_KEY_SECRET: ${MINIO_SECRET_KEY}
-      # 注意：末尾不能带斜杠 —— 后端是 base_url + file_key（file_key 本身以 / 开头）
-      # 拼接的，多一个斜杠会拼出 //blog-project/... 这种双斜杠路径。
-      CORE_COACH_MINIO_BASE_URL: ${MINIO_PUBLIC_URL:-https://zouxp.xyz/oss}
+      # MinIO 对外访问地址（后端拼图片 URL 的前缀），指向 nginx 的 /oss/ 反代，
+      # 使图片与页面同源同协议，避免 HTTPS 页面的 mixed content 裂图。
+      # 变量名必须是 MINIO_PUBLIC_URL：后端 loader.go 里是显式 os.Getenv 读取的。
+      # （同段其他 CORE_COACH_* 写法是 viper 的 env 前缀形式，但 viper 的
+      #   AutomaticEnv 与 Unmarshal 不兼容，对结构体字段实际无效，勿依赖。）
+      # 末尾不能带斜杠：后端按 base_url + file_key 拼接，多一个会拼出 // 双斜杠。
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-https://zouxp.xyz/oss}
       JWT_SECRET: ${JWT_SECRET:-blog-project}
     depends_on:
       mysql:
