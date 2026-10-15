@@ -98,7 +98,9 @@ services:
       CORE_COACH_MINIO_ENDPOINT: minio:9000
       CORE_COACH_MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
       CORE_COACH_MINIO_ACCESS_KEY_SECRET: ${MINIO_SECRET_KEY}
-      CORE_COACH_MINIO_BASE_URL: ${MINIO_PUBLIC_URL:-http://127.0.0.1:9000}
+      # 注意：末尾不能带斜杠 —— 后端是 base_url + file_key（file_key 本身以 / 开头）
+      # 拼接的，多一个斜杠会拼出 //blog-project/... 这种双斜杠路径。
+      CORE_COACH_MINIO_BASE_URL: ${MINIO_PUBLIC_URL:-https://zouxp.xyz/oss}
       JWT_SECRET: ${JWT_SECRET:-blog-project}
     depends_on:
       mysql:
@@ -123,12 +125,20 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    # TLS 证书由宿主机挂载进容器，不打进镜像（私钥不进 ACR）。
+    # 部署前置条件：/opt/blog/certs/server.pem 与 server.key 必须已存在，
+    # 否则容器内找不到证书，nginx 启动失败 → 容器起不来。
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - blog-backend
     networks:
       - blog-network
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://localhost/" ]
+      # 用 127.0.0.1 而不是 localhost：容器内 localhost 会解析到 ::1，
+      # 而 nginx 只监听 IPv4，用 localhost 会造成健康检查假失败（假 unhealthy）。
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1/healthz" ]
       interval: 15s
       timeout: 5s
       retries: 5

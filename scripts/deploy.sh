@@ -35,6 +35,16 @@ if [ ! -f "configs/config.yaml" ]; then
     （mysql/redis/minio 的 host 保持 127.0.0.1 即可，会被 compose 里的环境变量覆盖）"
 fi
 
+# TLS 证书：由宿主机挂载进 frontend 容器供 nginx 使用（不打包进镜像，私钥不进 ACR）。
+# 缺失时 nginx 会启动失败、容器反复重启 —— 同样提前拦截，别等健康检查超时。
+if [ ! -f "certs/server.pem" ] || [ ! -f "certs/server.key" ]; then
+  fail "缺少 TLS 证书 $DEPLOY_DIR/certs/server.pem 或 server.key。
+    在阿里云 SSL 证书服务下载「Nginx 格式」证书后放到该目录：
+      mkdir -p $DEPLOY_DIR/certs
+      把 xxx.pem 重命名为 server.pem，xxx.key 重命名为 server.key
+    （nginx.conf 里硬编码的就是这两个文件名，续期换证书时保持同名即可）"
+fi
+
 # 记录当前版本，用于回滚
 PREVIOUS_TAG=$(grep -E '^IMAGE_TAG=' .env 2>/dev/null | cut -d= -f2 || echo "latest")
 log "当前版本：$PREVIOUS_TAG → 目标版本：$IMAGE_TAG"
@@ -71,7 +81,7 @@ check_health() {
 }
 
 if check_health "后端" "http://127.0.0.1:9527/api/v1/health" \
-   && check_health "前端" "http://127.0.0.1/"; then
+   && check_health "前端" "http://127.0.0.1/healthz"; then
   log "部署成功：$IMAGE_TAG"
 else
   log "健康检查失败，开始回滚到 $PREVIOUS_TAG"
