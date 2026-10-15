@@ -9,7 +9,9 @@
           <!-- 品牌标识区域：已移除右侧导航，整体居中 -->
           <div class="auth-inlinebar">
             <button type="button" class="brand-mark" @click="goHome">
-              <span class="brand-mark__icon">&#9998;</span>
+              <span class="brand-mark__icon">
+                <img src="/logo-mark.svg" alt="" />
+              </span>
               <span class="brand-mark__text">
                 <strong>{{ localBrandName || brandName }}的博客</strong>
                 <small>{{ brandTagline }}</small>
@@ -125,16 +127,22 @@ onMounted(async () => {
 }
 
 .brand-mark__icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #059669, #3b82f6);
-  color: #fff;
-  box-shadow: 0 12px 24px rgba(16, 185, 129, 0.24);
-  font-size: 1.1rem;
+  background: linear-gradient(135deg, rgba(8, 127, 120, 0.14), rgba(8, 127, 120, 0.04));
+  box-shadow: 0 12px 24px rgba(8, 127, 120, 0.14), inset 0 0 0 1px rgba(8, 127, 120, 0.10);
+  flex-shrink: 0;
+}
+
+.brand-mark__icon img {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  display: block;
 }
 
 .brand-mark__text {
@@ -220,9 +228,14 @@ onMounted(async () => {
   }
 
   .brand-mark__icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 14px;
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+  }
+
+  .brand-mark__icon img {
+    width: 44px;
+    height: 44px;
   }
 
   .brand-mark__text strong {

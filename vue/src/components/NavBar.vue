@@ -3,7 +3,9 @@
     <div class="navbar__inner">
       <!-- 品牌（不可点击） -->
       <div class="navbar__brand">
-        <span class="navbar__brand-icon">&#9998;</span>
+        <span class="navbar__brand-icon">
+          <img src="/logo-mark.svg" alt="" />
+        </span>
         <strong>{{ blogName ? blogName + '的博客' : '我的博客' }}</strong>
       </div>
 
@@ -251,15 +253,21 @@ onMounted(async () => {
   user-select: none;
 }
 
+/* 品牌图标：浅色底托 + logo（logo 含米色书页、构图偏宽扁，白底上需要底色提对比） */
 .navbar__brand-icon {
-  width: 36px; height: 36px;
+  width: 38px; height: 38px;
   border-radius: 12px;
   display: inline-flex;
   align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #059669, #3b82f6);
-  color: #fff;
-  font-size: 0.95rem;
-  box-shadow: 0 8px 16px rgba(16, 185, 129, 0.2);
+  background: linear-gradient(135deg, rgba(8, 127, 120, 0.13), rgba(8, 127, 120, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(8, 127, 120, 0.10);
+  flex-shrink: 0;
+}
+
+.navbar__brand-icon img {
+  width: 36px; height: 36px;
+  object-fit: contain;
+  display: block;
 }
 
 .navbar__brand strong {

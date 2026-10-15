@@ -4,7 +4,10 @@
     <div class="admin-layout">
       <!-- 侧边栏 -->
       <aside class="admin-sidebar">
-        <div class="admin-sidebar__title">后台管理</div>
+        <div class="admin-sidebar__title">
+          <img src="/logo-mark.svg" alt="" class="admin-sidebar__logo" />
+          <span>后台管理</span>
+        </div>
         <button
           v-for="tab in tabs"
           :key="tab.key"
@@ -1069,12 +1072,23 @@ onMounted(async () => {
 }
 
 .admin-sidebar__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
   color: #666;
   padding: 0 16px 12px;
   border-bottom: 1px solid #e8e8e8;
   margin-bottom: 8px;
+}
+
+.admin-sidebar__logo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
 }
 
 .admin-sidebar__link {

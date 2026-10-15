@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="146 139 941 941" role="img" aria-labelledby="logo-title logo-desc">
+  <title id="logo-title">Blog + AI Logo</title>
+  <desc id="logo-desc">An open book combined with an intelligent chat bubble, sparkle accents, and a flowing teal orbit.</desc>
+  <defs>
+    <linearGradient id="book-teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#087f78"/>
+      <stop offset="0.48" stop-color="#087d72"/>
+      <stop offset="1" stop-color="#005a58"/>
+    </linearGradient>
+    <linearGradient id="page-cream" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#fff8e9"/>
+      <stop offset="1" stop-color="#f4e3c4"/>
+    </linearGradient>
+    <linearGradient id="orbit-mint" x1="0" y1="0" x2="1" y2="0.2">
+      <stop offset="0" stop-color="#61d4b3"/>
+      <stop offset="0.48" stop-color="#4ac6a7"/>
+      <stop offset="1" stop-color="#139c8b"/>
+    </linearGradient>
+    <linearGradient id="chat-teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#39b99b"/>
+      <stop offset="0.55" stop-color="#0e9688"/>
+      <stop offset="1" stop-color="#08716f"/>
+    </linearGradient>
+    <linearGradient id="page-lines" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6fcdb0"/>
+      <stop offset="1" stop-color="#85d8bf"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Open book cover -->
+  <path fill="url(#book-teal)" d="M307 322 C294 322 284 332 283 347 L283 694 C283 714 289 733 309 747 L590 971 C594 974 597 972 597 965 L597 463 C597 439 582 421 557 410 L326 325 C319 323 313 322 307 322 Z"/>
+
+  <!-- Right-hand page -->
+  <path fill="url(#page-cream)" d="M886 327 C831 330 756 347 701 370 C650 391 621 416 621 453 L621 970 C621 974 625 973 630 970 L896 865 C952 843 974 833 974 802 L974 488 C974 450 950 410 922 368 C911 350 900 334 886 327 Z"/>
+
+  <!-- Subtle page fold -->
+  <path fill="#fffaf0" opacity=".72" d="M886 328 C826 336 755 357 706 382 C675 398 650 417 641 438 C662 422 700 404 742 391 C800 373 857 360 922 359 C909 341 897 330 886 328 Z"/>
+
+  <!-- Page text lines -->
+  <g fill="none" stroke="url(#page-lines)" stroke-width="27" stroke-linecap="round">
+    <path d="M685 646 L836 614"/>
+    <path d="M685 703 L873 664"/>
+    <path d="M685 752 L780 732"/>
+  </g>
+
+  <!-- Flowing AI / knowledge orbit, front-left sweep -->
+  <path fill="url(#orbit-mint)" d="M258 516 C211 556 178 597 181 628 C189 700 326 756 567 774 C411 793 294 776 225 735 C164 699 146 647 170 600 C188 563 220 535 258 516 Z"/>
+  <!-- Flowing orbit, right-hand return -->
+  <path fill="url(#book-teal)" d="M620 864 C773 808 946 721 1025 647 C1057 617 1071 586 1073 554 C1074 531 1054 516 1012 508 C1049 528 1045 551 1029 576 C984 644 824 754 620 864 Z"/>
+
+  <!-- AI chat bubble with a bold white keyline -->
+  <path fill="url(#chat-teal)" stroke="#fffdf7" stroke-width="13" stroke-linejoin="round" d="M814 390 C866 371 926 373 965 397 C1000 419 1004 464 988 501 C972 539 936 562 898 565 L897 593 C897 602 891 607 884 600 L859 573 C818 578 779 565 758 540 C728 505 732 453 756 422 C770 406 789 397 814 390 Z"/>
+  <!-- Friendly AI eyes -->
+  <g fill="#fffdf8">
+    <rect x="815" y="450" width="29" height="60" rx="15"/>
+    <rect x="891" y="437" width="29" height="61" rx="15"/>
+  </g>
+
+  <!-- Sparkle accents -->
+  <path fill="#159f87" d="M964 245 C969 274 974 287 1015 298 C974 307 970 319 964 353 C957 320 953 307 913 298 C953 288 958 276 964 245 Z"/>
+  <path fill="#1ca78d" d="M1032 338 C1036 356 1040 365 1057 370 C1040 375 1036 384 1032 401 C1028 384 1024 375 1008 370 C1024 365 1028 356 1032 338 Z"/>
+</svg>
