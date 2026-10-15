@@ -44,14 +44,26 @@ func NewClient(cfg config.MinioConfig) (*Client, error) {
 		}
 	}
 
-	scheme := "http"
-	if cfg.UseSSL {
-		scheme = "https"
+	// baseURL 用于拼接「浏览器可访问」的文件 URL：
+	//   - 留空时回退到 endpoint
+	//   - 已显式带 scheme（如 https://zouxp.xyz/oss）时原样使用。
+	//     这样外部访问地址可以走 HTTPS 反向代理，而内部连接协议仍由
+	//     use_ssl 单独控制（MinIO 本体是 HTTP，不能因为要生成 https 链接
+	//     就把 use_ssl 打开，否则 minio client 会改用 TLS 连不上）。
+	//   - 未带 scheme 时按 use_ssl 补全，兼容历史写法 host:port
+	baseURL := strings.TrimSpace(cfg.BaseURL)
+	if baseURL == "" {
+		baseURL = cfg.Endpoint
 	}
-	baseURL := scheme + "://" + cfg.BaseURL
-	if cfg.BaseURL == "" {
-		baseURL = scheme + "://" + cfg.Endpoint
+	if !strings.Contains(baseURL, "://") {
+		scheme := "http"
+		if cfg.UseSSL {
+			scheme = "https"
+		}
+		baseURL = scheme + "://" + baseURL
 	}
+	// 去掉末尾斜杠：file_key 本身以 / 开头，多一个斜杠会拼出 //bucket/...
+	baseURL = strings.TrimSuffix(baseURL, "/")
 
 	return &Client{
 		client:     client,

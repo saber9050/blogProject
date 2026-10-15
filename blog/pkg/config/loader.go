@@ -56,6 +56,13 @@ func Load(configPath string) (*Config, error) {
 	if val := os.Getenv("CRYPTO_RSA_PRIVATE_KEY"); val != "" {
 		config.Crypto.RSAPrivateKey = val
 	}
+	// MinIO 对外访问地址（浏览器拼图片 URL 用的前缀）。
+	// 注意：这里必须显式覆盖，不能指望上面的 AutomaticEnv ——
+	// viper 的 Unmarshal 不会读取 AutomaticEnv 注册的键，
+	// 所以 compose 里注入的 CORE_COACH_* 变量对结构体字段是无效的。
+	if val := os.Getenv("MINIO_PUBLIC_URL"); val != "" {
+		config.Minio.BaseURL = val
+	}
 	globalConfig = config
 	return config, nil
 }
