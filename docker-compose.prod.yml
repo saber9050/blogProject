@@ -98,13 +98,19 @@ services:
       CORE_COACH_MINIO_ENDPOINT: minio:9000
       CORE_COACH_MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
       CORE_COACH_MINIO_ACCESS_KEY_SECRET: ${MINIO_SECRET_KEY}
-      # MinIO 对外访问地址（后端拼图片 URL 的前缀），指向 nginx 的 /oss/ 反代，
+      # MinIO 对外访问地址（后端拼图片 URL 的前缀），由 nginx 反代到 MinIO，
       # 使图片与页面同源同协议，避免 HTTPS 页面的 mixed content 裂图。
       # 变量名必须是 MINIO_PUBLIC_URL：后端 loader.go 里是显式 os.Getenv 读取的。
       # （同段其他 CORE_COACH_* 写法是 viper 的 env 前缀形式，但 viper 的
       #   AutomaticEnv 与 Unmarshal 不兼容，对结构体字段实际无效，勿依赖。）
-      # 末尾不能带斜杠：后端按 base_url + file_key 拼接，多一个会拼出 // 双斜杠。
-      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-https://zouxp.xyz/oss}
+      # ⚠️ 必须是纯源（可带端口），**不能带路径前缀、也不能带末尾斜杠**：
+      #    后端约定 GetFileURL(fileKey) = base_url + fileKey，
+      #    而 ParseFileKey(url) 直接把 URL 的 path 当 file_key。
+      #    一旦带路径（例如 /oss），ParseFileKey 会把前缀算进 file_key，
+      #    存库后 GetFileURL 再拼一次就变成 /oss/oss/...（曾真实踩过，
+      #    现象是「保存后封面 403」）。bucket 路径交给 nginx 的
+      #    location ^~ /blog-project/ 转发。
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-https://zouxp.xyz}
       JWT_SECRET: ${JWT_SECRET:-blog-project}
     depends_on:
       mysql:
