@@ -10,16 +10,24 @@
 
 services:
 
+  # ============ MySQL（过渡期保留，仅用于回滚，勿删） ============
+  # 迁移完成后 blog-backend 已改为连 PostgreSQL，这个服务不再被业务使用。
+  # 之所以还留在文件里，两个原因：
+  #   1) scripts/deploy.sh 带 --remove-orphans，删掉这段会让现有 blog-mysql
+  #      容器在下次部署时被直接移除，旧镜像回滚就没有数据库可连；
+  #   2) data volume mysql_data 是迁移之后唯一的回滚位。
+  # 观察一周确认新库稳定后，再连同末尾 volumes 里的 mysql_data 一起删除。
   mysql:
     image: mysql:8.0
     container_name: blog-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: "${MYSQL_PASSWORD}"
-      MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-blog-project}"
       TZ: Asia/Shanghai
+    # 不再对公网开放，仅本机可连（回滚排查时用）
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4
@@ -30,9 +38,40 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    # 2C4G 机器上 MySQL 是内存大户，必须设上限
     mem_limit: 1g
     mem_reservation: 512m
+
+  postgres:
+    # pgvector 官方镜像：业务表 + 向量表同库，省掉「跨库两个事务」的一致性问题
+    image: pgvector/pgvector:pg17
+    container_name: blog-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: "${PG_PASSWORD}"
+      POSTGRES_USER: "${PG_USER:-postgres}"
+      POSTGRES_DB: "${PG_DATABASE:-blog-project}"
+      TZ: Asia/Shanghai
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    # 只绑 127.0.0.1：PG 不需要对公网开放（这一点比现在的 MySQL 3306 直暴要好）。
+    # 迁移时从宿主机连 127.0.0.1:5432 即可；
+    # 本地要远程调试就走 SSH 隧道，别把数据库挂到公网上。
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - blog-network
+    # 2C4G 上必须限制连接数：每个连接约占 5~10MB，默认 100 个连接能吃掉几百 MB。
+    # shared_buffers 默认 128MB，配合下面的 mem_limit 512m 是安全水位。
+    command: postgres -c max_connections=50
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${PG_USER:-postgres} -d ${PG_DATABASE:-blog-project}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # 原来 MySQL 占 1G，换 PG 后降到 512m，整机内存反而更宽松
+    mem_limit: 512m
+    mem_reservation: 256m
 
   redis:
     image: redis:7-alpine
@@ -86,12 +125,15 @@ services:
     volumes:
       - ./configs/config.yaml:/app/configs/config.yaml:ro
     environment:
-      # 容器网络内用服务名互访，覆盖配置文件里的 IP
-      CORE_COACH_DATABASE_MYSQL_HOST: mysql
-      CORE_COACH_DATABASE_MYSQL_PORT: 3306
-      CORE_COACH_DATABASE_MYSQL_USERNAME: ${MYSQL_USER:-root}
-      CORE_COACH_DATABASE_MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      # 容器网络内用服务名互访。
+      # 注意：PG_HOST 这几个是 pkg/config/loader.go 里显式 os.Getenv 读取的，
+      # 所以真的会生效；而同段的 CORE_COACH_* 是 viper 的 env 前缀形式，
+      # viper 的 AutomaticEnv 与 Unmarshal 不兼容，对结构体字段实际无效，勿依赖。
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_USER: ${PG_USER:-postgres}
+      PG_PASSWORD: ${PG_PASSWORD}
+      PG_DATABASE: ${PG_DATABASE:-blog-project}
       CORE_COACH_DATABASE_REDIS_HOST: redis
       CORE_COACH_DATABASE_REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
@@ -113,7 +155,7 @@ services:
       MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-https://zouxp.xyz}
       JWT_SECRET: ${JWT_SECRET:-blog-project}
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -156,9 +198,15 @@ services:
     mem_limit: 128m
 
 volumes:
-  mysql_data:
+  pg_data:
   redis_data:
   minio_data:
+  # ⚠️ 已停用的 MySQL 数据卷，**故意保留声明**：
+  # 1) 迁移后一个月内是唯一的回滚位，出问题能退回旧库；
+  # 2) 留在文件里是为了防止 `docker compose down -v`（-v 只删声明过的卷）
+  #    把历史数据一起清掉。
+  # 确认不再需要回滚后，再手工 docker volume rm 并删掉这一行。
+  mysql_data:
 
 networks:
   blog-network:

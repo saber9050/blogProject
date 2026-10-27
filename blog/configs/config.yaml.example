@@ -7,15 +7,18 @@ app:
   port: 9527                  # 端口
 
 # 数据库配置
+# 主库已从 MySQL 迁到 PostgreSQL（向量检索需要 pgvector 与业务表同库）
 database:
-  mysql:
-    host: "192.168.100.100"     # 地址，如果docker部署要改成mysql
-    port: 3306
-    username: "xxx"             # 账号
-    password: "xxxx"            # 密码
+  postgres:
+    host: "192.168.100.100"     # docker 部署时改成 postgres（compose 里的服务名）
+    port: 5432
+    username: "postgres"        # 账号
+    password: "xxxx"            # 密码，容器里可用 PG_PASSWORD 环境变量覆盖
     database: "blog-project"
+    ssl_mode: "disable"         # 内网/本机一律 disable；公网暴露时才考虑 require
+    time_zone: "Asia/Shanghai"  # 影响 timestamptz 的读写换算，别乱改
     max_idle_conns: 10
-    max_open_conns: 100
+    max_open_conns: 50          # PG 每连接占内存，别照抄 MySQL 的 100
   redis:
     host: "192.168.100.100"     # 地址，如果docker部署要改成redis
     port: 6379
