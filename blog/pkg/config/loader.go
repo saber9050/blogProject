@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -41,8 +42,27 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	// 从环境变量覆盖敏感配置
-	if val := os.Getenv("MYSQL_PASSWORD"); val != "" {
-		config.Database.MySQL.Password = val
+	//
+	// 这里每个变量都是显式 os.Getenv，不能指望上面的 v.AutomaticEnv()：
+	// viper 的 Unmarshal 不会读取 AutomaticEnv 注册的键，
+	// 所以 compose 里注入的 CORE_COACH_* 变量对结构体字段实际是无效的。
+	// （历史上 MYSQL_HOST 就是这么「配了但没生效」的。）
+	if val := os.Getenv("PG_HOST"); val != "" {
+		config.Database.Postgres.Host = val
+	}
+	if val := os.Getenv("PG_PORT"); val != "" {
+		if p, err := strconv.Atoi(val); err == nil {
+			config.Database.Postgres.Port = p
+		}
+	}
+	if val := os.Getenv("PG_USER"); val != "" {
+		config.Database.Postgres.Username = val
+	}
+	if val := os.Getenv("PG_PASSWORD"); val != "" {
+		config.Database.Postgres.Password = val
+	}
+	if val := os.Getenv("PG_DATABASE"); val != "" {
+		config.Database.Postgres.Database = val
 	}
 	if val := os.Getenv("REDIS_PASSWORD"); val != "" {
 		config.Database.Redis.Password = val

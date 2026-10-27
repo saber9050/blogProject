@@ -25,18 +25,23 @@ type AppConfig struct {
 }
 
 // DatabaseConfig 数据库配置
+//
+// 主库已从 MySQL 迁到 PostgreSQL：向量检索（pgvector）必须与业务表同库，
+// 否则「删旧 chunk + 写新 chunk」无法放进同一个事务，只能靠最终一致兜底。
 type DatabaseConfig struct {
-	MySQL MySQLConfig `mapstructure:"mysql"`
-	Redis RedisConfig `mapstructure:"redis"`
+	Postgres PostgresConfig `mapstructure:"postgres"`
+	Redis    RedisConfig    `mapstructure:"redis"`
 }
 
-// MySQLConfig MySQL 配置
-type MySQLConfig struct {
+// PostgresConfig PostgreSQL 配置
+type PostgresConfig struct {
 	Host         string `mapstructure:"host"`
 	Port         int    `mapstructure:"port"`
 	Username     string `mapstructure:"username"`
 	Password     string `mapstructure:"password"`
 	Database     string `mapstructure:"database"`
+	SSLMode      string `mapstructure:"ssl_mode"`  // disable / require / verify-full，本地与内网一律 disable
+	TimeZone     string `mapstructure:"time_zone"` // 影响 timestamptz 的读写换算，默认 Asia/Shanghai
 	MaxIdleConns int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns int    `mapstructure:"max_open_conns"`
 }
