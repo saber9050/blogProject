@@ -1,9 +1,9 @@
 // Package repostest 是仓储层集成测试的公共辅助包。
 //
 // 它只服务于带 `integration` 构建标签的测试文件，不参与任何生产代码路径。
-// 集成测试需要一个可写的真实 MySQL，连接串通过 TEST_MYSQL_DSN 传入：
+// 集成测试需要一个可写的真实 PostgreSQL，连接串通过 TEST_PG_DSN 传入：
 //
-//	TEST_MYSQL_DSN='root:test@tcp(127.0.0.1:3306)/blog_test?charset=utf8mb4&parseTime=True&loc=Local' \
+//	TEST_PG_DSN='postgres://postgres:test@127.0.0.1:5432/blog_test?sslmode=disable' \
 //	  go test -tags=integration ./internal/repository/...
 //
 // DSN 里的库名只作为前缀，每个测试包会在它后面拼上自己的 schema，
@@ -13,22 +13,25 @@ package repostest
 import (
 	"blog/internal/model/entity"
 	"database/sql"
+	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
-	mysqldriver "github.com/go-sql-driver/mysql"
-	gormmysql "gorm.io/driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib" // 注册 pgx，用于建库
+	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
 
 // DSNEnv 是测试库连接串所在的环境变量名。
-const DSNEnv = "TEST_MYSQL_DSN"
+const DSNEnv = "TEST_PG_DSN"
 
 // Open 打开测试库并自动建表。
 //
 // dsn 为空时返回 (nil, nil)，调用方据此判断"没有测试库"并跳过用例——
-// 这样本地不装 MySQL 也能跑 `go test ./...`，不会被集成测试拖累。
+// 这样本地不装 PostgreSQL 也能跑 `go test ./...`，不会被集成测试拖累。
 //
 // schema 必填，实际连接的库是 `<DSN 中的库名>_<schema>`。之所以要按包隔离，
 // 是因为 `go test ./...` 默认并行执行不同的测试包：如果 auth 和 user 两个包
@@ -39,29 +42,33 @@ func Open(dsn, schema string) (*gorm.DB, error) {
 		return nil, nil
 	}
 
-	cfg, err := mysqldriver.ParseDSN(dsn)
+	u, err := url.Parse(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("解析 %s 失败: %w", DSNEnv, err)
 	}
-	if cfg.DBName == "" {
-		return nil, fmt.Errorf("%s 必须带库名，例如 root:pw@tcp(127.0.0.1:3306)/blog_test?parseTime=True", DSNEnv)
+	if !strings.HasPrefix(u.Scheme, "postgres") {
+		return nil, fmt.Errorf("%s 必须是 postgres:// 形式，例如 postgres://postgres:pw@127.0.0.1:5432/blog_test?sslmode=disable", DSNEnv)
+	}
+	base := strings.TrimPrefix(u.Path, "/")
+	if base == "" {
+		return nil, fmt.Errorf("%s 必须带库名，例如 postgres://postgres:pw@127.0.0.1:5432/blog_test?sslmode=disable", DSNEnv)
 	}
 	if schema == "" {
 		return nil, fmt.Errorf("schema 不能为空：每个测试包必须使用独立的库，否则并行执行时会互相清表")
 	}
 
-	target := cfg.DBName + "_" + schema
-	if err := ensureDatabase(cfg, target); err != nil {
+	target := base + "_" + schema
+	if err := ensureDatabase(u, target); err != nil {
 		return nil, err
 	}
 
-	targetCfg := *cfg
-	targetCfg.DBName = target
+	targetURL := *u
+	targetURL.Path = "/" + target
 
-	db, err := gorm.Open(gormmysql.Open(targetCfg.FormatDSN()), &gorm.Config{
+	db, err := gorm.Open(gormpostgres.Open(targetURL.String()), &gorm.Config{
 		// 测试时关掉 GORM 自带日志，失败信息靠断言表达，日志只会淹没输出
 		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
-		// 与 pkg/database/mysql.go 保持一致的连接参数，否则测试环境与线上行为有差异
+		// 与 pkg/database/postgres.go 保持一致的连接参数，否则测试环境与线上行为有差异
 		DisableForeignKeyConstraintWhenMigrating: true,
 		SkipDefaultTransaction:                   true,
 	})
@@ -81,43 +88,67 @@ func Open(dsn, schema string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("测试数据库 Ping 失败: %w", err)
 	}
 
-	// 建表清单必须与 internal/app/app.go 中的 AutoMigrate 保持一致，
-	// 否则测试库结构和线上不一致，测试通过也说明不了问题。
-	if err := db.AutoMigrate(
-		&entity.User{},
-		&entity.Article{},
-		&entity.Tag{},
-		&entity.TagArticle{},
-		&entity.Category{},
-		&entity.Comment{},
-		&entity.Like{},
-		&entity.ArticleImage{},
-		&entity.About{},
-	); err != nil {
+	// 建表清单与线上同源（entity.AllModels），否则测试库结构和线上不一致，
+	// 测试通过也说明不了问题。
+	if err := db.AutoMigrate(entity.AllModels()...); err != nil {
 		return nil, fmt.Errorf("测试库建表失败: %w", err)
 	}
 
 	return db, nil
 }
 
-// ensureDatabase 连接到 MySQL 服务端（不指定库）并创建目标库。
-func ensureDatabase(cfg *mysqldriver.Config, name string) error {
-	serverCfg := *cfg
-	serverCfg.DBName = ""
+// ensureDatabase 连接到 PostgreSQL 服务端（postgres 系统库）并创建目标库。
+//
+// PostgreSQL 的 CREATE DATABASE 既不支持 IF NOT EXISTS，也不允许在事务里执行，
+// 所以这里走裸 database/sql，不经过 GORM。
+func ensureDatabase(u *url.URL, name string) error {
+	if !validIdent(name) {
+		return fmt.Errorf("测试库名 %q 含非法字符，只允许字母、数字、下划线与横线", name)
+	}
 
-	conn, err := sql.Open("mysql", serverCfg.FormatDSN())
+	admin := *u
+	admin.Path = "/postgres"
+
+	conn, err := sql.Open("pgx", admin.String())
 	if err != nil {
-		return fmt.Errorf("连接 MySQL 服务端失败: %w", err)
+		return fmt.Errorf("连接 PostgreSQL 服务端失败: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 
-	// 建库语句不支持占位符，name 由 DSN 库名拼接而来，不接受外部输入
-	stmt := "CREATE DATABASE IF NOT EXISTS `" + name + "` " +
-		"CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
-	if _, err := conn.Exec(stmt); err != nil {
-		return fmt.Errorf("创建测试库 %s 失败（该账号需要 CREATE 权限）: %w", name, err)
+	var exists int
+	err = conn.QueryRow("SELECT 1 FROM pg_database WHERE datname = $1", name).Scan(&exists)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// 不存在，往下建
+	case err != nil:
+		return fmt.Errorf("查询测试库 %s 是否存在失败: %w", name, err)
+	default:
+		return nil
+	}
+
+	// 建库语句不支持占位符，name 已通过 validIdent 校验，不接受外部输入
+	if _, err := conn.Exec(`CREATE DATABASE "` + name + `"`); err != nil {
+		return fmt.Errorf("创建测试库 %s 失败（该账号需要 CREATEDB 权限）: %w", name, err)
 	}
 	return nil
+}
+
+// validIdent 粗校验标识符，防止库名里出现引号把 DDL 拼坏。
+func validIdent(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '_' || r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Cleanup 清空指定的表，保证用例之间互不污染。

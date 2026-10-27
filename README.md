@@ -4,7 +4,7 @@
 
 | 子项目 | 目录 | 技术栈 |
 |---|---|---|
-| 后端服务 | [blog/](./blog/) | Go + Gin + GORM + MySQL + Redis + MinIO |
+| 后端服务 | [blog/](./blog/) | Go + Gin + GORM + PostgreSQL(pgvector) + Redis + MinIO |
 | 前端页面 | [vue/](./vue/) | Vue 3 + TypeScript + Vite + Pinia |
 
 ## 快速导航
@@ -19,7 +19,7 @@
 
 ```text
 ┌──────────────┐    HTTP /api     ┌──────────────┐    GORM     ┌───────────┐
-│  Vue SPA     │ ───────────────→ │  Gin Backend │ ──────────→ │   MySQL   │
+│  Vue SPA     │ ───────────────→ │  Gin Backend │ ──────────→ │ Postgres  │
 │  :3000       │ ←─────────────── │  :9527       │             └───────────┘
 └──────────────┘   JSON Response  └──────────────┘    ↑ 缓存            ↑
                                           │        ┌───────────┐  ┌───────────┐
@@ -28,7 +28,7 @@
 ```
 
 生产环境（Docker）下前端由 Nginx 托管并监听 `80`，同时把 `/api` 反向代理到后端 `9527`；
-后端与 MySQL / Redis / MinIO 通过 `blog-network` 内部网络以服务名互访，数据库端口不对公网开放。
+后端与 PostgreSQL / Redis / MinIO 通过 `blog-network` 内部网络以服务名互访，数据库端口不对公网开放。
 
 - **后端**：Go + Gin + GORM + JWT（双 Token）+ Redis + MinIO
 - **前端**：Vue 3 + TypeScript + Vite + Pinia + Vue Router + Axios + wangEditor
@@ -69,8 +69,9 @@ cp blog/configs/config.yaml.example blog/configs/config.yaml
 
 | 变量 | 说明 |
 |---|---|
-| `MYSQL_PASSWORD` | MySQL root 密码 |
-| `MYSQL_DATABASE` | 数据库名，默认 `blog-project` |
+| `PG_PASSWORD` | PostgreSQL 密码 |
+| `PG_USER` | PostgreSQL 账号，默认 `postgres` |
+| `PG_DATABASE` | 数据库名，默认 `blog-project` |
 | `REDIS_PASSWORD` | Redis 密码，留空表示不启用 |
 | `JWT_SECRET` | JWT 签名密钥，建议随机长字符串 |
 | `MINIO_ACCESS_KEY` | MinIO 账号 |
@@ -82,7 +83,7 @@ cp blog/configs/config.yaml.example blog/configs/config.yaml
 然后按需修改 `blog/configs/config.yaml`，至少要改 `app.host` 和 `email` 相关项。
 
 > ⚠️ **`.env` 与 `config.yaml` 里的密码必须一致。**
-> MySQL / MinIO 容器用 `.env` 的值初始化，而后端是读 `config.yaml` 去连接的，两边对不上会连接失败。
+> PostgreSQL / MinIO 容器用 `.env` 的值初始化，而后端也可能读 `config.yaml` 去连接，两边对不上会连接失败。
 
 ### 2. 启动服务
 
@@ -101,7 +102,7 @@ docker compose logs -f
 |---|---|---|---|
 | `blog-frontend` | 本地构建（Vue → Nginx） | `80` | SPA 静态资源 + `/api` 反向代理 |
 | `blog-backend` | 本地构建（Go → Alpine） | `9527` | Gin RESTful API |
-| `mysql` | `mysql:8.0` | `3306` | 持久化数据库 |
+| `postgres` | `pgvector/pgvector:pg17` | `5432` | 持久化数据库（业务表 + 向量表） |
 | `redis` | `redis:7-alpine` | `6379` | 缓存 + Refresh Token 存储 |
 | `minio` | `minio/minio` | `9000 / 9001` | 对象存储（文章图片等） |
 
@@ -122,14 +123,19 @@ Docker 部署时，需要调整 `config.yaml` 中的这几处（其余保持默�
 
 | 配置项 | 建议值 | 说明 |
 |---|---|---|
-| `database.mysql.host` | `mysql` | 使用 Compose 内部服务名 |
+| `database.postgres.host` | `postgres` | 使用 Compose 内部服务名 |
+| `database.postgres.port` | `5432` | PostgreSQL 端口 |
 | `database.redis.host` | `redis` | 使用 Compose 内部服务名 |
 | `minio.endpoint` | `minio:9000` | 容器内部连接地址 |
 | `minio.base_url` | `http://<服务器IP>:9000` | 图片的公网访问地址 |
 | `app.host` | `<服务器IP>` | 邮件链接等场景使用 |
 
-> 其中 `mysql` / `redis` / `minio:9000` 这几项已在 compose 中通过环境变量覆盖，
-> 即使 `config.yaml` 里写的是 `127.0.0.1` 也能正常工作；`minio.base_url` 和 `app.host` 因为要暴露给浏览器，必须手改。
+> `PG_*` / `redis` / `minio:9000` 这几项已在 compose 中通过环境变量注入，
+> 其中 `PG_HOST`、`PG_PORT`、`PG_USER`、`PG_DATABASE`、`PG_PASSWORD` 在
+> `pkg/config/loader.go` 里是**显式 `os.Getenv` 读取**的，因此确实会覆盖 `config.yaml`；
+> 而 `CORE_COACH_*` 走的是 viper 前缀形式，viper 的 AutomaticEnv 与 Unmarshal 不兼容，
+> 对结构体字段实际无效，别依赖它。
+> `minio.base_url` 和 `app.host` 因为要暴露给浏览器，必须手改。
 
 ## 环境变量
 
@@ -137,13 +143,15 @@ Docker 部署时，需要调整 `config.yaml` 中的这几处（其余保持默�
 
 | 环境变量 | 值 | 说明 |
 |---|---|---|
-| `CORE_COACH_DATABASE_MYSQL_HOST` | `mysql` | MySQL 服务名 |
-| `CORE_COACH_DATABASE_MYSQL_PORT` | `3306` | MySQL 端口 |
+| `PG_HOST` | `postgres` | PostgreSQL 服务名 |
+| `PG_PORT` | `5432` | PostgreSQL 端口 |
+| `PG_USER` | `postgres` | PostgreSQL 账号 |
+| `PG_DATABASE` | `blog-project` | 数据库名 |
 | `CORE_COACH_DATABASE_REDIS_HOST` | `redis` | Redis 服务名 |
 | `CORE_COACH_DATABASE_REDIS_PORT` | `6379` | Redis 端口 |
 | `CORE_COACH_MINIO_ENDPOINT` | `minio:9000` | MinIO 内部地址 |
 
-生产环境使用的 `docker-compose.prod.yml` 在此基础上额外注入 `MYSQL_USER`、`MYSQL_PASSWORD`、
+生产环境使用的 `docker-compose.prod.yml` 在此基础上额外注入 `PG_PASSWORD`、
 `REDIS_PASSWORD`、`JWT_SECRET` 以及 MinIO 相关凭证，全部来自服务器上的 `.env`。
 
 ## 本地开发

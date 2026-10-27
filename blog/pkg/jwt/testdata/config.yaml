@@ -13,12 +13,14 @@ jwt:
   remember_me_hours: 720
 
 database:
-  mysql:
+  postgres:
     host: 127.0.0.1
-    port: 3306
+    port: 5432
     username: test
     password: test
     database: test
+    ssl_mode: disable
+    time_zone: Asia/Shanghai
     max_idle_conns: 5
     max_open_conns: 10
   redis:

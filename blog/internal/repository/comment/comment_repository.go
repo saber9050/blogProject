@@ -42,10 +42,10 @@ func (r *commentRepository) ListAllComments(page, pageSize int, articleTitle, us
 		Where("comments.deleted_at IS NULL")
 
 	if articleTitle != "" {
-		countQuery = countQuery.Where("articles.title LIKE ?", "%"+articleTitle+"%")
+		countQuery = countQuery.Where("articles.title ILIKE ?", "%"+articleTitle+"%")
 	}
 	if userName != "" {
-		countQuery = countQuery.Where("users.user_name LIKE ?", "%"+userName+"%")
+		countQuery = countQuery.Where("users.user_name ILIKE ?", "%"+userName+"%")
 	}
 	if startTime != "" {
 		countQuery = countQuery.Where("comments.created_at >= ?", startTime)
@@ -71,10 +71,10 @@ func (r *commentRepository) ListAllComments(page, pageSize int, articleTitle, us
 		Where("comments.deleted_at IS NULL")
 
 	if articleTitle != "" {
-		dataQuery = dataQuery.Where("articles.title LIKE ?", "%"+articleTitle+"%")
+		dataQuery = dataQuery.Where("articles.title ILIKE ?", "%"+articleTitle+"%")
 	}
 	if userName != "" {
-		dataQuery = dataQuery.Where("users.user_name LIKE ?", "%"+userName+"%")
+		dataQuery = dataQuery.Where("users.user_name ILIKE ?", "%"+userName+"%")
 	}
 	if startTime != "" {
 		dataQuery = dataQuery.Where("comments.created_at >= ?", startTime)

@@ -22,24 +22,30 @@
 
 services:
 
-  # ===================== MySQL =====================
-  mysql:
-    image: mysql:8.0
-    container_name: blog-mysql
+  # ===================== PostgreSQL（主库 + pgvector） =====================
+  # 用途：业务表与向量表同库，让「删旧 chunk + 写新 chunk」能放进同一个事务。
+  # 镜像选 pgvector 官方版，而不是官方 postgres 再手工装扩展——
+  # 迁移工具和 CI 都用同一个镜像，避免「本地过了线上挂」。
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: blog-postgres
     restart: unless-stopped
     environment:
       # 不设兜底值：宁可启动失败并给出明确提示，也不要静默使用弱口令/泄露的口令
-      MYSQL_ROOT_PASSWORD: "${MYSQL_PASSWORD:?请先 cp .env.example .env 并设置 MYSQL_PASSWORD}"
-      MYSQL_DATABASE: "${MYSQL_DATABASE:-blog-project}"
+      POSTGRES_PASSWORD: "${PG_PASSWORD:?请先 cp .env.example .env 并设置 PG_PASSWORD}"
+      POSTGRES_USER: "${PG_USER:-postgres}"
+      POSTGRES_DB: "${PG_DATABASE:-blog-project}"
       TZ: Asia/Shanghai
+      # 显式 UTF8：默认 locale 在不同宿主机上可能不同，编码不一致会直接毁掉中文数据
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     ports:
-      - "3306:3306"
+      - "127.0.0.1:5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - pg_data:/var/lib/postgresql/data
     networks:
       - blog-network
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${PG_USER:-postgres} -d ${PG_DATABASE:-blog-project}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -99,14 +105,18 @@ services:
       - ./blog/configs/config.yaml:/app/configs/config.yaml:ro
     environment:
       # 覆盖数据库连接地址（内部 Docker 网络）
-      CORE_COACH_DATABASE_MYSQL_HOST: mysql
-      CORE_COACH_DATABASE_MYSQL_PORT: 3306
+      # 这些变量在 pkg/config/loader.go 里是显式 os.Getenv 读取的，确保生效
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_USER: "${PG_USER:-postgres}"
+      PG_PASSWORD: "${PG_PASSWORD}"
+      PG_DATABASE: "${PG_DATABASE:-blog-project}"
       CORE_COACH_DATABASE_REDIS_HOST: redis
       CORE_COACH_DATABASE_REDIS_PORT: 6379
       # MinIO 连接地址（内部 Docker 网络）
       CORE_COACH_MINIO_ENDPOINT: minio:9000
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -130,9 +140,15 @@ services:
       - blog-network
 
 volumes:
-  mysql_data:
+  pg_data:
   redis_data:
   minio_data:
+  # ⚠️ 已停用的 MySQL 数据卷，**故意保留声明**：
+  # 1) 迁移后一个月内是唯一的回滚位，出问题能退回旧库；
+  # 2) 留在 compose 文件里，是为了防止有人执行 `docker compose down -v` 时
+  #    （-v 只删文件里声明过的卷）把历史数据一起清掉。
+  # 确认不再需要回滚后，再手工 `docker volume rm` 并删掉这一行。
+  mysql_data:
 
 networks:
   blog-network:

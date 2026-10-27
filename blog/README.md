@@ -8,7 +8,7 @@
 |---|---|
 | 语言 | Go 1.26 |
 | 框架 | Gin v1.12 |
-| ORM | GORM v1.31 + MySQL |
+| ORM | GORM v1.31 + PostgreSQL 17（pgvector） |
 | 缓存 | Redis (go-redis v9) |
 | JWT | golang-jwt v5 |
 | 配置 | Viper |
@@ -47,7 +47,7 @@ blog/
 │   └── service/         # 业务逻辑层
 ├── pkg/                 # 公共工具包
 │   ├── config/          # 配置加载
-│   ├── database/        # MySQL/Redis 初始化
+│   ├── database/        # PostgreSQL/Redis 初始化
 │   ├── email/           # 邮件发送
 │   ├── errors/          # 业务错误码
 │   ├── jwt/             # JWT 令牌
@@ -66,7 +66,7 @@ blog/
 ### 前置条件
 
 - Go 1.26+
-- MySQL 8.0+
+- PostgreSQL 17+（需支持 pgvector 扩展，推荐镜像 `pgvector/pgvector:pg17`）
 - Redis 7.0+
 - MinIO（可选，用于图片/文件存储）
 - 大模型（AI 摘要等用）**在后台「AI 模型」页配置**，不走配置文件
@@ -83,7 +83,7 @@ cp configs/config.yaml.example configs/config.yaml
 |---|---|
 | `app.port` | 服务端口（默认 9527） |
 | `app.mode` | 运行模式（debug / release / test） |
-| `database.mysql` | MySQL 连接信息（含连接池大小） |
+| `database.postgres` | PostgreSQL 连接信息（含连接池大小） |
 | `database.redis` | Redis 连接信息（含 DB 编号、连接池大小） |
 | `jwt.secret` | JWT 签名密钥 |
 | `jwt.access_expire_minutes` | Access Token 过期时间（分钟），默认 15 |
@@ -97,7 +97,20 @@ cp configs/config.yaml.example configs/config.yaml
 > 大模型**不通过配置文件配置**：请在后台「AI 模型」页维护（存库，需测试连接通过才能保存）。
 > 未配置任何模型时，调用需要模型的接口（如一键生成摘要）会返回「请先配置模型」。
 
-支持环境变量覆盖敏感字段：`MYSQL_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`。
+支持环境变量覆盖敏感字段：`PG_HOST`、`PG_PORT`、`PG_USER`、`PG_PASSWORD`、`PG_DATABASE`、
+`REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`、`MINIO_PUBLIC_URL`。
+
+### 数据迁移（MySQL → PostgreSQL）
+
+旧的 MySQL 数据通过主程序的子命令搬到 PostgreSQL，服务器上可直接复用已有镜像：
+
+```bash
+go run ./cmd/server migrate \
+  -src "root:密码@tcp(127.0.0.1:3306)/blog-project?charset=utf8mb4&parseTime=True&loc=Local" \
+  -dst "postgres://postgres:密码@127.0.0.1:5432/blog-project?sslmode=disable"
+```
+
+先加 `-dry-run` 可以只统计源库行数、不写目标库。
 
 ### 运行
 

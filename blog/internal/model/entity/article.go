@@ -7,12 +7,12 @@ type Article struct {
 	BaseEntity
 	UserID    uint           `gorm:"type:bigint;not null;comment:文章作者id" json:"user_id"`
 	Title     string         `gorm:"type:varchar(100);not null;comment:文章标题" json:"title"`
-	Content   string         `gorm:"type:longtext;not null;comment:文章内容" json:"content"`
+	Content   string         `gorm:"type:text;not null;comment:文章内容" json:"content"`
 	CoverURL  string         `gorm:"type:varchar(255);comment:封面图片url" json:"cover_url"`
 	Summary   string         `gorm:"type:varchar(255);comment:摘要" json:"summary"`
 	Views     uint           `gorm:"type:bigint;default:0;comment:浏览量" json:"views"`
 	TypeID    uint           `gorm:"type:bigint;not null;comment:文章分类id" json:"type_id"`
-	Status    int8           `gorm:"type:tinyint;not null;default:0;comment:状态:1已发布,0草稿箱" json:"status"`
+	Status    int8           `gorm:"type:smallint;not null;default:0;comment:状态:1已发布,0草稿箱" json:"status"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }
 
@@ -23,7 +23,7 @@ func (Article) TableName() string {
 // ArticleImage 文章内容引用图片实体
 type ArticleImage struct {
 	BaseEntity
-	ArticleID uint   `gorm:"bigint;not null;comment:文章id" json:"article_id"`
+	ArticleID uint   `gorm:"type:bigint;not null;index;comment:文章id" json:"article_id"`
 	URL       string `gorm:"type:varchar(255);comment:封面图片url" json:"url"`
 }
 

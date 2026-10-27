@@ -45,7 +45,7 @@ import (
 // App 应用结构体
 type App struct {
 	cfg          *config.Config
-	mysqlDB      *gorm.DB
+	pgDB         *gorm.DB
 	redis        *redis.Client
 	minioClient  *minioPkg.Client
 	router       *api.Router
@@ -125,39 +125,23 @@ func (a *App) initLogger() error {
 
 // initDatabase 初始化数据库
 func (a *App) initDatabase() error {
-	// 初始化 MySQL
-	mysqlDB, err := database.InitMySQL(&a.cfg.Database.MySQL)
+	// 初始化 PostgreSQL（主库：业务表 + 后续的向量表同库，便于放进同一事务）
+	pgDB, err := database.InitPostgres(&a.cfg.Database.Postgres)
 	if err != nil {
-		return fmt.Errorf("MySQL 初始化失败: %w", err)
+		return fmt.Errorf("PostgreSQL 初始化失败: %w", err)
 	}
-	a.mysqlDB = mysqlDB
+	a.pgDB = pgDB
 
-	//自动迁移数据库表
-	logger.Info("开始数据库迁移...")
-	if err := a.mysqlDB.AutoMigrate(
-		// 用户相关
-		&entity.User{},
-
-		// 文章相关
-		&entity.Article{},
-		&entity.Tag{},
-		&entity.TagArticle{},
-		&entity.Category{},
-		&entity.Comment{},
-		&entity.Like{},
-
-		// 文章图片引用
-		&entity.ArticleImage{},
-
-		// 关于页面
-		&entity.About{},
-
-		// 大模型配置
-		&entity.AIModelConfig{},
-	); err != nil {
-		logger.Warn("数据库迁移警告", zap.Error(err))
+	// 同步表结构（AutoMigrate 只建表/加列，不搬数据）
+	//
+	// 日志特意不写「数据库迁移」：那四个字容易被理解成「把 MySQL 数据搬过来了」，
+	// 实际这里只是让表结构跟上 entity 定义。搬数据是 `migrate` 子命令干的事。
+	// 建表清单统一由 entity.AllModels() 提供，启动、迁移工具、集成测试三处共用。
+	logger.Info("开始同步表结构（AutoMigrate）...")
+	if err := a.pgDB.AutoMigrate(entity.AllModels()...); err != nil {
+		logger.Warn("表结构同步警告", zap.Error(err))
 	} else {
-		logger.Info("数据库迁移完成")
+		logger.Info("表结构同步完成（不含数据）")
 	}
 	// 初始化 Redis（可选）
 	rs, err := database.InitRedis(&a.cfg.Database.Redis)
@@ -177,7 +161,7 @@ func (a *App) initDefaultAdmin() {
 	}
 
 	var count int64
-	a.mysqlDB.Model(&entity.User{}).Where("role_id = ?", 1).Count(&count)
+	a.pgDB.Model(&entity.User{}).Where("role_id = ?", 1).Count(&count)
 	if count > 0 {
 		logger.Info("管理员账号已存在，跳过创建")
 		return
@@ -196,7 +180,7 @@ func (a *App) initDefaultAdmin() {
 		RoleID:       1,
 		Status:       1,
 	}
-	if err := a.mysqlDB.Create(&admin).Error; err != nil {
+	if err := a.pgDB.Create(&admin).Error; err != nil {
 		logger.Error("创建默认管理员失败", zap.Error(err))
 		return
 	}
@@ -220,14 +204,14 @@ func (a *App) initDependencies() {
 
 	// 创建 Repository
 	authCache := auth3.NewLoginCache()
-	authRepo := auth.NewAuthRepository(a.mysqlDB)
-	uRepo := userRepo.NewUserRepository(a.mysqlDB)
-	aRepo := article.NewArticleRepository(a.mysqlDB)
-	cRepo := commentRepo.NewCommentRepository(a.mysqlDB)
-	catRepo := category.NewCategoryRepository(a.mysqlDB)
-	tRepo := tag.NewTagRepository(a.mysqlDB)
-	aboutRepo := about.NewAboutRepository(a.mysqlDB)
-	llmCfgRepo := llmconfigRepo.NewLLMConfigRepository(a.mysqlDB)
+	authRepo := auth.NewAuthRepository(a.pgDB)
+	uRepo := userRepo.NewUserRepository(a.pgDB)
+	aRepo := article.NewArticleRepository(a.pgDB)
+	cRepo := commentRepo.NewCommentRepository(a.pgDB)
+	catRepo := category.NewCategoryRepository(a.pgDB)
+	tRepo := tag.NewTagRepository(a.pgDB)
+	aboutRepo := about.NewAboutRepository(a.pgDB)
+	llmCfgRepo := llmconfigRepo.NewLLMConfigRepository(a.pgDB)
 
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
@@ -309,7 +293,7 @@ func (a *App) gracefulShutdown() {
 	}
 
 	// 关闭数据库连接
-	_ = database.CloseMySQL()
+	_ = database.ClosePostgres()
 	_ = database.CloseRedis()
 
 	// 同步日志
