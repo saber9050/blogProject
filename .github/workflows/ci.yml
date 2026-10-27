@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION_FILE: blog/go.mod
+  # Go 版本不再从 go.mod 读：go 指令只声明最低版本，钉到具体补丁号
+  # 会让标准库新公布的漏洞把 CI 打成红灯。各 job 统一用 '1.26.x'。
   NODE_VERSION: '18'
 
 jobs:
@@ -31,7 +32,11 @@ jobs:
       - name: 安装 Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: ${{ env.GO_VERSION_FILE }}
+          # 不固定到 go.mod 里那个具体补丁号（1.26.9）：go 指令只声明最低版本，
+          # 钉死补丁号会让 govulncheck 因标准库新公布的漏洞直接红灯
+          # ——2026-10-27 就撞上 crypto/x509 的 GO-2026-6809，1.26.10 才修。
+          # 用 1.26.x 自动取该分支最新补丁，兼容性由 go 指令兜底。
+          go-version: '1.26.x'
           cache-dependency-path: blog/go.sum
 
       - name: 静态检查 go vet
@@ -175,7 +180,8 @@ jobs:
       - name: 安装 Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: blog/go.mod
+          # 与 backend job 保持一致：取 1.26.x 最新补丁，避免标准库新漏洞误伤
+          go-version: '1.26.x'
           cache-dependency-path: blog/go.sum
 
       - name: 等待 PostgreSQL 就绪
@@ -212,7 +218,8 @@ jobs:
       - name: 安装 Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: blog/go.mod
+          # 与 backend job 保持一致：取 1.26.x 最新补丁，避免标准库新漏洞误伤
+          go-version: '1.26.x'
           cache-dependency-path: blog/go.sum
 
       - name: 密钥泄露扫描
