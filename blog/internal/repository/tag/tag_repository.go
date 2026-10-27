@@ -50,7 +50,7 @@ func (r *tagRepository) List(page, pageSize int, status *int, keyword, startTime
 		query = query.Where("status = ?", *status)
 	}
 	if keyword != "" {
-		query = query.Where("tag_name LIKE ?", "%"+keyword+"%")
+		query = query.Where("tag_name ILIKE ?", "%"+keyword+"%")
 	}
 	if startTime != "" {
 		query = query.Where("created_at >= ?", startTime)

@@ -47,7 +47,9 @@ func (r *articleRepository) List(page, pageSize int, status *int, sort string, c
 		query = query.Where("type_id = ?", categoryID)
 	}
 	if keyword != "" {
-		query = query.Where("title LIKE ? OR summary LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+		// ILIKE：PostgreSQL 的 LIKE 区分大小写，而 MySQL 的 utf8mb4_general_ci
+		// 不区分。改用 ILIKE 保持迁移前的搜索行为（搜 "go" 能命中 "Go"）。
+		query = query.Where("title ILIKE ? OR summary ILIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
 	if len(tagIDs) > 0 {
 		tagStr := strings.Trim(strings.Replace(fmt.Sprint(tagIDs), " ", ",", -1), "[]")

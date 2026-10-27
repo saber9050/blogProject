@@ -40,7 +40,7 @@ func (r *categoryRepository) List(page, pageSize int, status *int, keyword, star
 		query = query.Where("status = ?", *status)
 	}
 	if keyword != "" {
-		query = query.Where("category_name LIKE ?", "%"+keyword+"%")
+		query = query.Where("category_name ILIKE ?", "%"+keyword+"%")
 	}
 	if startTime != "" {
 		query = query.Where("created_at >= ?", startTime)
