@@ -4,6 +4,11 @@ package entity
 //
 // 应用启动、迁移工具、集成测试三处都从这里取，避免各写一份清单而漂移——
 // 曾经 repostest 里就漏了 AIModelConfig，导致测试库和线上结构不一致。
+//
+// ⚠️ ArticleChunk 刻意不在这里。它的 embedding 列是 vector(n)，维度来自运行时配置
+// （ai_model_configs.dimension），AutoMigrate 表达不了；更麻烦的是，一旦把 vector 列
+// 交给 AutoMigrate，目标库没装 pgvector 扩展时整个应用都起不来（连登录都挂）。
+// 它由 pkg/database/vector.go 的 EnsureSchema 手写 DDL 单独创建。
 func AllModels() []interface{} {
 	return []interface{}{
 		// 用户相关
@@ -25,6 +30,9 @@ func AllModels() []interface{} {
 
 		// 大模型配置
 		&AIModelConfig{},
+
+		// 文章切分模板（article_chunks 见上，不在此列）
+		&ChunkTemplate{},
 	}
 }
 

@@ -8,6 +8,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/minio/minio-go/v7 v7.2.0
 	github.com/mojocn/base64Captcha v1.3.8
+	github.com/pgvector/pgvector-go v0.4.1
 	github.com/redis/go-redis/v9 v9.20.0
 	github.com/spf13/viper v1.21.0
 	go.uber.org/zap v1.28.0

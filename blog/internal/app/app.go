@@ -143,6 +143,10 @@ func (a *App) initDatabase() error {
 	} else {
 		logger.Info("表结构同步完成（不含数据）")
 	}
+
+	// 向量表要等 AutoMigrate 之后：部分唯一索引依赖 ai_model_configs 表已存在
+	a.ensureVectorSchema()
+
 	// 初始化 Redis（可选）
 	rs, err := database.InitRedis(&a.cfg.Database.Redis)
 	if err != nil {
@@ -151,6 +155,51 @@ func (a *App) initDatabase() error {
 	a.redis = rs
 
 	return nil
+}
+
+// ensureVectorSchema 按当前启用的向量模型维度初始化向量表。
+//
+// 全程只 warn 不阻断启动：向量功能不可用，不该让整站打不开。
+// 这也是把 article_chunks 排除在 AutoMigrate 之外的目的——没装 pgvector 扩展时，
+// 失败的只是这一段，登录、文章、评论全都照常。
+func (a *App) ensureVectorSchema() {
+	// 唯一索引优先：即便下面因为没配模型而跳过，这个约束也该尽量建上
+	if err := database.EnsureSingleEmbeddingModelIndex(a.pgDB); err != nil {
+		logger.Warn("向量模型唯一索引创建失败（可能库内已有多条向量模型记录），已跳过",
+			zap.Error(err))
+	}
+
+	var m entity.AIModelConfig
+	err := a.pgDB.Where("type = ? AND status = ?", entity.ModelTypeEmbedding, 1).First(&m).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		logger.Info("未配置向量模型，跳过向量表初始化")
+		return
+	}
+	if err != nil {
+		logger.Warn("读取向量模型失败，跳过向量表初始化", zap.Error(err))
+		return
+	}
+	if m.Dimension <= 0 {
+		logger.Warn("向量模型未填写维度，跳过向量表初始化",
+			zap.Uint("config_id", m.ID), zap.String("model", m.Model))
+		return
+	}
+
+	if err := database.EnsureSchema(a.pgDB, m.Dimension); err != nil {
+		var mismatch *database.DimensionMismatchError
+		if errors.As(err, &mismatch) {
+			// 这是最需要人说清楚的一种错：库里的表和数据都是好的，只是与新配的模型维度不符
+			logger.Warn("向量表维度与向量模型不一致，向量化功能不可用；如需切换维度请调用 /admin/vector/reset",
+				zap.Int("table_dimension", mismatch.Current),
+				zap.Int("model_dimension", mismatch.Want),
+				zap.Int64("existing_chunks", mismatch.Chunks))
+			return
+		}
+		logger.Warn("向量表初始化失败，向量化功能将不可用", zap.Error(err))
+		return
+	}
+	logger.Info("向量表就绪",
+		zap.Int("dimension", m.Dimension), zap.String("model", m.Model))
 }
 
 // initDefaultAdmin 初始化默认管理员
