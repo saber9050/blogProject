@@ -5,7 +5,7 @@
 //
 // 运行方式：
 //
-//	TEST_MYSQL_DSN='root:test@tcp(127.0.0.1:3306)/blog_test?charset=utf8mb4&parseTime=True&loc=Local' \
+//	TEST_PG_DSN='postgres://postgres:test@127.0.0.1:5432/blog_test?sslmode=disable' \
 //	  go test -tags=integration -v ./internal/repository/user/...
 package user_test
 

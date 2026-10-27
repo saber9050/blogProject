@@ -118,7 +118,7 @@ jobs:
         # 编排文件对密钥类变量用了 ${VAR:?} 必填语法（不给弱口令兜底），
         # CI 环境没有 .env，这里补一份一次性假值，仅用于语法校验。
         env:
-          MYSQL_PASSWORD: ci-placeholder
+          PG_PASSWORD: ci-placeholder
           MINIO_SECRET_KEY: ci-placeholder
         run: docker compose -f docker-compose.yml config --quiet
 
@@ -143,7 +143,7 @@ jobs:
           cache-from: type=gha,scope=blog-frontend
           cache-to: type=gha,scope=blog-frontend,mode=max
 
-  # ========== 集成测试：起真实 MySQL，验证 SQL、索引与约束的真实行为 ==========
+  # ========== 集成测试：起真实 PostgreSQL，验证 SQL、索引与约束的真实行为 ==========
   integration:
     name: 集成测试
     runs-on: ubuntu-latest
@@ -152,18 +152,20 @@ jobs:
       run:
         working-directory: blog
     services:
-      mysql:
-        image: mysql:8.0
+      postgres:
+        # 用 pgvector 镜像而不是官方 postgres：后续的向量列类型和扩展依赖它，
+        # 提前对齐可以避免「本地过了 CI 挂」。
+        image: pgvector/pgvector:pg17
         env:
-          MYSQL_ROOT_PASSWORD: ci-test-password
-          MYSQL_DATABASE: blog_test
+          POSTGRES_PASSWORD: ci-test-password
+          POSTGRES_DB: blog_test
         ports:
-          - 3306:3306
-        # 健康检查不能省：容器起来 ≠ MySQL 能接受连接。
+          - 5432:5432
+        # 健康检查不能省：容器起来 ≠ PostgreSQL 能接受连接。
         # 少了它，测试会在数据库尚未初始化完成时开始，然后随机失败——
         # 偶发失败比没有测试更糟，它会训练你忽略红灯。
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-test-password"
+          --health-cmd="pg_isready -U postgres -d blog_test"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
@@ -176,29 +178,24 @@ jobs:
           go-version-file: blog/go.mod
           cache-dependency-path: blog/go.sum
 
-      - name: 等待 MySQL 就绪
+      - name: 等待 PostgreSQL 就绪
         run: |
-          if ! command -v mysqladmin >/dev/null 2>&1; then
-            echo "运行器未自带 mysqladmin，退化为固定等待 20 秒"
-            sleep 20
-            exit 0
-          fi
           for i in $(seq 1 30); do
-            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -pci-test-password --silent 2>/dev/null; then
-              echo "MySQL 已就绪（第 ${i} 次探测）"
+            if (echo > /dev/tcp/127.0.0.1/5432) 2>/dev/null; then
+              echo "PostgreSQL 已就绪（第 ${i} 次探测）"
               exit 0
             fi
-            echo "等待 MySQL 就绪... (${i}/30)"
+            echo "等待 PostgreSQL 就绪... (${i}/30)"
             sleep 3
           done
-          echo "MySQL 在 90 秒内仍未就绪"
+          echo "PostgreSQL 在 90 秒内仍未就绪"
           exit 1
 
       - name: 集成测试
         env:
           # 库名只是前缀，每个测试包会自动拼上自己的 schema（blog_test_auth 等），
           # 这样 `go test ./...` 并行执行不同包时不会互相清表。
-          TEST_MYSQL_DSN: root:ci-test-password@tcp(127.0.0.1:3306)/blog_test?charset=utf8mb4&parseTime=True&loc=Local
+          TEST_PG_DSN: postgres://postgres:ci-test-password@127.0.0.1:5432/blog_test?sslmode=disable
         run: go test -v -count=1 -tags=integration ./internal/repository/...
 
   # ========== 安全扫描：密钥泄露 + 依赖漏洞 ==========

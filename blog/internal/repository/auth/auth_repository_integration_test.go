@@ -1,11 +1,11 @@
 //go:build integration
 
 // 认证仓储的集成测试。覆盖「按账号/邮箱查用户 → 判断是否已注册 → 创建用户 → 改密码」
-// 这条完整链路，全部对着真实 MySQL 执行。
+// 这条完整链路，全部对着真实 PostgreSQL 执行。
 //
 // 运行方式：
 //
-//	TEST_MYSQL_DSN='root:test@tcp(127.0.0.1:3306)/blog_test?charset=utf8mb4&parseTime=True&loc=Local' \
+//	TEST_PG_DSN='postgres://postgres:test@127.0.0.1:5432/blog_test?sslmode=disable' \
 //	  go test -tags=integration -v ./internal/repository/auth/...
 package auth_test
 
