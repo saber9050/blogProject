@@ -100,18 +100,6 @@ cp configs/config.yaml.example configs/config.yaml
 支持环境变量覆盖敏感字段：`PG_HOST`、`PG_PORT`、`PG_USER`、`PG_PASSWORD`、`PG_DATABASE`、
 `REDIS_PASSWORD`、`JWT_SECRET`、`COZE_API_KEY`、`CRYPTO_RSA_PRIVATE_KEY`、`MINIO_PUBLIC_URL`。
 
-### 数据迁移（MySQL → PostgreSQL）
-
-旧的 MySQL 数据通过主程序的子命令搬到 PostgreSQL，服务器上可直接复用已有镜像：
-
-```bash
-go run ./cmd/server migrate \
-  -src "root:密码@tcp(127.0.0.1:3306)/blog-project?charset=utf8mb4&parseTime=True&loc=Local" \
-  -dst "postgres://postgres:密码@127.0.0.1:5432/blog-project?sslmode=disable"
-```
-
-先加 `-dry-run` 可以只统计源库行数、不写目标库。
-
 ### 运行
 
 ```bash
