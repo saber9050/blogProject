@@ -6,6 +6,7 @@ import (
 	"blog/internal/model/entity"
 	repo "blog/internal/repository/article"
 	"blog/internal/repository/category"
+	tplRepo "blog/internal/repository/chunktemplate"
 	commentRepo "blog/internal/repository/comment"
 	"blog/internal/repository/tag"
 	"blog/internal/repository/user"
@@ -16,6 +17,7 @@ import (
 	"context"
 	"mime/multipart"
 	"regexp"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -29,6 +31,9 @@ type articleService struct {
 	commentRepo  commentRepo.CommentRepository
 	userSvc      user2.UserService
 	minio        *minioPkg.Client
+	// tplRepo 仅用于后台列表回填「向量化用的模板名」。允许为 nil（历史构造函数签名），
+	// nil 时该字段返回空串，前端仍可用 vector_template_id 自行映射。
+	tplRepo tplRepo.Repository
 }
 
 // NewArticleService 创建文章服务实例
@@ -40,6 +45,7 @@ func NewArticleService(
 	commentRepo commentRepo.CommentRepository,
 	userSvc user2.UserService,
 	minio *minioPkg.Client,
+	tplRepo tplRepo.Repository,
 ) ArticleService {
 	return &articleService{
 		articleRepo:  articleRepo,
@@ -49,6 +55,7 @@ func NewArticleService(
 		commentRepo:  commentRepo,
 		userSvc:      userSvc,
 		minio:        minio,
+		tplRepo:      tplRepo,
 	}
 }
 
@@ -252,23 +259,51 @@ func (s *articleService) UnlikeArticle(articleID, userID uint) error {
 }
 
 // AdminList 后台获取文章列表
-func (s *articleService) AdminList(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) (*response.ArticleListResponse, error) {
+//
+// 返回 AdminArticleListResponse 而不是公共的 ArticleListResponse：
+// 前者在 ArticleItem 之上追加了向量化相关字段，公共接口的契约不受影响。
+func (s *articleService) AdminList(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) (*response.AdminArticleListResponse, error) {
 	list, total, err := s.articleRepo.List(page, pageSize, status, "", categoryID, tagIDs, keyword)
 	if err != nil {
 		logger.Error("获取文章列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取文章列表失败", err)
 	}
 
-	var items []*response.ArticleItem
+	// 模板名一次性查出来建 map，而不是每行 join 或每行查一次：
+	// 模板总数是个位数，一次查询 + 内存映射比 N 次往返便宜得多
+	tplNames := make(map[uint]string)
+	if s.tplRepo != nil {
+		if tpls, err := s.tplRepo.List(nil); err == nil {
+			for _, t := range tpls {
+				tplNames[t.ID] = t.Name
+			}
+		} else {
+			logger.Warn("读取切分模板列表失败，模板名将为空", zap.Error(err))
+		}
+	}
+
+	items := make([]*response.AdminArticleItem, 0, len(list))
 	for _, article := range list {
-		item, err := s.buildArticleResponse(article, 0)
+		base, err := s.buildArticleResponse(article, 0)
 		if err != nil {
 			continue
+		}
+		item := &response.AdminArticleItem{
+			ArticleItem:        *base,
+			VectorStatus:       article.VectorStatus,
+			VectorTemplateID:   article.VectorTemplateID,
+			VectorTemplateName: tplNames[article.VectorTemplateID],
+			VectorChunkCount:   article.VectorChunkCount,
+			VectorError:        article.VectorError,
+			UpdatedAt:          article.UpdatedAt.Format(time.RFC3339),
+		}
+		if article.VectorizedAt != nil {
+			item.VectorizedAt = article.VectorizedAt.Format(time.RFC3339)
 		}
 		items = append(items, item)
 	}
 
-	return &response.ArticleListResponse{
+	return &response.AdminArticleListResponse{
 		List:     items,
 		Total:    total,
 		Page:     page,
@@ -369,6 +404,17 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 	if req.Content != "" {
 		fields["content"] = req.Content
 
+		// 正文变了，库里已存的块与正文不再对应。把状态打回「未处理」，
+		// 让列表显示「否」而不是挂着过期的「是」——只有「是/否」两态时，
+		// 改完文章它仍然显示"是"，你会一直挂着旧内容而毫无察觉。
+		//
+		// 只改 status 和 error，不清 chunk_count / vectorized_at：留着还能看出
+		// 「这篇曾经切过多少块」。界面在 status != 3 时不展示块数，不会误导。
+		// 只改标题不重置——标题不进 chunk，不该作废。
+		if req.Content != article.Content {
+			fields["vector_status"] = entity.VectorStatusNone
+			fields["vector_error"] = ""
+		}
 	}
 
 	if req.Summary != "" {

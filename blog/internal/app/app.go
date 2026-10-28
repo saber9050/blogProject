@@ -7,6 +7,7 @@ import (
 	"blog/internal/model/entity"
 	"blog/internal/repository/about"
 	"blog/internal/repository/article"
+	articleChunkRepo "blog/internal/repository/articlechunk"
 	"blog/internal/repository/auth"
 	"blog/internal/repository/category"
 	chunkTplRepo "blog/internal/repository/chunktemplate"
@@ -24,6 +25,7 @@ import (
 	llmconfigSvc "blog/internal/service/llmconfig"
 	tagSvc "blog/internal/service/tag"
 	userSvc "blog/internal/service/user"
+	vectorizeSvc "blog/internal/service/vectorize"
 	vectorSvc "blog/internal/service/vectorschema"
 	"blog/pkg/config"
 	"blog/pkg/database"
@@ -234,6 +236,7 @@ func (a *App) initDependencies() {
 	aboutRepo := about.NewAboutRepository(a.pgDB)
 	llmCfgRepo := llmconfigRepo.NewLLMConfigRepository(a.pgDB)
 	ctRepo := chunkTplRepo.NewChunkTemplateRepository(a.pgDB)
+	acRepo := articleChunkRepo.NewArticleChunkRepository(a.pgDB)
 
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
@@ -241,7 +244,7 @@ func (a *App) initDependencies() {
 
 	// 初始化认证中间件
 	middleware.InitAuth(authCache)
-	aSvc := articleSvc.NewArticleService(aRepo, uRepo, catRepo, tRepo, cRepo, uSvc, a.minioClient)
+	aSvc := articleSvc.NewArticleService(aRepo, uRepo, catRepo, tRepo, cRepo, uSvc, a.minioClient, ctRepo)
 	cSvc := commentSvc.NewCommentService(cRepo, a.minioClient, uRepo)
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
@@ -251,10 +254,18 @@ func (a *App) initDependencies() {
 	// llmconfig 靠它实现「新建向量模型时按维度建表」
 	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo, a.vectorSchemaSvc)
 	lSvc := llmSvc.NewLLMService(llmCfgSvc)
+	vecSvc := vectorizeSvc.NewVectorizeService(a.pgDB, aRepo, ctRepo, acRepo, llmCfgSvc, a.vectorSchemaSvc)
+
+	// 先把进程重启前遗留的「排队中/处理中」重置为失败，再启动 worker。
+	// 顺序不能反：worker 起来后如果有旧任务还挂在 1/2，抢锁会一直拒绝新提交。
+	if _, err := vecSvc.RecoverZombies(); err != nil {
+		logger.Warn("重置遗留向量化任务失败", zap.Error(err))
+	}
+	vecSvc.Start(a.workerCtx)
 
 	// 创建 Router
 	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc, lSvc, llmCfgSvc,
-		ctSvc, a.vectorSchemaSvc)
+		ctSvc, a.vectorSchemaSvc, vecSvc)
 }
 
 // initRouter 初始化路由

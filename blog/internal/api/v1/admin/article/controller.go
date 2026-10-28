@@ -5,6 +5,7 @@ import (
 	"blog/internal/model/dto/request"
 	articleSvc "blog/internal/service/article"
 	llmSvc "blog/internal/service/llm"
+	vectorizeSvc "blog/internal/service/vectorize"
 	"blog/pkg/response"
 	"strconv"
 
@@ -15,14 +16,67 @@ import (
 type ArticleController struct {
 	articleService articleSvc.ArticleService
 	llmService     llmSvc.LLMService
+	vectorizeSvc   vectorizeSvc.Service
 }
 
 // NewArticleController 创建后台文章管理控制器
-func NewArticleController(articleService articleSvc.ArticleService, llmService llmSvc.LLMService) *ArticleController {
+func NewArticleController(
+	articleService articleSvc.ArticleService,
+	llmService llmSvc.LLMService,
+	vectorizeService vectorizeSvc.Service,
+) *ArticleController {
 	return &ArticleController{
 		articleService: articleService,
 		llmService:     llmService,
+		vectorizeSvc:   vectorizeService,
 	}
+}
+
+// Vectorize 提交向量化任务（立即返回，后台异步处理）
+func (ctrl *ArticleController) Vectorize(c *gin.Context) {
+	id, err := parseArticleID(c)
+	if err != nil {
+		response.BadRequest(c, "无效的文章ID")
+		return
+	}
+
+	var req request.VectorizeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数错误：template_id 必填")
+		return
+	}
+
+	result, err := ctrl.vectorizeSvc.Submit(id, req.TemplateID)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	response.SuccessWithMessage(c, "已提交，排队处理中", result)
+}
+
+// VectorStatus 查询向量化状态（前端轮询用）
+func (ctrl *ArticleController) VectorStatus(c *gin.Context) {
+	id, err := parseArticleID(c)
+	if err != nil {
+		response.BadRequest(c, "无效的文章ID")
+		return
+	}
+
+	result, err := ctrl.vectorizeSvc.Status(id)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
+// parseArticleID 解析路径参数 id
+func parseArticleID(c *gin.Context) (uint, error) {
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint(id64), nil
 }
 
 // ListArticles 获取后台文章列表

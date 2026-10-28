@@ -17,7 +17,7 @@ type ArticleService interface {
 	// UnlikeArticle 取消点赞
 	UnlikeArticle(articleID, userID uint) error
 	// AdminList 后台获取文章列表
-	AdminList(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) (*response.ArticleListResponse, error)
+	AdminList(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) (*response.AdminArticleListResponse, error)
 	// AdminCreate 后台创建文章
 	AdminCreate(req *request.CreateArticleRequest, userID uint) (*response.CreateArticleResponse, error)
 	// AdminUpdate 后台更新文章

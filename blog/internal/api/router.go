@@ -27,6 +27,7 @@ import (
 	llmconfigSvc "blog/internal/service/llmconfig"
 	tagSvc "blog/internal/service/tag"
 	user2 "blog/internal/service/user"
+	vectorizeSvc "blog/internal/service/vectorize"
 	vectorSvc "blog/internal/service/vectorschema"
 
 	"github.com/gin-gonic/gin"
@@ -65,13 +66,14 @@ func NewRouter(
 	llmConfigService llmconfigSvc.Service,
 	chunkTplService chunkTplSvc.Service,
 	vectorService vectorSvc.Service,
+	vectorizeService vectorizeSvc.Service,
 ) *Router {
 	return &Router{
 		authCtrl:          auth.NewController(authSvc),
 		userCtrl:          user.NewController(userSvc),
 		articleCtrl:       article.NewArticleController(articleService),
 		adminUserCtrl:     adminUser.NewUserController(userSvc),
-		adminArticleCtrl:  adminArticle.NewArticleController(articleService, llmService),
+		adminArticleCtrl:  adminArticle.NewArticleController(articleService, llmService, vectorizeService),
 		adminCategoryCtrl: adminCategory.NewCategoryController(categoryService),
 		adminTagCtrl:      adminTag.NewTagController(tagService),
 		adminCommentCtrl:  adminComment.NewCommentController(commentSvc),
