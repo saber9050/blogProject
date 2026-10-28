@@ -31,9 +31,10 @@ type Message struct {
 
 // Client OpenAI 兼容协议的模型客户端
 type Client struct {
-	cfg        Config
-	endpoint   string
-	httpClient *http.Client
+	cfg               Config
+	endpoint          string // /chat/completions
+	embeddingEndpoint string // /embeddings
+	httpClient        *http.Client
 }
 
 // NewClient 创建模型客户端
@@ -43,9 +44,10 @@ func NewClient(cfg Config) *Client {
 		timeout = 30
 	}
 	return &Client{
-		cfg:        cfg,
-		endpoint:   strings.TrimRight(cfg.BaseURL, "/") + "/chat/completions",
-		httpClient: &http.Client{Timeout: time.Duration(timeout) * time.Second},
+		cfg:               cfg,
+		endpoint:          strings.TrimRight(cfg.BaseURL, "/") + "/chat/completions",
+		embeddingEndpoint: embeddingEndpointOf(cfg.BaseURL),
+		httpClient:        &http.Client{Timeout: time.Duration(timeout) * time.Second},
 	}
 }
 

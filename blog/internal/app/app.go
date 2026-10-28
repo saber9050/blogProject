@@ -273,7 +273,9 @@ func (a *App) initDependencies() {
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
 	aboutSvc := aboutSvc.NewAboutService(aboutRepo, a.minioClient, uRepo)
-	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo)
+	// ensurer 传 nil：向量表维护服务（vectorschema）在 P4 实现，
+	// 在那之前新建向量模型只做维度校验、不建表，向量化功能也还用不了。
+	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo, nil)
 	lSvc := llmSvc.NewLLMService(llmCfgSvc)
 
 	// 创建 Router
