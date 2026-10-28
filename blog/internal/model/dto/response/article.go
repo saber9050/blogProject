@@ -44,13 +44,11 @@ type ArticleListResponse struct {
 // 虽然不算敏感信息，但没必要暴露，也增加响应体积。
 type AdminArticleItem struct {
 	ArticleItem
-	VectorStatus       int8   `json:"vector_status"`
-	VectorTemplateID   uint   `json:"vector_template_id"`
-	VectorTemplateName string `json:"vector_template_name"`
-	VectorChunkCount   int    `json:"vector_chunk_count"`
-	VectorError        string `json:"vector_error"`
-	VectorizedAt       string `json:"vectorized_at"`
-	UpdatedAt          string `json:"updated_at"`
+	VectorStatus     int8   `json:"vector_status"`
+	VectorChunkCount int    `json:"vector_chunk_count"`
+	VectorError      string `json:"vector_error"`
+	VectorizedAt     string `json:"vectorized_at"`
+	UpdatedAt        string `json:"updated_at"`
 }
 
 // AdminArticleListResponse 后台文章列表响应

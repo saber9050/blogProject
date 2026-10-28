@@ -157,7 +157,7 @@
                       class="btn-sm"
                       :disabled="a.status !== 1 || a.vector_status === 1 || a.vector_status === 2 || vectorBusyId === a.id"
                       :title="a.status !== 1 ? '草稿不允许向量化' : ''"
-                      @click="openVectorModal(a)"
+                      @click="submitVectorize(a)"
                     >
                       {{ a.vector_status === 1 || a.vector_status === 2 ? '处理中' : '向量化' }}
                     </button>
@@ -385,12 +385,7 @@
           <AIModelPanel />
         </section>
 
-        <!-- ========== 切分模板 ========== -->
-        <section v-if="activeTab === 'chunk-templates'" class="admin-panel">
-          <ChunkTemplatePanel />
-        </section>
-
-        <!-- ========== 切分管理 ========== -->
+        <!-- ========== 切分管理（查看向量化后的分块原文） ========== -->
         <section v-if="activeTab === 'chunks'" class="admin-panel">
           <ChunkViewerPanel />
         </section>
@@ -489,50 +484,6 @@
       </div>
     </div>
 
-    <!-- ========== 向量化：选切分模板 ========== -->
-    <div v-if="vectorModalVisible" class="modal-overlay" @click.self="vectorModalVisible = false">
-      <div class="modal">
-        <h3 class="modal__title">向量化文章</h3>
-        <div class="modal__body">
-          <p class="vector-modal__target">
-            文章：<strong>{{ vectorTarget?.title }}</strong>
-          </p>
-
-          <div v-if="vectorTemplates.length" class="modal__field">
-            <label class="modal__label"><span class="required-mark">*</span>切分模板</label>
-            <select v-model="vectorTemplateId" class="modal__input">
-              <option value="" disabled>请选择模板</option>
-              <option v-for="t in vectorTemplates" :key="t.id" :value="String(t.id)">
-                {{ t.name }}（{{ t.chunk_size }} 字/块，重叠 {{ t.chunk_overlap }}）
-              </option>
-            </select>
-            <p class="vector-modal__hint">
-              提交后立即返回，切分与向量化在后台排队执行。可以继续提交其他文章，也可以离开本页。
-            </p>
-          </div>
-
-          <div v-else class="vector-modal__empty">
-            还没有启用的切分模板。
-            <button class="btn-sm btn-sm--primary" @click="goToChunkTemplates">去创建模板</button>
-          </div>
-
-          <div v-if="vectorTarget && vectorTarget.vector_status === 3" class="vector-modal__hint">
-            该文章已有 {{ vectorTarget.vector_chunk_count }} 个块，重新向量化会先删掉旧块。
-          </div>
-        </div>
-        <div class="modal__footer">
-          <button class="btn btn--cancel" @click="vectorModalVisible = false">取消</button>
-          <button
-            class="btn btn--primary"
-            :disabled="!vectorTemplateId || vectorSubmitting"
-            @click="submitVectorize"
-          >
-            {{ vectorSubmitting ? '提交中…' : '开始向量化' }}
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- ========== 一键转移分类模态框 ========== -->
     <div v-if="transferModalVisible" class="modal-overlay" @click.self="transferModalVisible = false">
       <div class="modal">
@@ -569,7 +520,6 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import AIModelPanel from '../components/AIModelPanel.vue'
-import ChunkTemplatePanel from '../components/ChunkTemplatePanel.vue'
 import ChunkViewerPanel from '../components/ChunkViewerPanel.vue'
 import { showToast } from '../utils/toast'
 
@@ -597,8 +547,6 @@ interface ArticleItem {
   likes?: number
   // ===== 向量化（仅后台列表返回）=====
   vector_status?: number // 0未处理 1排队中 2处理中 3已完成 4失败
-  vector_template_id?: number
-  vector_template_name?: string
   vector_chunk_count?: number
   vector_error?: string
   vectorized_at?: string
@@ -631,7 +579,6 @@ const tabs = [
   { key: 'categories', label: '分类管理', icon: '📁' },
   { key: 'tags', label: '标签管理', icon: '🏷️' },
   { key: 'ai', label: 'AI 模型', icon: '🤖' },
-  { key: 'chunk-templates', label: '切分模板', icon: '✂️' },
   { key: 'chunks', label: '切分管理', icon: '🧩' }
 ]
 
@@ -807,17 +754,9 @@ const loadArticles = async (page = 1) => {
 }
 
 // ---------- 向量化 ----------
-interface ChunkTemplateOption {
-  id: number
-  name: string
-  chunk_size: number
-  chunk_overlap: number
-}
-
-const vectorModalVisible = ref(false)
-const vectorTarget = ref<ArticleItem | null>(null)
-const vectorTemplates = ref<ChunkTemplateOption[]>([])
-const vectorTemplateId = ref('')
+// 不选切分模板：切分参数是全局固定的（后端 chunker.DefaultParams），
+// 按字符数切分只有三个旋钮，做成可选项的结果是多一个要维护的管理模块，
+// 块质量并没有变好。点一下就把这篇交给后台，切分、向量化都在队列里完成。
 const vectorSubmitting = ref(false)
 // 正在提交请求的那一行（与「已入队」状态区分开，避免按钮提前变灰引起困惑）
 const vectorBusyId = ref<number | null>(null)
@@ -849,42 +788,10 @@ const vectorState = (a: ArticleItem) => {
     return {
       text: `是（${a.vector_chunk_count || 0} 块）`,
       cls: 'status-badge--normal',
-      tip: a.vector_template_name ? `模板：${a.vector_template_name}` : ''
+      tip: '已向量化，可在「切分管理」查看分块原文'
     }
   }
   return { text: '否', cls: 'status-badge--idle', tip: '尚未向量化' }
-}
-
-const loadVectorTemplates = async () => {
-  try {
-    const res = await api.get('/admin/chunk-templates', { params: { status: 1 } })
-    vectorTemplates.value = (res.data?.data || []).map((t: any) => ({
-      id: t.id,
-      name: t.name,
-      chunk_size: t.chunk_size,
-      chunk_overlap: t.chunk_overlap
-    }))
-  } catch {
-    vectorTemplates.value = []
-  }
-}
-
-const openVectorModal = async (a: ArticleItem) => {
-  vectorTarget.value = a
-  vectorTemplateId.value = ''
-  vectorModalVisible.value = true
-  if (!vectorTemplates.value.length) {
-    await loadVectorTemplates()
-  }
-  // 只有一个模板时直接选中，省一次点击
-  if (vectorTemplates.value.length === 1) {
-    vectorTemplateId.value = String(vectorTemplates.value[0].id)
-  }
-}
-
-const goToChunkTemplates = () => {
-  vectorModalVisible.value = false
-  activeTab.value = 'chunk-templates'
 }
 
 const stopPoll = (articleId: number) => {
@@ -926,7 +833,6 @@ const startPoll = (articleId: number) => {
         row.vector_error = st.vector_error
         row.vectorized_at = st.vectorized_at
         row.updated_at = st.updated_at
-        row.vector_template_id = st.vector_template_id
       }
       if (st.vector_status === 3) {
         pollTimers.delete(articleId)
@@ -947,21 +853,27 @@ const startPoll = (articleId: number) => {
   pollTimers.set(articleId, window.setTimeout(tick, 1000))
 }
 
-const submitVectorize = async () => {
-  const target = vectorTarget.value
-  if (!target || !vectorTemplateId.value) return
-  vectorBusyId.value = target.id
+/**
+ * 提交向量化。
+ *
+ * 点一下直接进后台队列，不再弹窗选模板：切分参数是全局固定的，
+ * 让用户每篇选一次「怎么切」既没有决策依据，也把内部参数暴露成了产品概念。
+ * 已有块的文章会被覆盖（后端同事务内删旧写新），这里给一句提示避免误解。
+ */
+const submitVectorize = async (a: ArticleItem) => {
+  if (!a || a.status !== 1) return
+  vectorBusyId.value = a.id
   vectorSubmitting.value = true
   try {
-    const res = await api.post(`/admin/articles/${target.id}/vectorize`, {
-      template_id: Number(vectorTemplateId.value)
-    })
+    const res = await api.post(`/admin/articles/${a.id}/vectorize`)
     const d = res.data?.data
-    const row = adminArticles.value.find((a) => a.id === target.id)
+    const row = adminArticles.value.find((x) => x.id === a.id)
     if (row && d) row.vector_status = d.vector_status
-    showToast('已提交，排队处理中', 'success')
-    vectorModalVisible.value = false
-    startPoll(target.id)
+    showToast(
+      a.vector_status === 3 ? '已提交，旧分块会在完成后被替换' : '已提交，后台排队处理中',
+      'success'
+    )
+    startPoll(a.id)
   } catch (err: any) {
     showToast(err?.response?.data?.message || '提交失败', 'error')
   } finally {
@@ -1427,32 +1339,6 @@ onMounted(async () => {
 .status-badge--failed { background: #fff2f0; color: #ff4d4f; }
 .status-badge--stale { background: #fff7e6; color: #fa8c16; }
 .status-badge--idle { background: #f5f5f5; color: #999; }
-
-.vector-modal__target {
-  margin: 0 0 12px;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: #555;
-}
-
-.vector-modal__hint {
-  margin: 6px 0 0;
-  font-size: 0.76rem;
-  line-height: 1.55;
-  color: #888;
-}
-
-.vector-modal__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  color: #666;
-  background: rgba(148, 163, 184, 0.1);
-}
 
 .cat-tag-badge { background: #f0f5ff; color: #2f54eb; margin-right: 4px; }
 .cat-tag-badge--tag { background: #f0f0f0; color: #666; }

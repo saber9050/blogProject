@@ -51,10 +51,6 @@
     <!-- ===== 块明细 ===== -->
     <template v-if="view === 'detail'">
       <div class="cv-filter">
-        <select v-model="filter.template_id" class="cv-input" @change="loadChunks(1)">
-          <option value="">全部模板</option>
-          <option v-for="t in templates" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
-        </select>
         <input
           v-model="filter.article_id"
           class="cv-input cv-input--sm"
@@ -75,7 +71,6 @@
           <tr>
             <th>块 ID</th>
             <th>文章</th>
-            <th>模板</th>
             <th>序号</th>
             <th>字符数</th>
             <th>原文预览</th>
@@ -88,9 +83,7 @@
             <td class="cv-ellipsis" :title="c.article_title">
               <span class="cv-muted">#{{ c.article_id }}</span> {{ c.article_title || '（已删除）' }}
             </td>
-            <td>{{ c.template_name || '—' }}</td>
-            <td class="cv-mono">{{ c.chunk_index }}</td>
-            <td class="cv-mono">{{ c.char_count }}</td>
+            <td class="cv-mono">{{ c.chunk_index }}</td>            <td class="cv-mono">{{ c.char_count }}</td>
             <td class="cv-preview">
               {{ c.content }}<span v-if="c.content_truncated" class="cv-more">…</span>
             </td>
@@ -113,44 +106,10 @@
 
     <!-- ===== 聚合统计 ===== -->
     <template v-else>
-      <div class="cv-filter">
-        <select v-model="groupBy" class="cv-input" @change="loadStat">
-          <option value="template">按模板</option>
-          <option value="article">按文章</option>
-        </select>
-      </div>
-
-      <table v-if="groupBy === 'template'" class="cv-table">
-        <thead>
-          <tr>
-            <th>模板</th>
-            <th>状态</th>
-            <th>文章数</th>
-            <th>块数</th>
-            <th>平均块长</th>
-            <th>最近切分</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="s in tplStats" :key="s.template_id">
-            <td>
-              {{ s.template_name }}
-              <span v-if="!s.chunk_count" class="cv-muted">（未使用）</span>
-            </td>
-            <td>{{ s.template_status === 1 ? '启用' : '禁用' }}</td>
-            <td class="cv-mono">{{ s.article_count }}</td>
-            <td class="cv-mono">{{ s.chunk_count }}</td>
-            <td class="cv-mono">{{ s.chunk_count ? s.avg_chars + ' 字' : '—' }}</td>
-            <td class="cv-time">{{ s.last_chunk_at || '—' }}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <table v-else class="cv-table">
+      <table class="cv-table">
         <thead>
           <tr>
             <th>文章</th>
-            <th>模板</th>
             <th>块数</th>
             <th>平均块长</th>
             <th>最近切分</th>
@@ -161,14 +120,13 @@
             <td class="cv-ellipsis" :title="s.article_title">
               <span class="cv-muted">#{{ s.article_id }}</span> {{ s.article_title }}
             </td>
-            <td>{{ s.template_name || '—' }}</td>
             <td class="cv-mono">{{ s.chunk_count }}</td>
             <td class="cv-mono">{{ s.avg_chars }} 字</td>
             <td class="cv-time">{{ s.last_chunk_at || '—' }}</td>
           </tr>
         </tbody>
       </table>
-      <div v-if="!statList.length" class="cv-empty">暂无统计数据</div>
+      <div v-if="!artStats.length" class="cv-empty">暂无统计数据</div>
     </template>
 
     <Teleport to="body">
@@ -218,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import api from '../api'
 import { showToast } from '../utils/toast'
 
@@ -226,18 +184,11 @@ interface ChunkItem {
   id: number
   article_id: number
   article_title: string
-  template_id: number
-  template_name: string
   chunk_index: number
   char_count: number
   content: string
   content_truncated: boolean
   created_at: string
-}
-
-interface ChunkTemplate {
-  id: number
-  name: string
 }
 
 interface VectorSchema {
@@ -251,23 +202,19 @@ interface VectorSchema {
   message: string
 }
 
-const templates = ref<ChunkTemplate[]>([])
 const schema = ref<VectorSchema | null>(null)
 const summary = reactive({ chunk_total: 0, article_total: 0, avg_chunk_per_article: 0 })
 
 const view = ref<'detail' | 'stat'>('detail')
-const groupBy = ref<'template' | 'article'>('template')
 
-const filter = reactive({ template_id: '', article_id: '', keyword: '' })
+const filter = reactive({ article_id: '', keyword: '' })
 const chunks = ref<ChunkItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = 20
 const loading = ref(false)
 
-const statList = ref<any[]>([])
-const tplStats = computed(() => (groupBy.value === 'template' ? statList.value : []))
-const artStats = computed(() => (groupBy.value === 'article' ? statList.value : []))
+const artStats = ref<any[]>([])
 
 const fullChunk = ref<ChunkItem | null>(null)
 
@@ -286,19 +233,10 @@ const loadSchema = async () => {
   }
 }
 
-const loadTemplates = async () => {
-  try {
-    const res = await api.get('/admin/chunk-templates')
-    templates.value = res.data?.data || []
-  } catch {
-    templates.value = []
-  }
-}
-
 // summary 是全局的，不受筛选影响，所以单独从 stat 接口取一次
 const loadSummary = async () => {
   try {
-    const res = await api.get('/admin/chunks/stat', { params: { group_by: 'template' } })
+    const res = await api.get('/admin/chunks/stat', { params: { group_by: 'article' } })
     const s = res.data?.data?.summary || {}
     summary.chunk_total = s.chunk_total || 0
     summary.article_total = s.article_total || 0
@@ -314,7 +252,6 @@ const loadChunks = async (p = 1) => {
   loading.value = true
   try {
     const params: Record<string, any> = { page: p, page_size: pageSize }
-    if (filter.template_id) params.template_id = filter.template_id
     if (filter.article_id) params.article_id = filter.article_id
     if (filter.keyword.trim()) params.keyword = filter.keyword.trim()
 
@@ -338,10 +275,10 @@ const loadChunks = async (p = 1) => {
 
 const loadStat = async () => {
   try {
-    const res = await api.get('/admin/chunks/stat', { params: { group_by: groupBy.value } })
-    statList.value = res.data?.data?.list || []
+    const res = await api.get('/admin/chunks/stat', { params: { group_by: 'article' } })
+    artStats.value = res.data?.data?.list || []
   } catch (err: any) {
-    statList.value = []
+    artStats.value = []
     showToast(errMsg(err, '加载统计失败'), 'error')
   }
 }
@@ -352,7 +289,6 @@ const switchToStat = async () => {
 }
 
 const resetFilter = async () => {
-  filter.template_id = ''
   filter.article_id = ''
   filter.keyword = ''
   await loadChunks(1)
@@ -371,7 +307,7 @@ const openFull = (row: ChunkItem) => {
 }
 
 const loadAll = async () => {
-  await Promise.all([loadSchema(), loadTemplates(), loadSummary()])
+  await Promise.all([loadSchema(), loadSummary()])
   if (view.value === 'detail') {
     await loadChunks(page.value)
   } else {

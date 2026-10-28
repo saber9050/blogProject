@@ -245,7 +245,7 @@ func (a *App) initDependencies() {
 
 	// 初始化认证中间件
 	middleware.InitAuth(authCache)
-	aSvc := articleSvc.NewArticleService(aRepo, uRepo, catRepo, tRepo, cRepo, uSvc, a.minioClient, ctRepo)
+	aSvc := articleSvc.NewArticleService(aRepo, uRepo, catRepo, tRepo, cRepo, uSvc, a.minioClient)
 	cSvc := commentSvc.NewCommentService(cRepo, a.minioClient, uRepo)
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
@@ -255,7 +255,7 @@ func (a *App) initDependencies() {
 	// llmconfig 靠它实现「新建向量模型时按维度建表」
 	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo, a.vectorSchemaSvc)
 	lSvc := llmSvc.NewLLMService(llmCfgSvc)
-	vecSvc := vectorizeSvc.NewVectorizeService(a.pgDB, aRepo, ctRepo, acRepo, llmCfgSvc, a.vectorSchemaSvc)
+	vecSvc := vectorizeSvc.NewVectorizeService(a.pgDB, aRepo, acRepo, llmCfgSvc, a.vectorSchemaSvc)
 	ckSvc := chunkSvc.NewChunkService(acRepo)
 
 	// 先把进程重启前遗留的「排队中/处理中」重置为失败，再启动 worker。

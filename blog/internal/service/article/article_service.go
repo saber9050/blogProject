@@ -6,7 +6,6 @@ import (
 	"blog/internal/model/entity"
 	repo "blog/internal/repository/article"
 	"blog/internal/repository/category"
-	tplRepo "blog/internal/repository/chunktemplate"
 	commentRepo "blog/internal/repository/comment"
 	"blog/internal/repository/tag"
 	"blog/internal/repository/user"
@@ -31,9 +30,6 @@ type articleService struct {
 	commentRepo  commentRepo.CommentRepository
 	userSvc      user2.UserService
 	minio        *minioPkg.Client
-	// tplRepo 仅用于后台列表回填「向量化用的模板名」。允许为 nil（历史构造函数签名），
-	// nil 时该字段返回空串，前端仍可用 vector_template_id 自行映射。
-	tplRepo tplRepo.Repository
 }
 
 // NewArticleService 创建文章服务实例
@@ -45,7 +41,6 @@ func NewArticleService(
 	commentRepo commentRepo.CommentRepository,
 	userSvc user2.UserService,
 	minio *minioPkg.Client,
-	tplRepo tplRepo.Repository,
 ) ArticleService {
 	return &articleService{
 		articleRepo:  articleRepo,
@@ -55,7 +50,6 @@ func NewArticleService(
 		commentRepo:  commentRepo,
 		userSvc:      userSvc,
 		minio:        minio,
-		tplRepo:      tplRepo,
 	}
 }
 
@@ -269,19 +263,6 @@ func (s *articleService) AdminList(page, pageSize int, status *int, categoryID u
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取文章列表失败", err)
 	}
 
-	// 模板名一次性查出来建 map，而不是每行 join 或每行查一次：
-	// 模板总数是个位数，一次查询 + 内存映射比 N 次往返便宜得多
-	tplNames := make(map[uint]string)
-	if s.tplRepo != nil {
-		if tpls, err := s.tplRepo.List(nil); err == nil {
-			for _, t := range tpls {
-				tplNames[t.ID] = t.Name
-			}
-		} else {
-			logger.Warn("读取切分模板列表失败，模板名将为空", zap.Error(err))
-		}
-	}
-
 	items := make([]*response.AdminArticleItem, 0, len(list))
 	for _, article := range list {
 		base, err := s.buildArticleResponse(article, 0)
@@ -289,13 +270,11 @@ func (s *articleService) AdminList(page, pageSize int, status *int, categoryID u
 			continue
 		}
 		item := &response.AdminArticleItem{
-			ArticleItem:        *base,
-			VectorStatus:       article.VectorStatus,
-			VectorTemplateID:   article.VectorTemplateID,
-			VectorTemplateName: tplNames[article.VectorTemplateID],
-			VectorChunkCount:   article.VectorChunkCount,
-			VectorError:        article.VectorError,
-			UpdatedAt:          article.UpdatedAt.Format(time.RFC3339),
+			ArticleItem:      *base,
+			VectorStatus:     article.VectorStatus,
+			VectorChunkCount: article.VectorChunkCount,
+			VectorError:      article.VectorError,
+			UpdatedAt:        article.UpdatedAt.Format(time.RFC3339),
 		}
 		if article.VectorizedAt != nil {
 			item.VectorizedAt = article.VectorizedAt.Format(time.RFC3339)

@@ -10,7 +10,10 @@ import (
 type Service interface {
 	// Submit 提交向量化任务。只做校验 + 抢锁 + 投递，毫秒级返回，
 	// 真正的切分与 embedding 在后台 worker 里串行执行。
-	Submit(articleID, templateID uint) (*response.VectorizeSubmitResponse, error)
+	//
+	// 不接受切分参数：切分策略是全局固定的（见 chunker.DefaultParams），
+	// 调用方只需要说「把这篇向量化」，不需要也不应该决定怎么切。
+	Submit(articleID uint) (*response.VectorizeSubmitResponse, error)
 	// Status 查询向量化状态（轮询用，只查 articles 一行）
 	Status(articleID uint) (*response.VectorStatusResponse, error)
 	// RecoverZombies 把进程重启前遗留的「排队中/处理中」重置为失败。

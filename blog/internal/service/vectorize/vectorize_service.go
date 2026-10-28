@@ -11,7 +11,6 @@ import (
 	"blog/internal/model/entity"
 	articleRepo "blog/internal/repository/article"
 	articlechunkRepo "blog/internal/repository/articlechunk"
-	chunkTplRepo "blog/internal/repository/chunktemplate"
 	"blog/internal/service/chunker"
 	llmconfigSvc "blog/internal/service/llmconfig"
 	vectorSchemaSvc "blog/internal/service/vectorschema"
@@ -42,15 +41,15 @@ const (
 )
 
 // task 一个待处理的向量化任务
+//
+// 只有文章 id：切分参数是全局固定的，任务里不带任何「怎么切」的信息。
 type task struct {
-	articleID  uint
-	templateID uint
+	articleID uint
 }
 
 type vectorizeService struct {
 	db        *gorm.DB
 	articleRp articleRepo.ArticleRepository
-	tplRepo   chunkTplRepo.Repository
 	chunkRepo articlechunkRepo.Repository
 	llmCfgSvc llmconfigSvc.Service
 	schemaSvc vectorSchemaSvc.Service
@@ -61,7 +60,6 @@ type vectorizeService struct {
 func NewVectorizeService(
 	db *gorm.DB,
 	articleRp articleRepo.ArticleRepository,
-	tplRepo chunkTplRepo.Repository,
 	chunkRepo articlechunkRepo.Repository,
 	llmCfgSvc llmconfigSvc.Service,
 	schemaSvc vectorSchemaSvc.Service,
@@ -69,7 +67,6 @@ func NewVectorizeService(
 	return &vectorizeService{
 		db:        db,
 		articleRp: articleRp,
-		tplRepo:   tplRepo,
 		chunkRepo: chunkRepo,
 		llmCfgSvc: llmCfgSvc,
 		schemaSvc: schemaSvc,
@@ -81,7 +78,7 @@ func NewVectorizeService(
 //
 // 顺序：校验 → 抢锁 → 投递。抢锁用的是条件 UPDATE，
 // 靠 RowsAffected 判断，不做「先查后改」——那样并发点两次会都通过检查。
-func (s *vectorizeService) Submit(articleID, templateID uint) (*response.VectorizeSubmitResponse, error) {
+func (s *vectorizeService) Submit(articleID uint) (*response.VectorizeSubmitResponse, error) {
 	article, err := s.articleRp.FindByID(articleID)
 	if err != nil {
 		logger.Error("读取文章失败", zap.Uint("article_id", articleID), zap.Error(err))
@@ -106,18 +103,6 @@ func (s *vectorizeService) Submit(articleID, templateID uint) (*response.Vectori
 			"文章正文过少（当前 %d 字，至少 %d 字），无法向量化", n, chunker.MinContentChars))
 	}
 
-	tpl, err := s.tplRepo.FindByID(templateID)
-	if err != nil {
-		logger.Error("读取切分模板失败", zap.Error(err))
-		return nil, errors.NewWithErr(errors.CodeInternalError, "读取切分模板失败", err)
-	}
-	if tpl == nil {
-		return nil, errors.New(errors.CodeNotFound, "切分模板不存在")
-	}
-	if tpl.Status != 1 {
-		return nil, errors.New(errors.CodeBadRequest, "该切分模板已禁用，请先启用")
-	}
-
 	// 提前确认向量模型可用，避免任务排队半天最后因为没配模型失败
 	if _, _, err := s.llmCfgSvc.ResolveEmbedding(); err != nil {
 		return nil, err
@@ -140,7 +125,7 @@ func (s *vectorizeService) Submit(articleID, templateID uint) (*response.Vectori
 	}
 
 	select {
-	case s.queue <- task{articleID: articleID, templateID: templateID}:
+	case s.queue <- task{articleID: articleID}:
 	default:
 		// 队列满：把状态退回去。带 vector_status=1 条件，
 		// 否则可能覆盖掉刚刚被 worker 改成 2 的状态
@@ -152,7 +137,6 @@ func (s *vectorizeService) Submit(articleID, templateID uint) (*response.Vectori
 
 	return &response.VectorizeSubmitResponse{
 		ArticleID:    articleID,
-		TemplateID:   templateID,
 		VectorStatus: entity.VectorStatusQueued,
 	}, nil
 }
@@ -161,7 +145,7 @@ func (s *vectorizeService) Submit(articleID, templateID uint) (*response.Vectori
 func (s *vectorizeService) Status(articleID uint) (*response.VectorStatusResponse, error) {
 	var a entity.Article
 	err := s.db.Select(
-		"id, vector_status, vector_template_id, vector_chunk_count, vector_error, vectorized_at, updated_at").
+		"id, vector_status, vector_chunk_count, vector_error, vectorized_at, updated_at").
 		First(&a, articleID).Error
 	if err != nil {
 		if stderrors.Is(err, gorm.ErrRecordNotFound) {
@@ -174,7 +158,6 @@ func (s *vectorizeService) Status(articleID uint) (*response.VectorStatusRespons
 	out := &response.VectorStatusResponse{
 		ArticleID:        a.ID,
 		VectorStatus:     a.VectorStatus,
-		VectorTemplateID: a.VectorTemplateID,
 		VectorChunkCount: a.VectorChunkCount,
 		VectorError:      a.VectorError,
 		UpdatedAt:        a.UpdatedAt.Format(time.RFC3339),
@@ -256,7 +239,6 @@ func (s *vectorizeService) process(parent context.Context, t task) {
 	}
 	logger.Info("文章向量化完成",
 		zap.Uint("article_id", t.articleID),
-		zap.Uint("template_id", t.templateID),
 		zap.Duration("cost", time.Since(start)))
 }
 
@@ -270,14 +252,6 @@ func (s *vectorizeService) doVectorize(ctx context.Context, t task) error {
 		return stderrors.New("文章已被删除")
 	}
 
-	tpl, err := s.tplRepo.FindByID(t.templateID)
-	if err != nil {
-		return fmt.Errorf("读取切分模板失败: %w", err)
-	}
-	if tpl == nil {
-		return stderrors.New("切分模板已被删除")
-	}
-
 	cfg, dim, err := s.llmCfgSvc.ResolveEmbedding()
 	if err != nil {
 		return err
@@ -288,7 +262,7 @@ func (s *vectorizeService) doVectorize(ctx context.Context, t task) error {
 		return err
 	}
 
-	chunks, err := chunker.Split(article.Content, chunker.ParamsFromTemplate(tpl))
+	chunks, err := chunker.Split(article.Content, chunker.DefaultParams())
 	if err != nil {
 		return err
 	}
@@ -304,8 +278,9 @@ func (s *vectorizeService) doVectorize(ctx context.Context, t task) error {
 	rows := make([]*entity.ArticleChunk, 0, len(chunks))
 	for i, c := range chunks {
 		rows = append(rows, &entity.ArticleChunk{
-			ArticleID:      t.articleID,
-			TemplateID:     t.templateID,
+			ArticleID: t.articleID,
+			// TemplateID 留零值：模板概念已下线，这一列随 DDL 一起等下一轮清理。
+			// 不写死 0 而是不赋值，是为了让「这里没这个概念」在代码里也是一致的。
 			ChunkIndex:     i,
 			Content:        c.Content,
 			CharCount:      c.CharCount,
@@ -327,7 +302,6 @@ func (s *vectorizeService) doVectorize(ctx context.Context, t task) error {
 		return tx.Model(&entity.Article{}).Where("id = ?", t.articleID).
 			Updates(map[string]interface{}{
 				"vector_status":      entity.VectorStatusDone,
-				"vector_template_id": t.templateID,
 				"vector_chunk_count": len(rows),
 				"vector_error":       "",
 				"vectorized_at":      now,

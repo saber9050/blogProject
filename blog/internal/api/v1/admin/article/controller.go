@@ -33,6 +33,9 @@ func NewArticleController(
 }
 
 // Vectorize 提交向量化任务（立即返回，后台异步处理）
+//
+// 不需要请求体：切分参数是全局固定的，调用方只表达「把这篇向量化」。
+// 之前要传 template_id，等于把内部实现细节暴露成了接口契约。
 func (ctrl *ArticleController) Vectorize(c *gin.Context) {
 	id, err := parseArticleID(c)
 	if err != nil {
@@ -40,13 +43,7 @@ func (ctrl *ArticleController) Vectorize(c *gin.Context) {
 		return
 	}
 
-	var req request.VectorizeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误：template_id 必填")
-		return
-	}
-
-	result, err := ctrl.vectorizeSvc.Submit(id, req.TemplateID)
+	result, err := ctrl.vectorizeSvc.Submit(id)
 	if err != nil {
 		response.BizError(c, err)
 		return

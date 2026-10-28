@@ -54,7 +54,25 @@ type Result struct {
 	CharCount int // rune 数，不是字节数
 }
 
+// DefaultParams 生产环境使用的切分参数。
+//
+// 不再由用户按模板配置：按字符数切分本身只有三个旋钮，调来调去差异很小，
+// 做成可配置项的结果是「多了一个要维护的管理模块，块质量并没有变好」。
+// 参数固化在代码里，要调整就改这里的常量并重新发布——这也让「某篇文章是
+// 用哪套参数切的」不再是个需要记录的变量。
+func DefaultParams() Params {
+	return Params{
+		ChunkSize:    DefaultChunkSize,
+		ChunkOverlap: DefaultChunkOverlap,
+		MinChunkSize: DefaultMinChunkSize,
+		StripHTML:    true,
+	}
+}
+
 // ParamsFromTemplate 用切分模板构造参数
+//
+// 模板管理界面已下线，这个函数仅为兼容 DDL 里保留的 template_id 列与
+// 后续可能的「按标题层级切分」实验保留；生产链路走 DefaultParams。
 func ParamsFromTemplate(t *entity.ChunkTemplate) Params {
 	if t == nil {
 		return Params{
