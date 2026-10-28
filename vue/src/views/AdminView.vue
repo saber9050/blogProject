@@ -119,6 +119,7 @@
                 <th>分类</th>
                 <th>标签</th>
                 <th>状态</th>
+                <th>向量化</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -141,7 +142,25 @@
                   </span>
                 </td>
                 <td>
+                  <!-- vector_state 返回文案与样式类；失败时 hover 显示原因 -->
+                  <span
+                    class="status-badge"
+                    :class="vectorState(a).cls"
+                    :title="a.vector_status === 4 ? a.vector_error : vectorState(a).tip"
+                  >
+                    {{ vectorState(a).text }}
+                  </span>
+                </td>
+                <td>
                   <div class="table-actions">
+                    <button
+                      class="btn-sm"
+                      :disabled="a.status !== 1 || a.vector_status === 1 || a.vector_status === 2 || vectorBusyId === a.id"
+                      :title="a.status !== 1 ? '草稿不允许向量化' : ''"
+                      @click="openVectorModal(a)"
+                    >
+                      {{ a.vector_status === 1 || a.vector_status === 2 ? '处理中' : '向量化' }}
+                    </button>
                     <button class="btn-sm" @click="goToArticleEditor('/admin/article/' + a.id + '/edit')">编辑</button>
                     <button class="btn-sm btn-sm--danger" @click="handleDelete('article', a.id)">删除</button>
                   </div>
@@ -365,6 +384,16 @@
         <section v-if="activeTab === 'ai'" class="admin-panel">
           <AIModelPanel />
         </section>
+
+        <!-- ========== 切分模板 ========== -->
+        <section v-if="activeTab === 'chunk-templates'" class="admin-panel">
+          <ChunkTemplatePanel />
+        </section>
+
+        <!-- ========== 切分管理 ========== -->
+        <section v-if="activeTab === 'chunks'" class="admin-panel">
+          <ChunkViewerPanel />
+        </section>
       </main>
     </div>
 
@@ -460,6 +489,50 @@
       </div>
     </div>
 
+    <!-- ========== 向量化：选切分模板 ========== -->
+    <div v-if="vectorModalVisible" class="modal-overlay" @click.self="vectorModalVisible = false">
+      <div class="modal">
+        <h3 class="modal__title">向量化文章</h3>
+        <div class="modal__body">
+          <p class="vector-modal__target">
+            文章：<strong>{{ vectorTarget?.title }}</strong>
+          </p>
+
+          <div v-if="vectorTemplates.length" class="modal__field">
+            <label class="modal__label"><span class="required-mark">*</span>切分模板</label>
+            <select v-model="vectorTemplateId" class="modal__input">
+              <option value="" disabled>请选择模板</option>
+              <option v-for="t in vectorTemplates" :key="t.id" :value="String(t.id)">
+                {{ t.name }}（{{ t.chunk_size }} 字/块，重叠 {{ t.chunk_overlap }}）
+              </option>
+            </select>
+            <p class="vector-modal__hint">
+              提交后立即返回，切分与向量化在后台排队执行。可以继续提交其他文章，也可以离开本页。
+            </p>
+          </div>
+
+          <div v-else class="vector-modal__empty">
+            还没有启用的切分模板。
+            <button class="btn-sm btn-sm--primary" @click="goToChunkTemplates">去创建模板</button>
+          </div>
+
+          <div v-if="vectorTarget && vectorTarget.vector_status === 3" class="vector-modal__hint">
+            该文章已有 {{ vectorTarget.vector_chunk_count }} 个块，重新向量化会先删掉旧块。
+          </div>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--cancel" @click="vectorModalVisible = false">取消</button>
+          <button
+            class="btn btn--primary"
+            :disabled="!vectorTemplateId || vectorSubmitting"
+            @click="submitVectorize"
+          >
+            {{ vectorSubmitting ? '提交中…' : '开始向量化' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ========== 一键转移分类模态框 ========== -->
     <div v-if="transferModalVisible" class="modal-overlay" @click.self="transferModalVisible = false">
       <div class="modal">
@@ -491,11 +564,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, type Ref } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import AIModelPanel from '../components/AIModelPanel.vue'
+import ChunkTemplatePanel from '../components/ChunkTemplatePanel.vue'
+import ChunkViewerPanel from '../components/ChunkViewerPanel.vue'
 import { showToast } from '../utils/toast'
 
 // ---------- 类型 ----------
@@ -520,6 +595,14 @@ interface ArticleItem {
   status: number
   views?: number
   likes?: number
+  // ===== 向量化（仅后台列表返回）=====
+  vector_status?: number // 0未处理 1排队中 2处理中 3已完成 4失败
+  vector_template_id?: number
+  vector_template_name?: string
+  vector_chunk_count?: number
+  vector_error?: string
+  vectorized_at?: string
+  updated_at?: string
 }
 
 interface CatTagItem {
@@ -547,7 +630,9 @@ const tabs = [
   { key: 'comments', label: '评论管理', icon: '💬' },
   { key: 'categories', label: '分类管理', icon: '📁' },
   { key: 'tags', label: '标签管理', icon: '🏷️' },
-  { key: 'ai', label: 'AI 模型', icon: '🤖' }
+  { key: 'ai', label: 'AI 模型', icon: '🤖' },
+  { key: 'chunk-templates', label: '切分模板', icon: '✂️' },
+  { key: 'chunks', label: '切分管理', icon: '🧩' }
 ]
 
 const users = ref<UserItem[]>([])
@@ -720,6 +805,178 @@ const loadArticles = async (page = 1) => {
     articleTotal.value = res.data.data?.total || 0
   } catch (e) { console.error('加载文章失败:', e) }
 }
+
+// ---------- 向量化 ----------
+interface ChunkTemplateOption {
+  id: number
+  name: string
+  chunk_size: number
+  chunk_overlap: number
+}
+
+const vectorModalVisible = ref(false)
+const vectorTarget = ref<ArticleItem | null>(null)
+const vectorTemplates = ref<ChunkTemplateOption[]>([])
+const vectorTemplateId = ref('')
+const vectorSubmitting = ref(false)
+// 正在提交请求的那一行（与「已入队」状态区分开，避免按钮提前变灰引起困惑）
+const vectorBusyId = ref<number | null>(null)
+
+// 每个文章一个轮询定时器，页面卸载时统一清掉
+const pollTimers = new Map<number, number>()
+
+/**
+ * 向量化状态 → 文案与样式。
+ *
+ * 特意区分「排队中(1)」和「处理中(2)」：两者都属于同一条链路，
+ * 用同一个蓝但靠有无旋转图标区分（这里用文案前缀区分，样式相同）。
+ * 「待更新」是 3 且 vectorized_at 早于 updated_at —— 正文改过了，旧块已过期。
+ */
+const vectorState = (a: ArticleItem) => {
+  const s = a.vector_status ?? 0
+  if (s === 1) return { text: '排队中', cls: 'status-badge--queued', tip: '已提交，等待处理' }
+  if (s === 2) return { text: '处理中…', cls: 'status-badge--running', tip: '正在切分与向量化' }
+  if (s === 4) {
+    return { text: '失败', cls: 'status-badge--failed', tip: a.vector_error || '向量化失败' }
+  }
+  if (s === 3) {
+    // 正文改过但没重新向量化
+    const v = a.vectorized_at ? Date.parse(a.vectorized_at) : NaN
+    const u = a.updated_at ? Date.parse(a.updated_at) : NaN
+    if (!Number.isNaN(v) && !Number.isNaN(u) && v < u) {
+      return { text: '待更新', cls: 'status-badge--stale', tip: '正文已修改，需要重新向量化' }
+    }
+    return {
+      text: `是（${a.vector_chunk_count || 0} 块）`,
+      cls: 'status-badge--normal',
+      tip: a.vector_template_name ? `模板：${a.vector_template_name}` : ''
+    }
+  }
+  return { text: '否', cls: 'status-badge--idle', tip: '尚未向量化' }
+}
+
+const loadVectorTemplates = async () => {
+  try {
+    const res = await api.get('/admin/chunk-templates', { params: { status: 1 } })
+    vectorTemplates.value = (res.data?.data || []).map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      chunk_size: t.chunk_size,
+      chunk_overlap: t.chunk_overlap
+    }))
+  } catch {
+    vectorTemplates.value = []
+  }
+}
+
+const openVectorModal = async (a: ArticleItem) => {
+  vectorTarget.value = a
+  vectorTemplateId.value = ''
+  vectorModalVisible.value = true
+  if (!vectorTemplates.value.length) {
+    await loadVectorTemplates()
+  }
+  // 只有一个模板时直接选中，省一次点击
+  if (vectorTemplates.value.length === 1) {
+    vectorTemplateId.value = String(vectorTemplates.value[0].id)
+  }
+}
+
+const goToChunkTemplates = () => {
+  vectorModalVisible.value = false
+  activeTab.value = 'chunk-templates'
+}
+
+const stopPoll = (articleId: number) => {
+  const timer = pollTimers.get(articleId)
+  if (timer) {
+    clearTimeout(timer)
+    pollTimers.delete(articleId)
+  }
+}
+
+/**
+ * 轮询状态。
+ *
+ * 用 setTimeout 串行而不是 setInterval：上一次响应回来才排下一次，
+ * 避免接口变慢时请求堆叠（本项目的 axios 有 401 自动刷新，堆叠会放大刷新风暴）。
+ * 次数上限 100 次，避免用户忘了关页面而一直打接口。
+ */
+const startPoll = (articleId: number) => {
+  stopPoll(articleId)
+  let count = 0
+
+  const tick = async () => {
+    count += 1
+    if (count > 100) {
+      pollTimers.delete(articleId)
+      return
+    }
+    try {
+      const res = await api.get(`/admin/articles/${articleId}/vector-status`)
+      const st = res.data?.data
+      if (!st) {
+        pollTimers.delete(articleId)
+        return
+      }
+      const row = adminArticles.value.find((a) => a.id === articleId)
+      if (row) {
+        row.vector_status = st.vector_status
+        row.vector_chunk_count = st.vector_chunk_count
+        row.vector_error = st.vector_error
+        row.vectorized_at = st.vectorized_at
+        row.updated_at = st.updated_at
+        row.vector_template_id = st.vector_template_id
+      }
+      if (st.vector_status === 3) {
+        pollTimers.delete(articleId)
+        showToast(`《${row?.title || ''}》向量化完成，共 ${st.vector_chunk_count} 块`, 'success')
+        return
+      }
+      if (st.vector_status === 4) {
+        pollTimers.delete(articleId)
+        showToast(`《${row?.title || ''}》向量化失败：${st.vector_error || '未知原因'}`, 'error')
+        return
+      }
+      pollTimers.set(articleId, window.setTimeout(tick, 3000))
+    } catch {
+      pollTimers.delete(articleId)
+    }
+  }
+
+  pollTimers.set(articleId, window.setTimeout(tick, 1000))
+}
+
+const submitVectorize = async () => {
+  const target = vectorTarget.value
+  if (!target || !vectorTemplateId.value) return
+  vectorBusyId.value = target.id
+  vectorSubmitting.value = true
+  try {
+    const res = await api.post(`/admin/articles/${target.id}/vectorize`, {
+      template_id: Number(vectorTemplateId.value)
+    })
+    const d = res.data?.data
+    const row = adminArticles.value.find((a) => a.id === target.id)
+    if (row && d) row.vector_status = d.vector_status
+    showToast('已提交，排队处理中', 'success')
+    vectorModalVisible.value = false
+    startPoll(target.id)
+  } catch (err: any) {
+    showToast(err?.response?.data?.message || '提交失败', 'error')
+  } finally {
+    vectorBusyId.value = null
+    vectorSubmitting.value = false
+  }
+}
+
+// 离开页面必须清掉所有定时器，否则会一直在后台打接口
+onBeforeUnmount(() => {
+  for (const timer of pollTimers.values()) {
+    clearTimeout(timer)
+  }
+  pollTimers.clear()
+})
 
 const loadComments = async (page = 1) => {
   commentPage.value = page
@@ -1162,6 +1419,40 @@ onMounted(async () => {
 .status-badge--normal { background: #f6ffed; color: #52c41a; }
 .status-badge--banned { background: #fff2f0; color: #ff4d4f; }
 .status-badge--draft { background: #fffbe6; color: #faad14; }
+
+/* ===== 向量化状态 ===== */
+/* 排队中与处理中同色：同一条链路不该用两个色相，否则会让人以为是两种不同的问题 */
+.status-badge--queued { background: #e6f4ff; color: #1677ff; }
+.status-badge--running { background: #e6f4ff; color: #1677ff; }
+.status-badge--failed { background: #fff2f0; color: #ff4d4f; }
+.status-badge--stale { background: #fff7e6; color: #fa8c16; }
+.status-badge--idle { background: #f5f5f5; color: #999; }
+
+.vector-modal__target {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #555;
+}
+
+.vector-modal__hint {
+  margin: 6px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: #888;
+}
+
+.vector-modal__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #666;
+  background: rgba(148, 163, 184, 0.1);
+}
 
 .cat-tag-badge { background: #f0f5ff; color: #2f54eb; margin-right: 4px; }
 .cat-tag-badge--tag { background: #f0f0f0; color: #666; }
