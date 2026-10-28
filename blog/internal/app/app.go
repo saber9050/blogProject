@@ -256,7 +256,7 @@ func (a *App) initDependencies() {
 	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo, a.vectorSchemaSvc)
 	lSvc := llmSvc.NewLLMService(llmCfgSvc)
 	vecSvc := vectorizeSvc.NewVectorizeService(a.pgDB, aRepo, acRepo, llmCfgSvc, a.vectorSchemaSvc)
-	ckSvc := chunkSvc.NewChunkService(acRepo)
+	ckSvc := chunkSvc.NewChunkService(a.pgDB, acRepo)
 
 	// 先把进程重启前遗留的「排队中/处理中」重置为失败，再启动 worker。
 	// 顺序不能反：worker 起来后如果有旧任务还挂在 1/2，抢锁会一直拒绝新提交。

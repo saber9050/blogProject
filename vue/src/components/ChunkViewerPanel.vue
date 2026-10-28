@@ -88,7 +88,16 @@
               {{ c.content }}<span v-if="c.content_truncated" class="cv-more">…</span>
             </td>
             <td>
-              <button class="btn-sm" @click="openFull(c)">查看全文</button>
+              <div class="cv-actions">
+                <button class="btn-sm" @click="openFull(c)">查看全文</button>
+                <button
+                  class="btn-sm btn-sm--danger"
+                  title="删除该文章的全部分块，并重置其向量化状态"
+                  @click="askDeleteArticle(c.article_id, c.article_title)"
+                >
+                  删除本文向量
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -113,6 +122,7 @@
             <th>块数</th>
             <th>平均块长</th>
             <th>最近切分</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -123,6 +133,15 @@
             <td class="cv-mono">{{ s.chunk_count }}</td>
             <td class="cv-mono">{{ s.avg_chars }} 字</td>
             <td class="cv-time">{{ s.last_chunk_at || '—' }}</td>
+            <td>
+              <button
+                class="btn-sm btn-sm--danger"
+                title="删除该文章的全部分块，并重置其向量化状态"
+                @click="askDeleteArticle(s.article_id, s.article_title, s.chunk_count)"
+              >
+                删除本文向量
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -142,6 +161,30 @@
           </div>
           <div class="modal__footer">
             <button class="btn" @click="fullChunk = null">关闭</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 删除整篇文章的向量：只影响一篇，不做「手输文字」那么重的确认 -->
+      <div v-if="delTarget" class="modal-overlay" @click.self="delTarget = null">
+        <div class="modal modal--delete" role="dialog" aria-modal="true">
+          <h3 class="modal__title">删除该文章的向量</h3>
+          <div class="modal__body">
+            <div class="modal__alert">
+              将删除《{{ delTarget.title || '（无标题）' }}》
+              <span class="cv-muted">#{{ delTarget.articleId }}</span>
+              的全部分块<template v-if="delTarget.chunkCount">（{{ delTarget.chunkCount }} 个）</template>，
+              并把该文章的向量化状态重置为「未处理」。
+            </div>
+            <p class="modal__hint">
+              删除后可以重新向量化。只删这一篇，其它文章不受影响。
+            </p>
+          </div>
+          <div class="modal__footer">
+            <button class="btn" @click="delTarget = null">取消</button>
+            <button class="btn btn--danger" :disabled="deleting" @click="doDeleteArticle">
+              {{ deleting ? '删除中…' : '确认删除' }}
+            </button>
           </div>
         </div>
       </div>
@@ -217,6 +260,15 @@ const loading = ref(false)
 const artStats = ref<any[]>([])
 
 const fullChunk = ref<ChunkItem | null>(null)
+
+// 删除整篇向量的确认目标
+interface DeleteTarget {
+  articleId: number
+  title: string
+  chunkCount?: number
+}
+const delTarget = ref<DeleteTarget | null>(null)
+const deleting = ref(false)
 
 const resetVisible = ref(false)
 const resetConfirm = ref('')
@@ -318,6 +370,42 @@ const loadAll = async () => {
 const openReset = () => {
   resetConfirm.value = ''
   resetVisible.value = true
+}
+
+/**
+ * 删除整篇文章的向量。
+ *
+ * 只做整篇删除：块是「整篇重新切分、整体替换」的产物，删掉其中一块之后
+ * 这篇文章的块集合既不是这次切分的结果、也不是上次的，之后无论重新切
+ * 还是做检索都会得到无法解释的状态。
+ */
+const askDeleteArticle = (articleId: number, title: string, chunkCount?: number) => {
+  delTarget.value = { articleId, title, chunkCount }
+}
+
+const doDeleteArticle = async () => {
+  const t = delTarget.value
+  if (!t) return
+  deleting.value = true
+  try {
+    const res = await api.delete(`/admin/chunks/article/${t.articleId}`)
+    const d = res.data?.data || {}
+    showToast(`已删除《${t.title || t.articleId}》的 ${d.deleted_chunks ?? 0} 个分块`, 'success')
+    delTarget.value = null
+    await loadSummary()
+    // 删掉当前页最后一篇文章时该页会空，回退一页，别让用户对着空表格
+    await loadChunks(page.value)
+    if (!chunks.value.length && page.value > 1) {
+      await loadChunks(page.value - 1)
+    }
+    if (view.value === 'stat') {
+      await loadStat()
+    }
+  } catch (err: any) {
+    showToast(errMsg(err, '删除失败'), 'error')
+  } finally {
+    deleting.value = false
+  }
 }
 
 const doReset = async () => {
@@ -487,6 +575,13 @@ onMounted(loadAll)
 
 .cv-muted {
   color: #aaa;
+}
+
+/* 操作列两个按钮并排，不换行：表格行高变化会让长列表跳来跳去 */
+.cv-actions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .cv-ellipsis {

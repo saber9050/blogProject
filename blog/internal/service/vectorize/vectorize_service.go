@@ -87,10 +87,11 @@ func (s *vectorizeService) Submit(articleID uint) (*response.VectorizeSubmitResp
 	if article == nil {
 		return nil, errors.New(errors.CodeNotFound, "文章不存在")
 	}
-	// 草稿不向量化：草稿还在改，切了也是白切。前端也会禁用按钮，这里再挡一次
-	if article.Status != 1 {
-		return nil, errors.New(errors.CodeBadRequest, "草稿不允许向量化，请先发布")
-	}
+	// 草稿也允许向量化：这是「发布前先看看切分效果对不对」的正常诉求。
+	// 之前挡草稿的理由是「草稿还在改，切了也是白切」，但切分管理能让作者
+	// 直接看到分块原文，提前验证恰恰是它最大的用处。
+	// 代价是库里会存在「未发布文章的向量」，所以将来做检索时必须过滤
+	// articles.status = 1，不能只查 article_chunks。
 	// 提前判空、判过短，别等到进了队列才失败——用户点完就该知道结果。
 	// 判断口径与 worker 里的 chunker.Split 保持一致（同一个 MinContentChars），
 	// 否则会出现「提交成功、排队几秒后失败」这种让人困惑的体验。

@@ -1,14 +1,17 @@
 package chunk
 
 import (
+	stderrors "errors"
 	"time"
 
 	"blog/internal/model/dto/response"
+	"blog/internal/model/entity"
 	repo "blog/internal/repository/articlechunk"
 	"blog/pkg/errors"
 	"blog/pkg/logger"
 
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // previewRunes 列表里 content 的预览长度。
@@ -21,12 +24,16 @@ const previewRunes = 200
 const maxPageSize = 100
 
 type chunkService struct {
+	db   *gorm.DB
 	repo repo.Repository
 }
 
 // NewChunkService 创建切分块查询服务
-func NewChunkService(r repo.Repository) Service {
-	return &chunkService{repo: r}
+//
+// 这里持 db 只为了「整篇删除」那一个写操作：删块要同时重置 articles 上的
+// 向量化状态，两件事必须在一个事务里，而 repo 的写方法都要求调用方传 tx。
+func NewChunkService(db *gorm.DB, r repo.Repository) Service {
+	return &chunkService{db: db, repo: r}
 }
 
 // List 分页查询
@@ -145,6 +152,69 @@ func (s *chunkService) Stat(groupBy string) (*response.ChunkStatResponse, error)
 		out.List = list
 	}
 	return out, nil
+}
+
+// DeleteByArticle 删除整篇文章的向量
+//
+// 允许的场景很具体：切出来发现效果不对，想清掉重来。所以它必须同时做两件事——
+// 删块、把文章状态退回「未处理」，少做任何一件都会让下一轮向量化判断错：
+//   - 只删块不重置状态：文章仍显示「是（N 块）」，但库里一块都没有
+//   - 只重置状态不删块：重新向量化时旧块还在，统计会翻倍
+func (s *chunkService) DeleteByArticle(articleID uint) (*response.ChunkDeleteResponse, error) {
+	var article entity.Article
+	err := s.db.Select("id, vector_status").First(&article, articleID).Error
+	if stderrors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errors.New(errors.CodeNotFound, "文章不存在")
+	}
+	if err != nil {
+		logger.Error("读取文章失败", zap.Uint("article_id", articleID), zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "读取文章失败", err)
+	}
+
+	// 排队中/处理中必须挡住：worker 完成时会把整批块连同状态一起写回来，
+	// 这时候删掉，用户会看到「删了又自己冒出来」，比报错更难理解。
+	if article.VectorStatus == entity.VectorStatusQueued ||
+		article.VectorStatus == entity.VectorStatusRunning {
+		return nil, errors.New(errors.CodeConflict, "该文章正在向量化，请等处理完成后再删除")
+	}
+
+	var deleted int64
+	txErr := s.db.Transaction(func(tx *gorm.DB) error {
+		// 表可能还没建（没配过向量模型），此时没有块可删，只重置文章状态
+		ready, err := s.repo.TableReady()
+		if err != nil {
+			return err
+		}
+		if ready {
+			if err := tx.Model(&entity.ArticleChunk{}).
+				Where("article_id = ?", articleID).
+				Count(&deleted).Error; err != nil {
+				return err
+			}
+			if err := s.repo.DeleteByArticle(tx, articleID); err != nil {
+				return err
+			}
+		}
+		return tx.Model(&entity.Article{}).Where("id = ?", articleID).
+			Updates(map[string]interface{}{
+				"vector_status":      entity.VectorStatusNone,
+				"vector_chunk_count": 0,
+				"vector_error":       "",
+				"vectorized_at":      nil,
+			}).Error
+	})
+	if txErr != nil {
+		logger.Error("删除文章向量失败", zap.Uint("article_id", articleID), zap.Error(txErr))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "删除文章向量失败", txErr)
+	}
+
+	logger.Info("已删除文章向量",
+		zap.Uint("article_id", articleID), zap.Int64("deleted_chunks", deleted))
+	return &response.ChunkDeleteResponse{
+		ArticleID:     articleID,
+		DeletedChunks: deleted,
+		VectorStatus:  entity.VectorStatusNone,
+	}, nil
 }
 
 // toItem 行转 DTO。truncate=true 时 content 截断到 previewRunes。

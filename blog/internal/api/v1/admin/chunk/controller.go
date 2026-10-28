@@ -77,3 +77,22 @@ func (ctrl *Controller) Get(c *gin.Context) {
 	}
 	response.Success(c, result)
 }
+
+// DeleteByArticle 删除整篇文章的向量（全部块 + 文章状态一起重置）
+//
+// 只有整篇删除，没有单块删除：块是「整篇重新切分、整体替换」的产物，
+// 删掉其中一块之后这篇文章的块集合既不是这次切分的结果、也不是上次的。
+func (ctrl *Controller) DeleteByArticle(c *gin.Context) {
+	articleID, err := strconv.ParseUint(c.Param("article_id"), 10, 32)
+	if err != nil || articleID == 0 {
+		response.BadRequest(c, "无效的文章ID")
+		return
+	}
+
+	result, err := ctrl.chunkService.DeleteByArticle(uint(articleID))
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	response.SuccessWithMessage(c, "已删除该文章的全部向量", result)
+}

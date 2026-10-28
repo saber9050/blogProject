@@ -12,4 +12,10 @@ type Service interface {
 	Get(id uint) (*response.ChunkItem, error)
 	// Stat 聚合统计。groupBy 只能是 template / article
 	Stat(groupBy string) (*response.ChunkStatResponse, error)
+	// DeleteByArticle 删除某篇文章的全部块，并把文章的向量状态重置为「未处理」。
+	//
+	// 只支持整篇删除，不提供单块删除：块是「整篇重新切分、整体替换」的产物，
+	// 删掉其中一块之后这篇文章的块集合就既不是这次切分的结果、也不是上次的，
+	// 之后无论重新切分还是做检索都会得到无法解释的状态。
+	DeleteByArticle(articleID uint) (*response.ChunkDeleteResponse, error)
 }

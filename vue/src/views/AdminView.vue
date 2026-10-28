@@ -153,10 +153,11 @@
                 </td>
                 <td>
                   <div class="table-actions">
+                    <!-- 草稿也允许向量化：发布前先看切分效果是正常诉求 -->
                     <button
                       class="btn-sm"
-                      :disabled="a.status !== 1 || a.vector_status === 1 || a.vector_status === 2 || vectorBusyId === a.id"
-                      :title="a.status !== 1 ? '草稿不允许向量化' : ''"
+                      :disabled="a.vector_status === 1 || a.vector_status === 2 || vectorBusyId === a.id"
+                      :title="a.vector_status === 3 ? '重新向量化会在完成后替换旧分块' : ''"
                       @click="submitVectorize(a)"
                     >
                       {{ a.vector_status === 1 || a.vector_status === 2 ? '处理中' : '向量化' }}
@@ -861,7 +862,7 @@ const startPoll = (articleId: number) => {
  * 已有块的文章会被覆盖（后端同事务内删旧写新），这里给一句提示避免误解。
  */
 const submitVectorize = async (a: ArticleItem) => {
-  if (!a || a.status !== 1) return
+  if (!a) return
   vectorBusyId.value = a.id
   vectorSubmitting.value = true
   try {
