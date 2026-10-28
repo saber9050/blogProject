@@ -523,6 +523,7 @@ import NavBar from '../components/NavBar.vue'
 import AIModelPanel from '../components/AIModelPanel.vue'
 import ChunkViewerPanel from '../components/ChunkViewerPanel.vue'
 import { showToast } from '../utils/toast'
+import { calcPages, getPageRange } from '../utils/pagination'
 
 // ---------- 类型 ----------
 interface UserItem {
@@ -931,25 +932,6 @@ const loadTags = async (page = 1) => {
     adminTags.value = res.data.data?.list || []
     tagTotal.value = res.data.data?.total || 0
   } catch (e) { console.error('加载标签失败:', e) }
-}
-
-const calcPages = (total: number, size: number) => Math.ceil(total / size) || 1
-
-const getPageRange = (current: number, total: number): (number | '...')[] => {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const pages: (number | '...')[] = []
-  if (current <= 4) {
-    for (let i = 1; i <= 5; i++) pages.push(i)
-    pages.push('...'); pages.push(total)
-  } else if (current >= total - 3) {
-    pages.push(1); pages.push('...')
-    for (let i = total - 4; i <= total; i++) pages.push(i)
-  } else {
-    pages.push(1); pages.push('...')
-    for (let i = current - 1; i <= current + 1; i++) pages.push(i)
-    pages.push('...'); pages.push(total)
-  }
-  return pages
 }
 
 // 保存按钮是否禁用（新增用户时，昵称或校验失败或未通过唯一性校验时禁用）
@@ -1510,58 +1492,6 @@ select.modal__input { appearance: auto; }
   margin: 8px 0 0;
 }
 
-/* ---------- 分页 ---------- */
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  padding: 16px 0;
-  flex-wrap: wrap;
-}
-
-.pagination__btn {
-  min-width: 32px;
-  height: 32px;
-  padding: 0 8px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  background: #fff;
-  color: #333;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.pagination__btn:hover { border-color: #1677ff; color: #1677ff; }
-.pagination__btn--active { background: #1677ff; color: #fff; border-color: #1677ff; }
-.pagination__btn--active:hover { background: #4096ff; border-color: #4096ff; color: #fff; }
-.pagination__btn:disabled { color: #d9d9d9; border-color: #d9d9d9; cursor: not-allowed; background: #fafafa; }
-
-.pagination__ellipsis {
-  display: inline-block;
-  width: 24px;
-  text-align: center;
-  color: #999;
-  font-size: 13px;
-}
-
-.pagination__info {
-  margin-left: 8px;
-  font-size: 13px;
-  color: #666;
-}
-
-.pagination__size {
-  margin-left: 4px;
-  padding: 4px 6px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  font-size: 13px;
-  color: #333;
-  background: #fff;
-  cursor: pointer;
-}
 
 /* ---------- 筛选栏 ---------- */
 .filter-bar {

@@ -94,10 +94,32 @@
         暂无切分数据。到「文章管理」选一篇文章点「向量化」，或检查筛选条件。
       </div>
 
-      <div v-if="total > 0" class="cv-pager">
-        <button class="btn-sm" :disabled="page <= 1" @click="loadChunks(page - 1)">上一页</button>
-        <span class="cv-pager__info">第 {{ page }} 页 / 共 {{ total }} 块</span>
-        <button class="btn-sm" :disabled="page * pageSize >= total" @click="loadChunks(page + 1)">下一页</button>
+      <div v-if="total > 0" class="pagination">
+        <button class="pagination__btn" :disabled="page <= 1" @click="loadChunks(page - 1)">上一页</button>
+        <template v-for="p in getPageRange(page, calcPages(total, pageSize))" :key="p">
+          <span v-if="p === '...'" class="pagination__ellipsis">...</span>
+          <button
+            v-else
+            class="pagination__btn"
+            :class="{ 'pagination__btn--active': p === page }"
+            @click="loadChunks(Number(p))"
+          >
+            {{ p }}
+          </button>
+        </template>
+        <button
+          class="pagination__btn"
+          :disabled="page >= calcPages(total, pageSize)"
+          @click="loadChunks(page + 1)"
+        >
+          下一页
+        </button>
+        <span class="pagination__info">共 {{ total }} 条</span>
+        <select v-model.number="pageSize" class="pagination__size" @change="loadChunks(1)">
+          <option :value="10">10条/页</option>
+          <option :value="20">20条/页</option>
+          <option :value="50">50条/页</option>
+        </select>
       </div>
     </template>
 
@@ -231,6 +253,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import api from '../api'
 import { showToast } from '../utils/toast'
+import { calcPages, getPageRange } from '../utils/pagination'
 
 interface ChunkItem {
   id: number
@@ -263,7 +286,7 @@ const filter = reactive({ article_id: '', keyword: '' })
 const chunks = ref<ChunkItem[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = 20
+const pageSize = ref(20)
 const loading = ref(false)
 
 const artStats = ref<any[]>([])
@@ -313,7 +336,7 @@ const loadSummary = async () => {
 const loadChunks = async (p = 1) => {
   loading.value = true
   try {
-    const params: Record<string, any> = { page: p, page_size: pageSize }
+    const params: Record<string, any> = { page: p, page_size: pageSize.value }
     if (filter.article_id) params.article_id = filter.article_id
     if (filter.keyword.trim()) params.keyword = filter.keyword.trim()
 
@@ -749,18 +772,6 @@ onMounted(loadAll)
   font-size: 0.85rem;
 }
 
-.cv-pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding-top: 4px;
-}
-
-.cv-pager__info {
-  font-size: 0.78rem;
-  color: #666;
-}
 
 /* ===== 弹窗 ===== */
 .modal-overlay {
