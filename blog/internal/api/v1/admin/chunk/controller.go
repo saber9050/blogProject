@@ -1,6 +1,7 @@
 package chunk
 
 import (
+	"blog/internal/model/dto/request"
 	"blog/internal/service/chunk"
 	"blog/pkg/response"
 	"strconv"
@@ -78,21 +79,24 @@ func (ctrl *Controller) Get(c *gin.Context) {
 	response.Success(c, result)
 }
 
-// DeleteByArticle 删除整篇文章的向量（全部块 + 文章状态一起重置）
+// DeleteArticles 批量删除文章向量
 //
 // 只有整篇删除，没有单块删除：块是「整篇重新切分、整体替换」的产物，
 // 删掉其中一块之后这篇文章的块集合既不是这次切分的结果、也不是上次的。
-func (ctrl *Controller) DeleteByArticle(c *gin.Context) {
-	articleID, err := strconv.ParseUint(c.Param("article_id"), 10, 32)
-	if err != nil || articleID == 0 {
-		response.BadRequest(c, "无效的文章ID")
+//
+// 用 POST 而不是 DELETE：DELETE 带 body 在部分代理/客户端上会被丢掉，
+// 而这里必须传一个 id 数组。
+func (ctrl *Controller) DeleteArticles(c *gin.Context) {
+	var req request.DeleteChunksRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数错误：article_ids 必填，单次最多 200 篇")
 		return
 	}
 
-	result, err := ctrl.chunkService.DeleteByArticle(uint(articleID))
+	result, err := ctrl.chunkService.DeleteArticles(req.ArticleIDs)
 	if err != nil {
 		response.BizError(c, err)
 		return
 	}
-	response.SuccessWithMessage(c, "已删除该文章的全部向量", result)
+	response.SuccessWithMessage(c, "已处理选中文章的向量删除", result)
 }

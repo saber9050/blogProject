@@ -59,12 +59,19 @@ type ChunkStatResponse struct {
 	List    interface{}      `json:"list"`
 }
 
-// ChunkDeleteResponse 删除整篇文章向量后的结果
+// ChunkDeleteSkipped 批量删除时被跳过的一篇及原因
 //
-// 返回被删块数与文章重置后的状态：删了多少块要能当场核对，
-// 否则「点了删除但页面还显示有块」时无法判断是没删掉还是没刷新。
-type ChunkDeleteResponse struct {
-	ArticleID     uint  `json:"article_id"`
-	DeletedChunks int64 `json:"deleted_chunks"`
-	VectorStatus  int8  `json:"vector_status"` // 恒为 0（未处理）
+// 之所以「跳过」而不是「整批失败」：用户一次勾十篇，其中一篇可能正在向量化，
+// 整批回滚会让他一篇都删不掉，还得自己找出是哪一篇。
+type ChunkDeleteSkipped struct {
+	ArticleID uint   `json:"article_id"`
+	Title     string `json:"title"`
+	Reason    string `json:"reason"`
+}
+
+// ChunkDeleteBatchResponse 批量删除文章向量的结果
+type ChunkDeleteBatchResponse struct {
+	DeletedArticles int                  `json:"deleted_articles"`
+	DeletedChunks   int64                `json:"deleted_chunks"`
+	Skipped         []ChunkDeleteSkipped `json:"skipped"`
 }

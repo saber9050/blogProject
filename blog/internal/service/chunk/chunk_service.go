@@ -154,32 +154,87 @@ func (s *chunkService) Stat(groupBy string) (*response.ChunkStatResponse, error)
 	return out, nil
 }
 
-// DeleteByArticle 删除整篇文章的向量
+// errStateConflict 删除时文章正在向量化，本次跳过
+var errStateConflict = stderrors.New("该文章正在向量化")
+
+// DeleteArticles 批量删除多个文章的向量
 //
-// 允许的场景很具体：切出来发现效果不对，想清掉重来。所以它必须同时做两件事——
-// 删块、把文章状态退回「未处理」，少做任何一件都会让下一轮向量化判断错：
+// 允许的场景很具体：切出来发现效果不对，想清掉重来。所以每一篇都必须同时做
+// 两件事——删块、把文章状态退回「未处理」，少做任何一件都会让下一轮向量化判断错：
 //   - 只删块不重置状态：文章仍显示「是（N 块）」，但库里一块都没有
 //   - 只重置状态不删块：重新向量化时旧块还在，统计会翻倍
-func (s *chunkService) DeleteByArticle(articleID uint) (*response.ChunkDeleteResponse, error) {
-	var article entity.Article
-	err := s.db.Select("id, vector_status").First(&article, articleID).Error
-	if stderrors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errors.New(errors.CodeNotFound, "文章不存在")
+//
+// 每篇一个独立事务，被跳过的记进 skipped 返回给前端。整批回滚的话，
+// 用户勾了十篇、其中一篇正在处理，就一篇都删不掉，还得自己找出是哪一篇。
+func (s *chunkService) DeleteArticles(articleIDs []uint) (*response.ChunkDeleteBatchResponse, error) {
+	ids := uniquePositive(articleIDs)
+	if len(ids) == 0 {
+		return nil, errors.New(errors.CodeBadRequest, "请至少选择一篇文章")
 	}
-	if err != nil {
-		logger.Error("读取文章失败", zap.Uint("article_id", articleID), zap.Error(err))
+
+	var articles []entity.Article
+	if err := s.db.Select("id, title, vector_status").Where("id IN ?", ids).Find(&articles).Error; err != nil {
+		logger.Error("读取文章列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "读取文章失败", err)
 	}
 
-	// 排队中/处理中必须挡住：worker 完成时会把整批块连同状态一起写回来，
-	// 这时候删掉，用户会看到「删了又自己冒出来」，比报错更难理解。
-	if article.VectorStatus == entity.VectorStatusQueued ||
-		article.VectorStatus == entity.VectorStatusRunning {
-		return nil, errors.New(errors.CodeConflict, "该文章正在向量化，请等处理完成后再删除")
+	out := &response.ChunkDeleteBatchResponse{Skipped: make([]response.ChunkDeleteSkipped, 0)}
+
+	// 查不到的文章（已删除 / id 有误）也算跳过，逐个说明，不要静默忽略
+	found := make(map[uint]struct{}, len(articles))
+	for _, a := range articles {
+		found[a.ID] = struct{}{}
+	}
+	for _, id := range ids {
+		if _, ok := found[id]; !ok {
+			out.Skipped = append(out.Skipped, response.ChunkDeleteSkipped{
+				ArticleID: id, Reason: "文章不存在",
+			})
+		}
 	}
 
+	for _, a := range articles {
+		// 排队中/处理中必须挡住：worker 完成时会把整批块连同状态一起写回来，
+		// 这时候删掉，用户会看到「删了又自己冒出来」，比报错更难理解。
+		// 这里只是先筛一遍少开事务，真正的并发防护在 deleteOne 的条件 UPDATE 上。
+		if a.VectorStatus == entity.VectorStatusQueued ||
+			a.VectorStatus == entity.VectorStatusRunning {
+			out.Skipped = append(out.Skipped, response.ChunkDeleteSkipped{
+				ArticleID: a.ID, Title: a.Title, Reason: "正在向量化，请等处理完成",
+			})
+			continue
+		}
+
+		deleted, err := s.deleteOne(a.ID)
+		if err != nil {
+			if stderrors.Is(err, errStateConflict) {
+				out.Skipped = append(out.Skipped, response.ChunkDeleteSkipped{
+					ArticleID: a.ID, Title: a.Title, Reason: "正在向量化，请等处理完成",
+				})
+				continue
+			}
+			logger.Error("删除文章向量失败", zap.Uint("article_id", a.ID), zap.Error(err))
+			out.Skipped = append(out.Skipped, response.ChunkDeleteSkipped{
+				ArticleID: a.ID, Title: a.Title, Reason: "删除失败，请重试",
+			})
+			continue
+		}
+		out.DeletedArticles++
+		out.DeletedChunks += deleted
+	}
+
+	logger.Info("批量删除文章向量完成",
+		zap.Int("requested", len(ids)),
+		zap.Int("deleted_articles", out.DeletedArticles),
+		zap.Int64("deleted_chunks", out.DeletedChunks),
+		zap.Int("skipped", len(out.Skipped)))
+	return out, nil
+}
+
+// deleteOne 删除单篇文章的向量，返回被删块数
+func (s *chunkService) deleteOne(articleID uint) (int64, error) {
 	var deleted int64
-	txErr := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// 表可能还没建（没配过向量模型），此时没有块可删，只重置文章状态
 		ready, err := s.repo.TableReady()
 		if err != nil {
@@ -195,26 +250,43 @@ func (s *chunkService) DeleteByArticle(articleID uint) (*response.ChunkDeleteRes
 				return err
 			}
 		}
-		return tx.Model(&entity.Article{}).Where("id = ?", articleID).
+		// 条件 UPDATE 再兜一次并发：从上面读状态到这里之间，worker 可能刚把
+		// 它改成「处理中」。RowsAffected=0 就回滚整个事务，块也不会被删掉。
+		res := tx.Model(&entity.Article{}).
+			Where("id = ? AND vector_status NOT IN ?", articleID,
+				[]int8{entity.VectorStatusQueued, entity.VectorStatusRunning}).
 			Updates(map[string]interface{}{
 				"vector_status":      entity.VectorStatusNone,
 				"vector_chunk_count": 0,
 				"vector_error":       "",
 				"vectorized_at":      nil,
-			}).Error
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errStateConflict
+		}
+		return nil
 	})
-	if txErr != nil {
-		logger.Error("删除文章向量失败", zap.Uint("article_id", articleID), zap.Error(txErr))
-		return nil, errors.NewWithErr(errors.CodeInternalError, "删除文章向量失败", txErr)
-	}
+	return deleted, err
+}
 
-	logger.Info("已删除文章向量",
-		zap.Uint("article_id", articleID), zap.Int64("deleted_chunks", deleted))
-	return &response.ChunkDeleteResponse{
-		ArticleID:     articleID,
-		DeletedChunks: deleted,
-		VectorStatus:  entity.VectorStatusNone,
-	}, nil
+// uniquePositive 去重并剔除 0
+func uniquePositive(ids []uint) []uint {
+	seen := make(map[uint]struct{}, len(ids))
+	out := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 // toItem 行转 DTO。truncate=true 时 content 截断到 previewRunes。

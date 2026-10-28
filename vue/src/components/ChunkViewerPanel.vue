@@ -3,8 +3,9 @@
     <div class="cv-panel__header">
       <h2 class="cv-panel__title">切分管理</h2>
       <div class="cv-panel__actions">
-        <button class="btn-sm" @click="loadAll">刷新</button>
         <button class="btn-sm btn-sm--danger" @click="openReset">清空向量数据</button>
+        <button class="btn-sm btn-sm--danger" @click="openDeleteArticles">删除文章向量</button>
+        <button class="btn-sm" @click="loadAll">刷新</button>
       </div>
     </div>
 
@@ -32,10 +33,6 @@
       <div class="cv-card">
         <div class="cv-card__value">{{ summary.article_total }}</div>
         <div class="cv-card__label">已向量化文章</div>
-      </div>
-      <div class="cv-card">
-        <div class="cv-card__value">{{ summary.avg_chunk_per_article }}</div>
-        <div class="cv-card__label">平均每篇块数</div>
       </div>
     </div>
 
@@ -88,16 +85,7 @@
               {{ c.content }}<span v-if="c.content_truncated" class="cv-more">…</span>
             </td>
             <td>
-              <div class="cv-actions">
-                <button class="btn-sm" @click="openFull(c)">查看全文</button>
-                <button
-                  class="btn-sm btn-sm--danger"
-                  title="删除该文章的全部分块，并重置其向量化状态"
-                  @click="askDeleteArticle(c.article_id, c.article_title)"
-                >
-                  删除本文向量
-                </button>
-              </div>
+              <button class="btn-sm" @click="openFull(c)">查看全文</button>
             </td>
           </tr>
         </tbody>
@@ -122,7 +110,6 @@
             <th>块数</th>
             <th>平均块长</th>
             <th>最近切分</th>
-            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -133,15 +120,6 @@
             <td class="cv-mono">{{ s.chunk_count }}</td>
             <td class="cv-mono">{{ s.avg_chars }} 字</td>
             <td class="cv-time">{{ s.last_chunk_at || '—' }}</td>
-            <td>
-              <button
-                class="btn-sm btn-sm--danger"
-                title="删除该文章的全部分块，并重置其向量化状态"
-                @click="askDeleteArticle(s.article_id, s.article_title, s.chunk_count)"
-              >
-                删除本文向量
-              </button>
-            </td>
           </tr>
         </tbody>
       </table>
@@ -165,25 +143,56 @@
         </div>
       </div>
 
-      <!-- 删除整篇文章的向量：只影响一篇，不做「手输文字」那么重的确认 -->
-      <div v-if="delTarget" class="modal-overlay" @click.self="delTarget = null">
-        <div class="modal modal--delete" role="dialog" aria-modal="true">
-          <h3 class="modal__title">删除该文章的向量</h3>
+      <!-- 删除文章向量：多选，一篇一列 -->
+      <div v-if="delVisible" class="modal-overlay" @click.self="delVisible = false">
+        <div class="modal modal--wide" role="dialog" aria-modal="true">
+          <h3 class="modal__title">删除文章向量</h3>
           <div class="modal__body">
-            <div class="modal__alert">
-              将删除《{{ delTarget.title || '（无标题）' }}》
-              <span class="cv-muted">#{{ delTarget.articleId }}</span>
-              的全部分块<template v-if="delTarget.chunkCount">（{{ delTarget.chunkCount }} 个）</template>，
-              并把该文章的向量化状态重置为「未处理」。
-            </div>
-            <p class="modal__hint">
-              删除后可以重新向量化。只删这一篇，其它文章不受影响。
+            <p class="modal__hint" style="margin: 0 0 10px">
+              只删除选中文章的全部分块，并把它们的向量化状态重置为「未处理」。删除后可以重新向量化。
             </p>
+
+            <div v-if="delLoading" class="cv-empty">加载中…</div>
+            <div v-else-if="!delOptions.length" class="cv-empty">
+              还没有任何文章完成向量化
+            </div>
+
+            <template v-else>
+              <div class="del-toolbar">
+                <span class="del-toolbar__count">
+                  已选 <strong>{{ delSelected.length }}</strong> / {{ delOptions.length }} 篇
+                </span>
+                <div class="del-toolbar__btns">
+                  <button class="btn-sm" @click="selectAll">全选</button>
+                  <button class="btn-sm" @click="clearSelect">取消全选</button>
+                </div>
+              </div>
+
+              <div class="del-grid">
+                <label
+                  v-for="a in delOptions"
+                  :key="a.article_id"
+                  class="del-item"
+                  :class="{ 'del-item--on': delSelected.includes(a.article_id) }"
+                >
+                  <input v-model="delSelected" type="checkbox" :value="a.article_id" />
+                  <span class="del-item__id">#{{ a.article_id }}</span>
+                  <span class="del-item__title" :title="a.article_title">
+                    {{ a.article_title || '（无标题）' }}
+                  </span>
+                  <span class="del-item__count">{{ a.chunk_count }} 块</span>
+                </label>
+              </div>
+            </template>
           </div>
           <div class="modal__footer">
-            <button class="btn" @click="delTarget = null">取消</button>
-            <button class="btn btn--danger" :disabled="deleting" @click="doDeleteArticle">
-              {{ deleting ? '删除中…' : '确认删除' }}
+            <button class="btn" @click="delVisible = false">取消</button>
+            <button
+              class="btn btn--danger"
+              :disabled="!delSelected.length || deleting"
+              @click="doDeleteArticles"
+            >
+              {{ deleting ? '删除中…' : `删除选中的 ${delSelected.length} 篇` }}
             </button>
           </div>
         </div>
@@ -246,7 +255,7 @@ interface VectorSchema {
 }
 
 const schema = ref<VectorSchema | null>(null)
-const summary = reactive({ chunk_total: 0, article_total: 0, avg_chunk_per_article: 0 })
+const summary = reactive({ chunk_total: 0, article_total: 0 })
 
 const view = ref<'detail' | 'stat'>('detail')
 
@@ -261,13 +270,16 @@ const artStats = ref<any[]>([])
 
 const fullChunk = ref<ChunkItem | null>(null)
 
-// 删除整篇向量的确认目标
-interface DeleteTarget {
-  articleId: number
-  title: string
-  chunkCount?: number
+// 删除文章向量：多选面板
+interface DelOption {
+  article_id: number
+  article_title: string
+  chunk_count: number
 }
-const delTarget = ref<DeleteTarget | null>(null)
+const delVisible = ref(false)
+const delOptions = ref<DelOption[]>([])
+const delSelected = ref<number[]>([])
+const delLoading = ref(false)
 const deleting = ref(false)
 
 const resetVisible = ref(false)
@@ -292,11 +304,9 @@ const loadSummary = async () => {
     const s = res.data?.data?.summary || {}
     summary.chunk_total = s.chunk_total || 0
     summary.article_total = s.article_total || 0
-    summary.avg_chunk_per_article = s.avg_chunk_per_article || 0
   } catch {
     summary.chunk_total = 0
     summary.article_total = 0
-    summary.avg_chunk_per_article = 0
   }
 }
 
@@ -373,34 +383,57 @@ const openReset = () => {
 }
 
 /**
- * 删除整篇文章的向量。
+ * 删除文章向量：多选后批量删除。
+ *
+ * 候选列表直接复用「按文章统计」——它列出的就是有块的文章，也就是已向量化的文章，
+ * 不需要再加一个专门接口。
  *
  * 只做整篇删除：块是「整篇重新切分、整体替换」的产物，删掉其中一块之后
- * 这篇文章的块集合既不是这次切分的结果、也不是上次的，之后无论重新切
- * 还是做检索都会得到无法解释的状态。
+ * 这篇文章的块集合既不是这次切分的结果、也不是上次的。
  */
-const askDeleteArticle = (articleId: number, title: string, chunkCount?: number) => {
-  delTarget.value = { articleId, title, chunkCount }
+const openDeleteArticles = async () => {
+  delVisible.value = true
+  delSelected.value = []
+  delLoading.value = true
+  try {
+    const res = await api.get('/admin/chunks/stat', { params: { group_by: 'article' } })
+    delOptions.value = res.data?.data?.list || []
+  } catch (err: any) {
+    delOptions.value = []
+    showToast(errMsg(err, '加载已向量化文章失败'), 'error')
+  } finally {
+    delLoading.value = false
+  }
 }
 
-const doDeleteArticle = async () => {
-  const t = delTarget.value
-  if (!t) return
+const selectAll = () => {
+  delSelected.value = delOptions.value.map((a) => a.article_id)
+}
+
+const clearSelect = () => {
+  delSelected.value = []
+}
+
+const doDeleteArticles = async () => {
+  if (!delSelected.value.length) return
   deleting.value = true
   try {
-    const res = await api.delete(`/admin/chunks/article/${t.articleId}`)
+    const res = await api.post('/admin/chunks/articles/delete', {
+      article_ids: delSelected.value
+    })
     const d = res.data?.data || {}
-    showToast(`已删除《${t.title || t.articleId}》的 ${d.deleted_chunks ?? 0} 个分块`, 'success')
-    delTarget.value = null
-    await loadSummary()
-    // 删掉当前页最后一篇文章时该页会空，回退一页，别让用户对着空表格
-    await loadChunks(page.value)
-    if (!chunks.value.length && page.value > 1) {
-      await loadChunks(page.value - 1)
+    const skipped = d.skipped || []
+    if (skipped.length) {
+      // 有跳过就说清楚原因，不能只报「成功」——用户会发现少了文章
+      showToast(
+        `已删除 ${d.deleted_articles} 篇（${d.deleted_chunks} 块），跳过 ${skipped.length} 篇：${skipped[0].reason}`,
+        'error'
+      )
+    } else {
+      showToast(`已删除 ${d.deleted_articles} 篇共 ${d.deleted_chunks} 块`, 'success')
     }
-    if (view.value === 'stat') {
-      await loadStat()
-    }
+    delVisible.value = false
+    await loadAll()
   } catch (err: any) {
     showToast(errMsg(err, '删除失败'), 'error')
   } finally {
@@ -577,11 +610,85 @@ onMounted(loadAll)
   color: #aaa;
 }
 
-/* 操作列两个按钮并排，不换行：表格行高变化会让长列表跳来跳去 */
-.cv-actions {
+/* ---------- 删除文章向量：多选面板 ---------- */
+.modal.modal--wide {
+  width: min(860px, 94vw);
+  max-width: none;
+}
+
+.del-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.del-toolbar__count {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.del-toolbar__btns {
   display: flex;
   gap: 6px;
+}
+
+/* 一篇一列：auto-fill 让宽屏并排多列、窄屏自动减列，不用写媒体查询 */
+.del-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.del-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.del-item:hover {
+  border-color: #c7d2fe;
+  background: #f8faff;
+}
+
+/* 选中态整格变色，而不是只有小方框：勾选后要一眼看出选了哪些 */
+.del-item--on {
+  border-color: #6366f1;
+  background: #eef2ff;
+}
+
+.del-item input {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.del-item__id {
+  flex: 0 0 auto;
+  color: #999;
+  font-size: 0.72rem;
+}
+
+.del-item__title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  color: #333;
+}
+
+.del-item__count {
+  flex: 0 0 auto;
+  color: #999;
+  font-size: 0.72rem;
 }
 
 .cv-ellipsis {

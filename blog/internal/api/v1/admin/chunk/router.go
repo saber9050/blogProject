@@ -12,7 +12,7 @@ func (ctrl *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	g.GET("", ctrl.List)
 	g.GET("/stat", ctrl.Stat)
 	g.GET("/:id", ctrl.Get)
-	// 整篇删除。gin 按 method 分树，DELETE 树里只有这一条，
-	// 不会与 GET 树的 :id 参数段冲突。
-	g.DELETE("/article/:article_id", ctrl.DeleteByArticle)
+	// 批量删除文章向量。用 POST 而不是 DELETE：要传 id 数组，
+	// 而 DELETE 带 body 在部分代理上会被丢掉。
+	g.POST("/articles/delete", ctrl.DeleteArticles)
 }
