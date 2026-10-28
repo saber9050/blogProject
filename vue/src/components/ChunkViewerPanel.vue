@@ -3,9 +3,9 @@
     <div class="cv-panel__header">
       <h2 class="cv-panel__title">切分管理</h2>
       <div class="cv-panel__actions">
-        <button class="btn-sm btn-sm--danger" @click="openReset">清空向量数据</button>
-        <button class="btn-sm btn-sm--danger" @click="openDeleteArticles">删除文章向量</button>
         <button class="btn-sm" @click="loadAll">刷新</button>
+        <button class="btn-sm btn-sm--danger" @click="openDeleteArticles">删除文章向量</button>
+        <button class="btn-sm btn-sm--danger" @click="openReset">清空向量数据</button>
       </div>
     </div>
 
@@ -66,12 +66,12 @@
       <table class="cv-table">
         <thead>
           <tr>
-            <th>块 ID</th>
+            <th class="cv-col--id">块 ID</th>
             <th>文章</th>
-            <th>序号</th>
-            <th>字符数</th>
-            <th>原文预览</th>
-            <th>操作</th>
+            <th class="cv-col--idx">序号</th>
+            <th class="cv-col--num">字符数</th>
+            <th class="cv-col--preview">原文预览</th>
+            <th class="cv-col--ops">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -464,6 +464,9 @@ onMounted(loadAll)
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* .admin-panel 是纯卡片容器、自身没有内边距，留白由各面板自己负责。
+     这里必须给，否则标题和按钮会贴在卡片边框上。数值与 AIModelPanel 对齐。 */
+  padding: 20px 24px 24px;
 }
 
 .cv-panel__header {
@@ -510,9 +513,10 @@ onMounted(loadAll)
   font-weight: 500;
 }
 
+/* 两个卡片平分整行：原来写死 3 列，删掉一个卡片后右边会空出三分之一 */
 .cv-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -697,12 +701,35 @@ onMounted(loadAll)
   white-space: nowrap;
 }
 
+/* 预览只有 10 个字，单行截断即可；原来放开多行会让行高随内容跳动 */
 .cv-preview {
   color: #555;
   line-height: 1.5;
-  max-height: 64px;
+  white-space: nowrap;
   overflow: hidden;
-  word-break: break-all;
+  text-overflow: ellipsis;
+}
+
+/* 明细表列宽：table-layout: fixed 下不指定就六列均分，
+   文章标题和 10 字预览会分到一样宽，看着很怪。 */
+.cv-col--id {
+  width: 84px;
+}
+
+.cv-col--idx {
+  width: 64px;
+}
+
+.cv-col--num {
+  width: 84px;
+}
+
+.cv-col--preview {
+  width: 180px;
+}
+
+.cv-col--ops {
+  width: 100px;
 }
 
 .cv-more {
