@@ -34,7 +34,14 @@ type DimensionMismatchError struct {
 }
 
 func (e *DimensionMismatchError) Error() string {
-	return fmt.Sprintf("向量表当前是 %d 维（已有 %d 个块），与期望的 %d 维不一致", e.Current, e.Chunks, e.Want)
+	// 块数为 0 时不要说「已有 0 个块」：用户会想「既然没数据，为什么不能换维度」。
+	// 真正的原因是表结构已经固定，即使没有数据也只能重建。
+	if e.Chunks <= 0 {
+		return fmt.Sprintf("向量表当前是 %d 维（表结构已固定，暂无数据），与期望的 %d 维不一致",
+			e.Current, e.Want)
+	}
+	return fmt.Sprintf("向量表当前是 %d 维（已有 %d 个块），与期望的 %d 维不一致",
+		e.Current, e.Chunks, e.Want)
 }
 
 // EnsureSchema 确保向量表存在且维度与 dim 一致。
