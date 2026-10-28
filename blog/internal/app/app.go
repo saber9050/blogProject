@@ -19,6 +19,7 @@ import (
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
+	chunkSvc "blog/internal/service/chunk"
 	chunkTplSvc "blog/internal/service/chunktemplate"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
@@ -255,6 +256,7 @@ func (a *App) initDependencies() {
 	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo, a.vectorSchemaSvc)
 	lSvc := llmSvc.NewLLMService(llmCfgSvc)
 	vecSvc := vectorizeSvc.NewVectorizeService(a.pgDB, aRepo, ctRepo, acRepo, llmCfgSvc, a.vectorSchemaSvc)
+	ckSvc := chunkSvc.NewChunkService(acRepo)
 
 	// 先把进程重启前遗留的「排队中/处理中」重置为失败，再启动 worker。
 	// 顺序不能反：worker 起来后如果有旧任务还挂在 1/2，抢锁会一直拒绝新提交。
@@ -265,7 +267,7 @@ func (a *App) initDependencies() {
 
 	// 创建 Router
 	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc, lSvc, llmCfgSvc,
-		ctSvc, a.vectorSchemaSvc, vecSvc)
+		ctSvc, a.vectorSchemaSvc, vecSvc, ckSvc)
 }
 
 // initRouter 初始化路由

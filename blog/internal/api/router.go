@@ -4,6 +4,7 @@ import (
 	"blog/internal/api/v1/about"
 	adminArticle "blog/internal/api/v1/admin/article"
 	adminCategory "blog/internal/api/v1/admin/category"
+	adminChunk "blog/internal/api/v1/admin/chunk"
 	adminChunkTpl "blog/internal/api/v1/admin/chunktemplate"
 	adminComment "blog/internal/api/v1/admin/comment"
 	adminLLMConfig "blog/internal/api/v1/admin/llmconfig"
@@ -21,6 +22,7 @@ import (
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
+	chunkSvc "blog/internal/service/chunk"
 	chunkTplSvc "blog/internal/service/chunktemplate"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
@@ -46,6 +48,7 @@ type Router struct {
 	adminLLMCtrl      *adminLLMConfig.Controller
 	adminChunkTplCtrl *adminChunkTpl.Controller
 	adminVectorCtrl   *adminVector.Controller
+	adminChunkCtrl    *adminChunk.Controller
 	commentCtrl       *comment.Controller
 	categoryCtrl      *category.CategoryController
 	tagCtrl           *tag.TagController
@@ -67,6 +70,7 @@ func NewRouter(
 	chunkTplService chunkTplSvc.Service,
 	vectorService vectorSvc.Service,
 	vectorizeService vectorizeSvc.Service,
+	chunkService chunkSvc.Service,
 ) *Router {
 	return &Router{
 		authCtrl:          auth.NewController(authSvc),
@@ -80,6 +84,7 @@ func NewRouter(
 		adminLLMCtrl:      adminLLMConfig.NewController(llmConfigService),
 		adminChunkTplCtrl: adminChunkTpl.NewController(chunkTplService),
 		adminVectorCtrl:   adminVector.NewController(vectorService),
+		adminChunkCtrl:    adminChunk.NewController(chunkService),
 		commentCtrl:       comment.NewController(commentSvc),
 		categoryCtrl:      category.NewCategoryController(categoryService),
 		tagCtrl:           tag.NewTagController(tagService),
@@ -146,6 +151,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 			r.adminLLMCtrl.RegisterRoutes(adminGroup)
 			r.adminChunkTplCtrl.RegisterRoutes(adminGroup)
 			r.adminVectorCtrl.RegisterRoutes(adminGroup)
+			r.adminChunkCtrl.RegisterRoutes(adminGroup)
 		}
 	}
 }
