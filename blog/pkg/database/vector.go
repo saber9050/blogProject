@@ -68,19 +68,18 @@ func EnsureSchema(db *gorm.DB, dim int) error {
 	// 顺序不能反：只删表不删列的话，重建出来的表仍然带着 template_id。
 	cleanupLegacyTemplateSchema(db)
 
-	// 后加的列要在「表已存在」的分支补上，CREATE TABLE IF NOT EXISTS 覆盖不到
-	if err := ensureChunkColumns(db); err != nil {
-		return err
-	}
-
 	current, exists, err := CurrentDimension(db)
 	if err != nil {
 		return err
 	}
 	if exists {
 		if current == dim {
-			// 索引也要在这个分支补：表可能是更早的版本建的，缺后来新增的索引。
-			// CREATE INDEX IF NOT EXISTS 是幂等的，每次启动都跑一遍代价可忽略。
+			// 后加的列与索引都要在这个分支补：表可能是更早的版本建的。
+			// 两步都是幂等的（ADD COLUMN / CREATE INDEX 均带 IF NOT EXISTS），
+			// 每次启动跑一遍代价可忽略。
+			if err := ensureChunkColumns(db); err != nil {
+				return err
+			}
 			return ensureChunkIndexes(db)
 		}
 		var chunks int64
@@ -91,7 +90,12 @@ func EnsureSchema(db *gorm.DB, dim int) error {
 		return &DimensionMismatchError{Current: current, Want: dim, Chunks: chunks}
 	}
 
-	return ensureChunkTable(db, dim)
+	if err := ensureChunkTable(db, dim); err != nil {
+		return err
+	}
+	// 建表 DDL 里已经带了全部列，这里只是兜底：将来往 ensureChunkColumns
+	// 加新列时忘了同步 DDL，也能被补上
+	return ensureChunkColumns(db)
 }
 
 // CurrentDimension 读取现有向量表的 embedding 列维度。
@@ -226,6 +230,17 @@ func cleanupLegacyTemplateSchema(db *gorm.DB) {
 // 2026-10-29 加的 section_index / heading_path 服务于「结构感知切分 + 父子块」：
 // 旧数据补上默认值（0 和空串），语义上等于「未知小节」，重新向量化时会被覆盖。
 func ensureChunkColumns(db *gorm.DB) error {
+	// 表还没建时无事可做。正常流程里 ensureChunkTable 一定先跑过，
+	// 这里是第二道保险：`ADD COLUMN IF NOT EXISTS` 只保证「列已存在」时幂等，
+	// **表不存在时会直接报 42P01**，不挡就会把整个启动/创建配置流程打断。
+	var reg *string
+	if err := db.Raw("SELECT to_regclass(?)::text", chunkTable).Scan(&reg).Error; err != nil {
+		return fmt.Errorf("检查向量表是否存在失败: %w", err)
+	}
+	if reg == nil {
+		return nil
+	}
+
 	stmts := []string{
 		`ALTER TABLE ` + chunkTable + ` ADD COLUMN IF NOT EXISTS section_index integer NOT NULL DEFAULT 0`,
 		`ALTER TABLE ` + chunkTable + ` ADD COLUMN IF NOT EXISTS heading_path varchar(512) NOT NULL DEFAULT ''`,
