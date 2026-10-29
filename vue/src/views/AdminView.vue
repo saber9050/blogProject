@@ -785,8 +785,34 @@ const vectorState = (a: ArticleItem) => {
   if (s === 4) {
     return { text: '失败', cls: 'status-badge--failed', tip: a.vector_error || '向量化失败' }
   }
+
+  // 「待更新」有两种来源，必须都能识别出来：
+  //
+  // ① status=0 但 vectorized_at 还在
+  //    正文变更时后端只把状态打回 0、**不删块也不清 vectorized_at**，
+  //    因为块留着还能在「切分管理」里对比改之前的切分效果。
+  //    这个分支原来漏了，导致改完正文直接显示「否」——和「从没向量化过」
+  //    长得一样，用户完全看不出旧向量还在库里过期着。
+  //
+  // ② status=3 但 vectorized_at < updated_at
+  //    兜底：万一有别的路径改了正文却没重置状态（比如直接改库）。
+  //
+  // 三种「没向量化」的区分：
+  //    从没切过 → vectorized_at 为空 → 「否」
+  //    手动删了向量 → 后端会把 vectorized_at 置 NULL → 「否」
+  //    切过又改了正文 → vectorized_at 还在 → 「待更新」
+  if (s === 0 && a.vectorized_at) {
+    const n = a.vector_chunk_count || 0
+    return {
+      text: '待更新',
+      cls: 'status-badge--stale',
+      tip: n > 0
+        ? `正文已修改，${n} 个旧分块已过期，需要重新向量化`
+        : '正文已修改，需要重新向量化'
+    }
+  }
+
   if (s === 3) {
-    // 正文改过但没重新向量化
     const v = a.vectorized_at ? Date.parse(a.vectorized_at) : NaN
     const u = a.updated_at ? Date.parse(a.updated_at) : NaN
     if (!Number.isNaN(v) && !Number.isNaN(u) && v < u) {

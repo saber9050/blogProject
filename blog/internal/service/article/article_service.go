@@ -383,12 +383,17 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 	if req.Content != "" {
 		fields["content"] = req.Content
 
-		// 正文变了，库里已存的块与正文不再对应。把状态打回「未处理」，
-		// 让列表显示「否」而不是挂着过期的「是」——只有「是/否」两态时，
-		// 改完文章它仍然显示"是"，你会一直挂着旧内容而毫无察觉。
+		// 正文变了，库里已存的块与正文不再对应，把状态打回「未处理」。
 		//
-		// 只改 status 和 error，不清 chunk_count / vectorized_at：留着还能看出
-		// 「这篇曾经切过多少块」。界面在 status != 3 时不展示块数，不会误导。
+		// 但 vectorized_at 必须保留——它是前端区分「待更新」和「从未向量化」的唯一依据：
+		//   status=0 且 vectorized_at 非空 → 切过、但正文改了（显示「待更新」）
+		//   status=0 且 vectorized_at 为空 → 从没切过，或用户手动删过向量（显示「否」）
+		// 清掉它，改完正文就会显示「否」，和「从没向量化过」长得一模一样。
+		//
+		// chunk_count 也保留，前端用它提示「N 个旧分块已过期」。
+		// 块本身同样不删：留着能在「切分管理」里对比改之前的切分效果，
+		// 重新向量化时会整篇替换。
+		//
 		// 只改标题不重置——标题不进 chunk，不该作废。
 		if req.Content != article.Content {
 			fields["vector_status"] = entity.VectorStatusNone
