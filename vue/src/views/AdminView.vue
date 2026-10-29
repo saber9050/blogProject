@@ -27,6 +27,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">用户管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadUsers(userPage)">刷新</button>
               <button class="btn-sm btn-sm--primary" @click="openModal('user')">+ 新增</button>
             </div>
           </div>
@@ -94,6 +95,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">文章管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadArticles(articlePage)">刷新</button>
               <button class="btn-sm" @click="transferModalVisible = true">一键转移</button>
               <button class="btn-sm btn-sm--primary" @click="goToArticleEditor('/admin/article/new')">+ 新增</button>
             </div>
@@ -191,6 +193,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">评论管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadComments(commentPage)">刷新</button>
               <button v-if="!batchMode" class="btn-sm btn-sm--danger" @click="batchMode = true">批量删除</button>
               <template v-else>
                 <button class="btn-sm" @click="exitBatchMode">取消</button>
@@ -254,6 +257,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">分类管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadCategories(categoryPage)">刷新</button>
               <button class="btn-sm btn-sm--primary" @click="openModal('category')">+ 新增</button>
             </div>
           </div>
@@ -320,6 +324,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">标签管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadTags(tagPage)">刷新</button>
               <button class="btn-sm btn-sm--primary" @click="openModal('tag')">+ 新增</button>
             </div>
           </div>

@@ -3,6 +3,7 @@
     <div class="ai-panel__header">
       <h2 class="ai-panel__title">AI 模型配置</h2>
       <div class="ai-panel__actions">
+        <button class="btn-sm" :disabled="loading" @click="load">刷新</button>
         <button class="btn-sm btn-sm--primary" @click="openCreate">+ 新增配置</button>
       </div>
     </div>
@@ -438,6 +439,14 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+}
+
+/* 原来只有一个按钮，所以没定义容器样式；加了「刷新」后必须给间距，
+   否则两个按钮只能靠 HTML 空白字符撑开，换行位置一变就贴在一起。
+   8px 与后台其它面板的 .admin-panel__actions 保持一致。 */
+.ai-panel__actions {
+  display: flex;
+  gap: 8px;
 }
 
 .ai-panel__title {
