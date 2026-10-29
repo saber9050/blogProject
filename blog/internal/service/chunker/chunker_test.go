@@ -35,7 +35,7 @@ func TestSplitEmptyContent(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := Split(c.content, Params{ChunkSize: 800, MinChunkSize: 100, StripHTML: true})
+			got, err := Split(c.content, Params{ChunkSize: 800, MinChunkSize: 100, StripMarkup: true})
 			if !errors.Is(err, ErrEmptyContent) {
 				t.Fatalf("期望 ErrEmptyContent，实际 err=%v got=%+v", err, got)
 			}
@@ -57,7 +57,7 @@ func TestSplitRejectsTooShort(t *testing.T) {
 		"<p>哦</p>",
 	}
 	for _, c := range cases {
-		_, err := Split(c, Params{ChunkSize: 800, MinChunkSize: 0, StripHTML: true})
+		_, err := Split(c, Params{ChunkSize: 800, MinChunkSize: 0, StripMarkup: true})
 		if !errors.Is(err, ErrContentTooShort) {
 			t.Fatalf("%q 期望 ErrContentTooShort，实际 %v", c, err)
 		}
@@ -69,7 +69,7 @@ func TestSplitRejectsTooShort(t *testing.T) {
 
 	// 刚好 10 字应该通过（边界值不能卡掉）
 	got := mustSplit(t, "<p>"+strings.Repeat("字", MinContentChars)+"</p>",
-		Params{ChunkSize: 800, MinChunkSize: 10, StripHTML: true})
+		Params{ChunkSize: 800, MinChunkSize: 10, StripMarkup: true})
 	if len(got) != 1 {
 		t.Fatalf("恰好 %d 字应通过，实际 %d 块", MinContentChars, len(got))
 	}
@@ -78,7 +78,7 @@ func TestSplitRejectsTooShort(t *testing.T) {
 // TestSplitShortContent 短内容只有一块，且内容与原文一致。
 func TestSplitShortContent(t *testing.T) {
 	html := `<p>这是一段很短的正文，只有一句话。</p>`
-	got := mustSplit(t, html, Params{ChunkSize: 800, MinChunkSize: 100, StripHTML: true})
+	got := mustSplit(t, html, Params{ChunkSize: 800, MinChunkSize: 100, StripMarkup: true})
 
 	if len(got) != 1 {
 		t.Fatalf("期望 1 块，实际 %d 块", len(got))
@@ -99,7 +99,7 @@ func TestSplitShortContent(t *testing.T) {
 // overlap 设 0，这样每块长度就是上限，好断言。
 func TestHardSplitLongTextWithoutPunctuation(t *testing.T) {
 	text := strings.Repeat("字", 2500)
-	got := mustSplit(t, text, Params{ChunkSize: 800, ChunkOverlap: 0, MinChunkSize: 100, StripHTML: false})
+	got := mustSplit(t, text, Params{ChunkSize: 800, ChunkOverlap: 0, MinChunkSize: 100, StripMarkup: false})
 
 	if len(got) != 4 {
 		t.Fatalf("2500 字按 800 切，期望 4 块，实际 %d 块", len(got))
@@ -132,7 +132,7 @@ func TestSplitByParagraph(t *testing.T) {
 	p3 := "第三段" + strings.Repeat("丙", 197)
 	html := "<p>" + p1 + "</p><p>" + p2 + "</p><p>" + p3 + "</p>"
 
-	got := mustSplit(t, html, Params{ChunkSize: 300, ChunkOverlap: 0, MinChunkSize: 50, StripHTML: true})
+	got := mustSplit(t, html, Params{ChunkSize: 300, ChunkOverlap: 0, MinChunkSize: 50, StripMarkup: true})
 
 	if len(got) != 3 {
 		t.Fatalf("期望 3 块（每段一块），实际 %d 块", len(got))
@@ -161,7 +161,7 @@ func TestScriptStyleRemoved(t *testing.T) {
 		`<script>var secretKey="不该出现的脚本内容";</script>` +
 		`<p>正文第二部分。</p>`
 
-	got := mustSplit(t, html, Params{ChunkSize: 800, MinChunkSize: 10, StripHTML: true})
+	got := mustSplit(t, html, Params{ChunkSize: 800, MinChunkSize: 10, StripMarkup: true})
 	joined := ""
 	for _, r := range got {
 		joined += r.Content
@@ -185,8 +185,8 @@ func TestOverlapApplied(t *testing.T) {
 	second := strings.Repeat("乙", 100)
 	text := first + "。" + second + "。"
 
-	withOverlap := mustSplit(t, text, Params{ChunkSize: 100, ChunkOverlap: 10, MinChunkSize: 0, StripHTML: false})
-	noOverlap := mustSplit(t, text, Params{ChunkSize: 100, ChunkOverlap: 0, MinChunkSize: 0, StripHTML: false})
+	withOverlap := mustSplit(t, text, Params{ChunkSize: 100, ChunkOverlap: 10, MinChunkSize: 0, StripMarkup: false})
+	noOverlap := mustSplit(t, text, Params{ChunkSize: 100, ChunkOverlap: 0, MinChunkSize: 0, StripMarkup: false})
 
 	if len(withOverlap) < 2 || len(noOverlap) < 2 {
 		t.Fatalf("应至少切出 2 块，实际 overlap=%d / no-overlap=%d", len(withOverlap), len(noOverlap))
@@ -216,7 +216,7 @@ func TestMergeSmallChunks(t *testing.T) {
 		"<p>" + strings.Repeat("正", 300) + "</p>" +
 		"<p>二、方法</p>"
 
-	got := mustSplit(t, html, Params{ChunkSize: 200, ChunkOverlap: 0, MinChunkSize: 100, StripHTML: true})
+	got := mustSplit(t, html, Params{ChunkSize: 200, ChunkOverlap: 0, MinChunkSize: 100, StripMarkup: true})
 
 	if len(got) == 0 {
 		t.Fatal("不该返回空结果")
@@ -258,7 +258,7 @@ func TestMergeRespectsMaxSize(t *testing.T) {
 	}
 
 	got := mustSplit(t, b.String(), Params{
-		ChunkSize: size, ChunkOverlap: 0, MinChunkSize: minSize, StripHTML: true,
+		ChunkSize: size, ChunkOverlap: 0, MinChunkSize: minSize, StripMarkup: true,
 	})
 
 	if len(got) == 0 {
@@ -371,10 +371,11 @@ func TestParamsDefaults(t *testing.T) {
 	}
 
 	// ChunkOverlap 大于一半 → 被截到一半，不会无限叠加
+	// 上限再加 2：重叠与本块之间有一个 "\n\n" 分隔符（见 applyOverlap）
 	got = mustSplit(t, text, Params{ChunkSize: 100, ChunkOverlap: 500, MinChunkSize: 0})
 	for i, r := range got {
-		if r.CharCount > 100+50 {
-			t.Fatalf("第 %d 块 %d 字，超过上限 ChunkSize+ChunkSize/2=150", i, r.CharCount)
+		if r.CharCount > 100+50+2 {
+			t.Fatalf("第 %d 块 %d 字，超过上限 ChunkSize+ChunkSize/2+2=152", i, r.CharCount)
 		}
 	}
 
@@ -389,7 +390,7 @@ func TestParamsDefaults(t *testing.T) {
 // 用例在这里钉死，改常量时必须同步改测试——等于强制停下来想一次。
 func TestDefaultParams(t *testing.T) {
 	got := DefaultParams()
-	want := Params{ChunkSize: 800, ChunkOverlap: 80, MinChunkSize: 100, StripHTML: true}
+	want := Params{ChunkSize: 800, ChunkOverlap: 80, MinChunkSize: 100, StripMarkup: true}
 	if got != want {
 		t.Fatalf("默认参数变化了：期望 %+v，实际 %+v", want, got)
 	}
@@ -404,5 +405,65 @@ func TestExtractText(t *testing.T) {
 	// 不剥标签时标签原样保留，但零宽字符仍要清掉
 	if got := ExtractText("<p>\u200b原样</p>", false); got != "<p>原样</p>" {
 		t.Fatalf("stripHTML=false 结果错误：%q", got)
+	}
+}
+
+// TestMarkdownToPlainText Markdown 清洗：去标记、留内容、段落边界不丢。
+func TestMarkdownToPlainText(t *testing.T) {
+	cases := []struct{ md, want string }{
+		{"# 一级标题", "一级标题"},
+		{"### 三级标题", "三级标题"},
+		{"这是**加粗**的文本", "这是加粗的文本"},
+		{"这是*斜体*的文本", "这是斜体的文本"},
+		{"这是~~删除线~~文本", "这是删除线文本"},
+		{"行内 `code` 示例", "行内 code 示例"},
+		{"- 第一项\n- 第二项", "第一项\n第二项"},
+		{"1. 第一步\n2. 第二步", "第一步\n第二步"},
+		{"[点这里](https://example.com) 查看", "点这里 查看"},
+		{"![示意图](https://example.com/a.png) 正文", "正文"},
+		{"> 引用的一句话", "引用的一句话"},
+		{"---", ""},
+		{"表格：\n| 命令 | 作用 |\n|---|---|\n| XADD | 添加 |", "表格：\n| 命令 | 作用 |\n| XADD | 添加 |"},
+	}
+	for _, c := range cases {
+		if got := MarkdownToPlainText(c.md); got != c.want {
+			t.Errorf("MarkdownToPlainText(%q)\n期望：%q\n实际：%q", c.md, c.want, got)
+		}
+	}
+}
+
+// TestMarkdownCodeBlock 代码块内容要保留，且块内的标记不能被误删。
+func TestMarkdownCodeBlock(t *testing.T) {
+	md := "说明文字\n\n```go\n// 这是注释\nx := a * b\n```\n\n结束"
+	got := MarkdownToPlainText(md)
+	if !strings.Contains(got, "这是注释") {
+		t.Fatalf("代码块内容丢失：%q", got)
+	}
+	if !strings.Contains(got, "a * b") {
+		t.Fatalf("代码里的 * 被误删：%q", got)
+	}
+	if strings.Contains(got, "```") {
+		t.Fatalf("围栏没去掉：%q", got)
+	}
+	// 段落边界要保住
+	if !strings.Contains(got, "\n\n") {
+		t.Fatalf("段落边界丢了：%q", got)
+	}
+}
+
+// TestMarkupAutoDetect 自动判断 HTML / Markdown。
+func TestMarkupAutoDetect(t *testing.T) {
+	html := "<p>第一段</p><p>第二段</p>"
+	if got := MarkupToPlainText(html); got != "第一段\n\n第二段" {
+		t.Fatalf("HTML 未被正确识别：%q", got)
+	}
+	md := "# 标题\n\n正文**加粗**"
+	if got := MarkupToPlainText(md); got != "标题\n\n正文加粗" {
+		t.Fatalf("Markdown 未被正确识别：%q", got)
+	}
+	// 开头不是标签的纯文本（正文中间出现 <tag> 示例）不该被判成 HTML
+	plain := "这段文字里有 <script> 标签的示例，讲的是 XSS"
+	if got := MarkupToPlainText(plain); !strings.Contains(got, "<script>") {
+		t.Fatalf("纯文本被误判为 HTML：%q", got)
 	}
 }

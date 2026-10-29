@@ -3,11 +3,11 @@ package llm
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 
 	"blog/internal/model/dto/response"
+	"blog/internal/service/chunker"
 	llmconfigSvc "blog/internal/service/llmconfig"
 	"blog/pkg/errors"
 	"blog/pkg/llmclient"
@@ -52,23 +52,20 @@ func configKey(cfg llmclient.Config) string {
 		cfg.BaseURL, cfg.Model, cfg.APIKey, cfg.TimeoutSec, cfg.MaxTokens, cfg.Temperature)
 }
 
-// stripHTMLTags 去除 HTML 标签，提取纯文本
-func stripHTMLTags(html string) string {
-	// 去除 HTML 标签
-	re := regexp.MustCompile(`<[^>]+>`)
-	text := re.ReplaceAllString(html, "")
-	// 替换连续空白为单个空格
-	re = regexp.MustCompile(`\s+`)
-	text = re.ReplaceAllString(text, " ")
-	// 去除首尾空白
-	text = strings.TrimSpace(text)
-	return text
+// stripMarkup 把正文变成纯文本再喂给模型。
+//
+// 原来这里是自己写的一行正则 `<[^>]+>` + `\s+`→空格，只认 HTML。
+// 2026-10-29 正文改成 Markdown 存储后，`#` `**` `|` 会原样进 prompt，
+// 白占 token 还干扰模型。改成复用 chunker 里那套（已经带 HTML/Markdown 自动判断）。
+func stripMarkup(content string) string {
+	// 换行压成空格：prompt 里不需要段落结构，省 token
+	return strings.Join(strings.Fields(chunker.ExtractText(content, true)), " ")
 }
 
 // GenerateSummary 使用指定模型配置根据文章标题和内容生成摘要
 func (s *llmServiceImpl) GenerateSummary(configID uint, title string, content string) (*response.GenerateSummaryResponse, error) {
-	// 1. 去除 HTML 标签，提取纯文本
-	plainText := stripHTMLTags(content)
+	// 1. 去掉标记，提取纯文本
+	plainText := stripMarkup(content)
 	if len(plainText) == 0 {
 		return nil, errors.New(errors.CodeBadRequest, "文章内容为空")
 	}

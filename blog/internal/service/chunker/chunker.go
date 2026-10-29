@@ -40,10 +40,12 @@ var (
 
 // Params 切分参数
 type Params struct {
-	ChunkSize    int  // 目标块大小（字符/rune）
-	ChunkOverlap int  // 相邻块重叠字符数
-	MinChunkSize int  // 小于该值的块并入相邻块
-	StripHTML    bool // 是否先把 HTML 转成纯文本
+	ChunkSize    int // 目标块大小（字符/rune）
+	ChunkOverlap int // 相邻块重叠字符数
+	MinChunkSize int // 小于该值的块并入相邻块
+	// StripMarkup 是否先把正文里的标记去掉、只留纯文本。
+	// HTML 和 Markdown 都支持，具体走哪套由内容自动判断（见 MarkupToPlainText）。
+	StripMarkup bool
 }
 
 // Result 一个切分块
@@ -63,7 +65,7 @@ func DefaultParams() Params {
 		ChunkSize:    DefaultChunkSize,
 		ChunkOverlap: DefaultChunkOverlap,
 		MinChunkSize: DefaultMinChunkSize,
-		StripHTML:    true,
+		StripMarkup:  true,
 	}
 }
 
@@ -76,7 +78,7 @@ func DefaultParams() Params {
 func Split(content string, p Params) ([]Result, error) {
 	p = p.withDefaults()
 
-	text := ExtractText(content, p.StripHTML)
+	text := ExtractText(content, p.StripMarkup)
 	if text == "" {
 		return nil, ErrEmptyContent
 	}
@@ -100,12 +102,115 @@ func Split(content string, p Params) ([]Result, error) {
 
 // ExtractText 按参数把正文转成纯文本。单独导出是因为 service 层在报错时
 // 需要知道正文长度（判断「空」还是「太短」），不该为此把切分再跑一遍。
-func ExtractText(content string, stripHTML bool) string {
-	if stripHTML {
-		return ToPlainText(content)
+func ExtractText(content string, stripMarkup bool) string {
+	if stripMarkup {
+		return MarkupToPlainText(content)
 	}
-	// 不剥标签时也要清洗零宽字符和多余空白，否则块首块尾会带看不见的脏字符
+	// 不去标记时也要清洗零宽字符和多余空白，否则块首块尾会带看不见的脏字符
 	return normalizeSpace(content)
+}
+
+// MarkupToPlainText 自动判断正文是 HTML 还是 Markdown，再走对应的清洗。
+//
+// 之所以要判断而不是写死一种：2026-10-29 正文存储格式从 HTML 换成了 Markdown，
+// 本地库已全量转换，但**服务器上的旧数据仍是 HTML**。写死 Markdown 清洗会让
+// 老文章切出一堆 `<p>` `</div>` 标签；写死 HTML 清洗则会把新文章的 `**` `#`
+// 原样留在块里。两边的代价都不小，一个 HasPrefix 判断就能避开。
+func MarkupToPlainText(raw string) string {
+	if looksLikeHTML(raw) {
+		return ToPlainText(raw)
+	}
+	return MarkdownToPlainText(raw)
+}
+
+// looksLikeHTML 粗判：HTML 正文一定以标签开头（编辑器输出的都是 <p> / <h1> / <div>）。
+// 只看开头一小段，避免整篇扫描。
+func looksLikeHTML(s string) bool {
+	s = strings.TrimLeft(s, " \t\r\n")
+	if s == "" {
+		return false
+	}
+	if s[0] != '<' {
+		return false
+	}
+	// 只认真正的 HTML 标签名，避免把 `<script>` 这种纯文本内容（用户写代码示例）误判
+	i := strings.IndexAny(s, "> \t\r\n")
+	if i <= 1 {
+		return false
+	}
+	switch strings.ToLower(s[1:i]) {
+	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
+		"table", "thead", "tbody", "tr", "td", "th", "blockquote", "pre",
+		"section", "article", "figure", "img", "br", "hr", "span", "strong", "em",
+		"style", "script", "noscript", "a", "code", "dl", "dt", "dd", "center", "font":
+		return true
+	}
+	return false
+}
+
+// Markdown 标记。顺序敏感：
+//   - 代码块必须先抽出来占位，否则块内的 `#` `*` `|` 会被当成标记删掉
+//   - 图片/链接要在强调之前处理，否则 `[**粗体**](url)` 里的括号会先被破坏
+var (
+	reMdCodeBlock = regexp.MustCompile("(?s)```[^\n]*\n(.*?)```")
+	reMdImage     = regexp.MustCompile(`!\[([^\]]*)\]\([^)]*\)`)
+	reMdLink      = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	reMdHeading   = regexp.MustCompile(`(?m)^[ \t]{0,3}#{1,6}[ \t]+`)
+	reMdQuote     = regexp.MustCompile(`(?m)^[ \t]{0,3}>[ \t]?`)
+	reMdHR        = regexp.MustCompile(`(?m)^[ \t]*([-*_][ \t]*){3,}$`)
+	// 字符集只能用 [ \t] 不能用 \s：\s 含 \n，会让这个正则跨行吃掉下一行的开头
+	// 末尾带 \n?：分隔行整行删掉，否则留下一个空行把表格拦腰截断
+	reMdTableSep   = regexp.MustCompile(`(?m)^[ \t]*\|[ \t:|-]*\|[ \t]*\n?`)
+	reMdBullet     = regexp.MustCompile(`(?m)^[ \t]*[-*+][ \t]+`)
+	reMdOrdered    = regexp.MustCompile(`(?m)^[ \t]*\d+\.[ \t]+`)
+	reMdStrike     = regexp.MustCompile(`~~([^~]+)~~`)
+	reMdBold       = regexp.MustCompile(`\*\*([^*]+)\*\*`)
+	reMdItalic     = regexp.MustCompile(`\*([^*]+)\*`)
+	reMdInlineCode = regexp.MustCompile("`([^`]*)`")
+)
+
+// MarkdownToPlainText 把 Markdown 正文转成保留段落结构的纯文本。
+//
+// 处理原则：**去掉标记，保留内容**。标题的 `#` 要去掉但标题文字要留；
+// 链接的 `[text](url)` 留 text 丢掉 url（URL 对 embedding 没有语义价值）；
+// 图片整段丢掉（`![x](url)` 里的 alt 通常为空或与正文无关）。
+//
+// 代码块里的内容**保留**：技术文章里代码本身就是正文的一部分，
+// 而且里面的标识符对向量化有区分度。先抽出来占位是为了防止块内的
+// `#` `*` `|` 被下面的正则误删。
+func MarkdownToPlainText(md string) string {
+	if md == "" {
+		return ""
+	}
+
+	var codes []string
+	s := reMdCodeBlock.ReplaceAllStringFunc(md, func(m string) string {
+		body := reMdCodeBlock.FindStringSubmatch(m)
+		if len(body) > 1 {
+			codes = append(codes, strings.TrimRight(body[1], "\n"))
+		} else {
+			codes = append(codes, "")
+		}
+		return fmt.Sprintf("\x00%d\x00", len(codes)-1)
+	})
+
+	s = reMdImage.ReplaceAllString(s, "")
+	s = reMdLink.ReplaceAllString(s, "$1")
+	s = reMdHeading.ReplaceAllString(s, "")
+	s = reMdQuote.ReplaceAllString(s, "")
+	s = reMdHR.ReplaceAllString(s, "")
+	s = reMdTableSep.ReplaceAllString(s, "")
+	s = reMdBullet.ReplaceAllString(s, "")
+	s = reMdOrdered.ReplaceAllString(s, "")
+	s = reMdStrike.ReplaceAllString(s, "$1")
+	s = reMdBold.ReplaceAllString(s, "$1")
+	s = reMdItalic.ReplaceAllString(s, "$1")
+	s = reMdInlineCode.ReplaceAllString(s, "$1")
+
+	for i, c := range codes {
+		s = strings.ReplaceAll(s, fmt.Sprintf("\x00%d\x00", i), c)
+	}
+	return normalizeSpace(s)
 }
 
 // withDefaults 兜住非法参数。
@@ -159,7 +264,10 @@ var zeroWidth = strings.NewReplacer(
 	"\ufeff", "", // BOM
 )
 
-// ToPlainText 把文章正文的 HTML 转成保留段落边界的纯文本。
+// ToPlainText 把 HTML 正文转成保留段落边界的纯文本。
+//
+// 2026-10-29 起新文章的正文是 Markdown（清洗走 MarkupToPlainText），
+// 这个函数只服务服务器上尚未迁移的 HTML 存量数据。
 //
 // 不能复用 llm_service 里的 stripHTMLTags：它把 `\s+` 压成单个空格，
 // 段落边界全丢，切出来的块毫无语义（整篇文章变成一行）。
@@ -341,7 +449,11 @@ func mergeSmall(chunks []string, minSize, maxSize int) []string {
 // 现在没有检索出口看不出效果，但检索质量强依赖这个重叠——
 // 等做检索时再补就要全量重新向量化，代价高得多。
 //
-// 注意：重叠会让块长度超过 ChunkSize，这是刻意的（上限 = ChunkSize + Overlap）。
+// 重叠与本块之间补一个空行：原来直接字符串拼接，上一块的尾巴和本块开头会粘成
+// 一行（实测出现过「1.消息队列的相关命令| 命令 | 基本语法格式 |」这种），
+// 把 markdown 表格的前半行和上一段的结尾黏在一起，喂给 embedding 就是噪声。
+//
+// 注意：重叠会让块长度超过 ChunkSize，这是刻意的（上限 = ChunkSize + Overlap + 2）。
 func applyOverlap(chunks []string, overlap int) []string {
 	if overlap <= 0 || len(chunks) < 2 {
 		return chunks
@@ -354,7 +466,7 @@ func applyOverlap(chunks []string, overlap int) []string {
 		if take > len(prev) {
 			take = len(prev)
 		}
-		out[i] = string(prev[len(prev)-take:]) + chunks[i]
+		out[i] = string(prev[len(prev)-take:]) + "\n\n" + chunks[i]
 	}
 	return out
 }
