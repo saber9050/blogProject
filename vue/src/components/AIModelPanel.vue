@@ -13,50 +13,52 @@
       温度与状态，保存不再测试连接。使用 AI 功能（如文章「一键生成摘要」）时，选择要使用的模型配置。
     </p>
 
-    <table class="ai-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>类型</th>
-          <th>模型 id</th>
-          <th>Base URL</th>
-          <th>维度</th>
-          <th>密钥</th>
-          <th>状态</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in list" :key="row.id">
-          <td>{{ row.id }}</td>
-          <td>
-            <span class="ai-badge" :class="row.type === 2 ? 'ai-badge--embed' : 'ai-badge--chat'">
-              {{ row.type === 2 ? '向量' : '对话' }}
-            </span>
-          </td>
-          <td>{{ row.model }}</td>
-          <td class="ai-table__url" :title="row.base_url">{{ row.base_url }}</td>
-          <td class="ai-table__mono">{{ row.type === 2 ? row.dimension : '—' }}</td>
-          <td class="ai-table__mono">{{ row.api_key_masked || '—' }}</td>
-          <td>
-            <span class="ai-badge" :class="row.status === 1 ? 'ai-badge--on' : 'ai-badge--off'">
-              {{ row.status === 1 ? '启用' : '禁用' }}
-            </span>
-          </td>
-          <td>
-            <div class="ai-actions">
-              <button class="btn-sm" :disabled="busyId === row.id" @click="testRow(row)">
-                {{ busyId === row.id ? '测试中' : '测试' }}
-              </button>
-              <button class="btn-sm" @click="openEdit(row)">编辑</button>
-              <button class="btn-sm btn-sm--danger" @click="remove(row)">删除</button>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <div v-if="!loading && !list.length" class="ai-empty">暂无模型配置，点击「+ 新增配置」开始</div>
-    <div v-if="loading" class="ai-empty">加载中...</div>
+      <div class="ai-table-wrap">
+        <table class="ai-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>类型</th>
+              <th>模型 id</th>
+              <th>Base URL</th>
+              <th>维度</th>
+              <th>密钥</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in list" :key="row.id">
+              <td>{{ row.id }}</td>
+              <td>
+                <span class="ai-badge" :class="row.type === 2 ? 'ai-badge--embed' : 'ai-badge--chat'">
+                  {{ row.type === 2 ? '向量' : '对话' }}
+                </span>
+              </td>
+              <td>{{ row.model }}</td>
+              <td class="ai-table__url" :title="row.base_url">{{ row.base_url }}</td>
+              <td class="ai-table__mono">{{ row.type === 2 ? row.dimension : '—' }}</td>
+              <td class="ai-table__mono">{{ row.api_key_masked || '—' }}</td>
+              <td>
+                <span class="ai-badge" :class="row.status === 1 ? 'ai-badge--on' : 'ai-badge--off'">
+                  {{ row.status === 1 ? '启用' : '禁用' }}
+                </span>
+              </td>
+              <td>
+                <div class="ai-actions">
+                  <button class="btn-sm" :disabled="busyId === row.id" @click="testRow(row)">
+                    {{ busyId === row.id ? '测试中' : '测试' }}
+                  </button>
+                  <button class="btn-sm" @click="openEdit(row)">编辑</button>
+                  <button class="btn-sm btn-sm--danger" @click="remove(row)">删除</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="!loading && !list.length" class="ai-empty">暂无模型配置，点击「+ 新增配置」开始</div>
+        <div v-if="loading" class="ai-empty">加载中...</div>
+      </div>
 
     <!--
       新增 / 编辑弹窗。
@@ -432,6 +434,23 @@ onMounted(() => {
   background: #fff;
   border-radius: var(--radius-md);
   padding: 20px 24px 24px;
+  /* 撑满父级 .admin-panel 并让表格区内部滚动：
+     页面本身不再滚动，列表再长也不会把侧边栏顶出视口 */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-panel__header,
+.ai-panel__tip {
+  flex-shrink: 0;
+}
+
+.ai-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .ai-panel__header {

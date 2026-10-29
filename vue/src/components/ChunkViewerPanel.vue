@@ -62,35 +62,37 @@
         <button class="btn-sm" @click="resetFilter">重置</button>
       </div>
 
-      <table class="cv-table">
-        <thead>
-          <tr>
-            <th class="cv-col--id">块 ID</th>
-            <th>文章</th>
-            <th class="cv-col--idx">序号</th>
-            <th class="cv-col--num">字符数</th>
-            <th class="cv-col--preview">原文预览</th>
-            <th class="cv-col--ops">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in chunks" :key="c.id">
-            <td class="cv-mono">{{ c.id }}</td>
-            <td class="cv-ellipsis" :title="c.article_title">
-              <span class="cv-muted">#{{ c.article_id }}</span> {{ c.article_title || '（已删除）' }}
-            </td>
-            <td class="cv-mono">{{ c.chunk_index }}</td>            <td class="cv-mono">{{ c.char_count }}</td>
-            <td class="cv-preview">
-              {{ c.content }}<span v-if="c.content_truncated" class="cv-more">…</span>
-            </td>
-            <td>
-              <button class="btn-sm" @click="openFull(c)">查看全文</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="!loading && !chunks.length" class="cv-empty">
-        暂无切分数据。到「文章管理」选一篇文章点「向量化」，或检查筛选条件。
+      <div class="cv-table-wrap">
+        <table class="cv-table">
+          <thead>
+            <tr>
+              <th class="cv-col--id">块 ID</th>
+              <th>文章</th>
+              <th class="cv-col--idx">序号</th>
+              <th class="cv-col--num">字符数</th>
+              <th class="cv-col--preview">原文预览</th>
+              <th class="cv-col--ops">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in chunks" :key="c.id">
+              <td class="cv-mono">{{ c.id }}</td>
+              <td class="cv-ellipsis" :title="c.article_title">
+                <span class="cv-muted">#{{ c.article_id }}</span> {{ c.article_title || '（已删除）' }}
+              </td>
+              <td class="cv-mono">{{ c.chunk_index }}</td>            <td class="cv-mono">{{ c.char_count }}</td>
+              <td class="cv-preview">
+                {{ c.content }}<span v-if="c.content_truncated" class="cv-more">…</span>
+              </td>
+              <td>
+                <button class="btn-sm" @click="openFull(c)">查看全文</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="!loading && !chunks.length" class="cv-empty">
+          暂无切分数据。到「文章管理」选一篇文章点「向量化」，或检查筛选条件。
+        </div>
       </div>
 
       <div v-if="total > 0" class="pagination">
@@ -124,27 +126,29 @@
 
     <!-- ===== 聚合统计 ===== -->
     <template v-else>
-      <table class="cv-table">
-        <thead>
-          <tr>
-            <th>文章</th>
-            <th>块数</th>
-            <th>平均块长</th>
-            <th>最近切分</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="s in artStats" :key="s.article_id">
-            <td class="cv-ellipsis" :title="s.article_title">
-              <span class="cv-muted">#{{ s.article_id }}</span> {{ s.article_title }}
-            </td>
-            <td class="cv-mono">{{ s.chunk_count }}</td>
-            <td class="cv-mono">{{ s.avg_chars }} 字</td>
-            <td class="cv-time">{{ s.last_chunk_at || '—' }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="!artStats.length" class="cv-empty">暂无统计数据</div>
+      <div class="cv-table-wrap">
+        <table class="cv-table">
+          <thead>
+            <tr>
+              <th>文章</th>
+              <th>块数</th>
+              <th>平均块长</th>
+              <th>最近切分</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in artStats" :key="s.article_id">
+              <td class="cv-ellipsis" :title="s.article_title">
+                <span class="cv-muted">#{{ s.article_id }}</span> {{ s.article_title }}
+              </td>
+              <td class="cv-mono">{{ s.chunk_count }}</td>
+              <td class="cv-mono">{{ s.avg_chars }} 字</td>
+              <td class="cv-time">{{ s.last_chunk_at || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="!artStats.length" class="cv-empty">暂无统计数据</div>
+      </div>
     </template>
 
     <Teleport to="body">
@@ -440,6 +444,24 @@ onMounted(loadAll)
   /* .admin-panel 是纯卡片容器、自身没有内边距，留白由各面板自己负责。
      这里必须给，否则标题和按钮会贴在卡片边框上。数值与 AIModelPanel 对齐。 */
   padding: 20px 24px 24px;
+  /* 撑满父级并让表格区内部滚动：页面本身不再滚，列表再长也能随时切管理项 */
+  flex: 1;
+  min-height: 0;
+}
+
+/* 头部、状态条、卡片、选项卡、筛选栏都固定，只有表格区滚 */
+.cv-panel__header,
+.cv-schema,
+.cv-cards,
+.cv-tabs,
+.cv-filter {
+  flex-shrink: 0;
+}
+
+.cv-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .cv-panel__header {

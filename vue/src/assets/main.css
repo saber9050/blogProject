@@ -969,6 +969,9 @@ a {
   gap: 6px;
   padding: 16px 0;
   flex-wrap: wrap;
+  /* 后台列表页里分页条固定在面板底部，不随表格滚走 —— 列表很长时
+     也不影响翻页 */
+  flex-shrink: 0;
 }
 
 .pagination__btn {
