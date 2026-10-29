@@ -1275,7 +1275,11 @@ onMounted(async () => {
   border-right: 1px solid #e8e8e8;
   padding: 16px 0;
   flex-shrink: 0;
+  /* 只写 overflow-y 的话，overflow-x 会从 visible 隐式变成 auto：
+     侧边栏原本就有极少量横向溢出（被 visible 直接画到边界外，看不见），
+     一旦变成滚动容器就会冒出横向滚动条。侧边栏永远不需要横向滚动，显式禁掉。 */
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .admin-sidebar__title {
