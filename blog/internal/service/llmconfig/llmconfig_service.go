@@ -290,6 +290,15 @@ func (s *llmConfigService) Resolve(id uint) (llmclient.Config, error) {
 	if m.Status != 1 {
 		return llmclient.Config{}, errors.New(errors.CodeBadRequest, "该模型配置已禁用，请先在「AI 模型」页启用")
 	}
+	// Resolve 的语义是「解析一个用于对话的模型配置」，向量模型不该走到这里。
+	//
+	// 之前不校验：前端如果把向量模型的 id 传进来（摘要页的模型下拉一度没按类型过滤），
+	// 就会拿 embedding 的 base_url + model 去调 /chat/completions，
+	// 报的是上游服务的 400/404，从错误信息完全看不出根因是「模型类型不对」。
+	if m.Type != entity.ModelTypeChat {
+		return llmclient.Config{}, errors.New(errors.CodeBadRequest,
+			"该配置是向量模型，不能用于对话生成")
+	}
 	return s.toClientConfig(m), nil
 }
 

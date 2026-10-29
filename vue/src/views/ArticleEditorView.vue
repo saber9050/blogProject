@@ -78,7 +78,7 @@
                 <option v-for="m in enabledModelConfigs" :key="m.id" :value="m.id">{{ m.model }}</option>
               </select>
               <p v-if="!enabledModelConfigs.length" class="summary-hint">
-                暂无启用的 AI 模型，请先在后台「AI 模型」页添加并启用后再生成摘要。
+                暂无已启用的对话模型，请先在后台「AI 模型」页添加并启用（向量模型不能用于生成摘要）。
               </p>
               <div class="summary-wrapper">
                 <textarea v-model="form.summary" class="form-input form-textarea" rows="3" placeholder="请输入文章摘要"></textarea>
@@ -141,15 +141,21 @@ const generating = ref(false)
 interface ModelOption {
   id: number
   model: string
+  type: number
   status: number
 }
 const modelConfigs = ref<ModelOption[]>([])
 const summaryModelId = ref(0)
-const enabledModelConfigs = computed(() => modelConfigs.value.filter(m => m.status === 1))
+// 只保留「对话模型 + 已启用」。type 再滤一遍是兜底：这个下拉是用来生成摘要的，
+// 万一接口没按 type 过滤（曾经就是这样），向量模型出现在选项里，选了必然失败。
+const enabledModelConfigs = computed(() =>
+  modelConfigs.value.filter(m => m.status === 1 && m.type === 1)
+)
 
 const loadModelConfigs = async () => {
   try {
-    const res = await api.get('/admin/llm-configs')
+    // type=1 只取对话模型：向量模型走 /embeddings，没有对话能力
+    const res = await api.get('/admin/llm-configs', { params: { type: 1 } })
     modelConfigs.value = res.data?.data || []
     const enabled = enabledModelConfigs.value
     if (enabled.length) summaryModelId.value = enabled[0].id
