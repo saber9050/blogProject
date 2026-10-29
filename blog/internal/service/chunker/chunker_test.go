@@ -19,19 +19,19 @@ func mustSplit(t *testing.T, content string, p Params) []Result {
 
 // TestSplitEmptyContent 空内容必须返回 ErrEmptyContent。
 //
-// 编辑器清空正文后存的是 `<p><br></p>`，不是空字符串。如果这里返回一个
-// 内容为 "" 的块，向量化会拿着空文本去调 embedding，多数服务报参数错误，
-// 而错误信息完全看不出根因。
+// 如果这里返回一个内容为 "" 的块，向量化会拿着空文本去调 embedding，
+// 多数服务报参数错误，而错误信息完全看不出根因。
+// 清洗后为空的几种形态都要认出来：空串、纯空白、纯零宽字符、只有分隔线。
 func TestSplitEmptyContent(t *testing.T) {
 	cases := []struct {
 		name    string
 		content string
 	}{
 		{"空字符串", ""},
-		{"编辑器空内容", "<p><br></p>"},
-		{"只有标签", "<p></p><div></div>"},
 		{"只有空白", "   \n\n\t  "},
-		{"只有 script", "<script>var a=1</script>"},
+		{"只有零宽字符", "\u200b\u200b\ufeff"},
+		{"只有分隔线", "---"},
+		{"只有图片", "![](http://example.com/a.png)"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -48,13 +48,13 @@ func TestSplitEmptyContent(t *testing.T) {
 
 // TestSplitRejectsTooShort 正文太短要拒绝，不能产出一个无意义的向量。
 //
-// 依据来自真实数据：本地 19 篇文章里有 6 篇正文就是 `<p>1</p>` 这种
+// 依据来自真实数据：本地 19 篇文章里有 6 篇正文就是 "1" 这种
 // 测试残留。这类内容拿去 embedding 既不报错也没价值，只会在库里留垃圾行。
 func TestSplitRejectsTooShort(t *testing.T) {
 	cases := []string{
-		"<p>1</p>",
-		"<p>123456789</p>", // 9 字，差一个字
-		"<p>哦</p>",
+		"1",
+		"123456789", // 9 字，差一个字
+		"哦",
 	}
 	for _, c := range cases {
 		_, err := Split(c, Params{ChunkSize: 800, MinChunkSize: 0, StripMarkup: true})
@@ -68,21 +68,21 @@ func TestSplitRejectsTooShort(t *testing.T) {
 	}
 
 	// 刚好 10 字应该通过（边界值不能卡掉）
-	got := mustSplit(t, "<p>"+strings.Repeat("字", MinContentChars)+"</p>",
+	got := mustSplit(t, strings.Repeat("字", MinContentChars),
 		Params{ChunkSize: 800, MinChunkSize: 10, StripMarkup: true})
 	if len(got) != 1 {
 		t.Fatalf("恰好 %d 字应通过，实际 %d 块", MinContentChars, len(got))
 	}
 }
 
-// TestSplitShortContent 短内容只有一块，且内容与原文一致。
 func TestSplitShortContent(t *testing.T) {
-	html := `<p>这是一段很短的正文，只有一句话。</p>`
-	got := mustSplit(t, html, Params{ChunkSize: 800, MinChunkSize: 100, StripMarkup: true})
+	md := "这是一段**很短**的正文，只有一句话。"
+	got := mustSplit(t, md, Params{ChunkSize: 800, MinChunkSize: 100, StripMarkup: true})
 
 	if len(got) != 1 {
 		t.Fatalf("期望 1 块，实际 %d 块", len(got))
 	}
+	// 加粗标记要去掉，文字保留
 	want := "这是一段很短的正文，只有一句话。"
 	if got[0].Content != want {
 		t.Fatalf("内容不一致\n期望：%q\n实际：%q", want, got[0].Content)
@@ -123,16 +123,13 @@ func TestHardSplitLongTextWithoutPunctuation(t *testing.T) {
 	}
 }
 
-// TestSplitByParagraph 段落优先，不跨段。
-//
-// 每段 200 字、块大小 300：两块拼起来 400 > 300，所以一段必须独占一块。
 func TestSplitByParagraph(t *testing.T) {
 	p1 := "第一段" + strings.Repeat("甲", 197)
 	p2 := "第二段" + strings.Repeat("乙", 197)
 	p3 := "第三段" + strings.Repeat("丙", 197)
-	html := "<p>" + p1 + "</p><p>" + p2 + "</p><p>" + p3 + "</p>"
+	md := p1 + "\n\n" + p2 + "\n\n" + p3
 
-	got := mustSplit(t, html, Params{ChunkSize: 300, ChunkOverlap: 0, MinChunkSize: 50, StripMarkup: true})
+	got := mustSplit(t, md, Params{ChunkSize: 300, ChunkOverlap: 0, MinChunkSize: 50, StripMarkup: true})
 
 	if len(got) != 3 {
 		t.Fatalf("期望 3 块（每段一块），实际 %d 块", len(got))
@@ -148,33 +145,6 @@ func TestSplitByParagraph(t *testing.T) {
 		}
 		if strings.Contains(got[i].Content, m.other) {
 			t.Fatalf("第 %d 块跨段了：包含了 %q", i, m.other)
-		}
-	}
-}
-
-// TestScriptStyleRemoved 脚本与样式连同内容整段删除。
-//
-// 只剥标签不删内容的话，CSS 选择器和 JS 变量名都会进向量，变成噪声。
-func TestScriptStyleRemoved(t *testing.T) {
-	html := `<style>.a{color:red}</style>` +
-		`<p>正文第一部分。</p>` +
-		`<script>var secretKey="不该出现的脚本内容";</script>` +
-		`<p>正文第二部分。</p>`
-
-	got := mustSplit(t, html, Params{ChunkSize: 800, MinChunkSize: 10, StripMarkup: true})
-	joined := ""
-	for _, r := range got {
-		joined += r.Content
-	}
-
-	for _, bad := range []string{"不该出现", "secretKey", "color:red", "var "} {
-		if strings.Contains(joined, bad) {
-			t.Fatalf("结果里残留了 %q：%s", bad, joined)
-		}
-	}
-	for _, want := range []string{"正文第一部分", "正文第二部分"} {
-		if !strings.Contains(joined, want) {
-			t.Fatalf("结果里缺少正文 %q：%s", want, joined)
 		}
 	}
 }
@@ -212,11 +182,11 @@ func TestOverlapApplied(t *testing.T) {
 // 碎块来源很实际：小标题单独一行、列表项很短。几个字的块拿去 embedding
 // 是纯浪费——向量里几乎没有信息，却占一次 API 调用和一行存储。
 func TestMergeSmallChunks(t *testing.T) {
-	html := "<p>一、背景</p>" +
-		"<p>" + strings.Repeat("正", 300) + "</p>" +
-		"<p>二、方法</p>"
+	md := "## 一、背景\n\n" +
+		strings.Repeat("正", 300) + "\n\n" +
+		"## 二、方法"
 
-	got := mustSplit(t, html, Params{ChunkSize: 200, ChunkOverlap: 0, MinChunkSize: 100, StripMarkup: true})
+	got := mustSplit(t, md, Params{ChunkSize: 200, ChunkOverlap: 0, MinChunkSize: 100, StripMarkup: true})
 
 	if len(got) == 0 {
 		t.Fatal("不该返回空结果")
@@ -252,9 +222,9 @@ func TestMergeRespectsMaxSize(t *testing.T) {
 
 	// 195 字的正文 + 20 个短标题，全部想并进第一块的话会达到 295 字
 	var b strings.Builder
-	b.WriteString("<p>" + strings.Repeat("正", size-5) + "</p>")
+	b.WriteString(strings.Repeat("正", size-5))
 	for i := 0; i < 20; i++ {
-		b.WriteString("<p>小标题</p>")
+		b.WriteString("\n\n小标题")
 	}
 
 	got := mustSplit(t, b.String(), Params{
@@ -279,43 +249,21 @@ func TestMergeRespectsMaxSize(t *testing.T) {
 	}
 }
 
-// TestHTMLUnescapeAfterStrip 实体反转义必须发生在剥标签之后。
-//
-// 顺序错了就会踩这个坑：`&lt;script&gt;` 先被反转义成真标签，
-// 紧接着被「删除所有标签」这一步当成标签删掉，正文里的「<script>」字样凭空消失。
-func TestHTMLUnescapeAfterStrip(t *testing.T) {
-	cases := []struct{ html, want string }{
-		{"<p>a &lt; b</p>", "a < b"},
-		{"<p>x &amp;&amp; y</p>", "x && y"},
-		{"<p>&lt;script&gt; 这个字样要保留</p>", "<script> 这个字样要保留"},
-		{"<p>引号 &quot;测试&quot;</p>", `引号 "测试"`},
-		{"<p>不换行&nbsp;空格</p>", "不换行 空格"},
-	}
-	for _, c := range cases {
-		got := ToPlainText(c.html)
-		if got != c.want {
-			t.Fatalf("ToPlainText(%q)\n期望：%q\n实际：%q", c.html, c.want, got)
-		}
-	}
-}
-
 // TestParagraphBreakPreserved 段落边界不能被压平。
 //
-// 现有 llm_service.stripHTMLTags 把 `\s+` 压成单个空格，整篇文章变成一行。
-// 直接复用它的会切出一堆语义断裂的块，所以必须单独实现并锁住这个行为。
+// Markdown 里空行就是段落边界，切分优先按 "\n\n" 分。压平了就只能按字数硬切，
+// 块边界会落在句子中间。
 func TestParagraphBreakPreserved(t *testing.T) {
-	html := "<p>第一段</p><p>第二段</p><p>第三段</p>"
-	got := ToPlainText(html)
-	want := "第一段\n\n第二段\n\n第三段"
-	if got != want {
-		t.Fatalf("段落边界丢失\n期望：%q\n实际：%q", want, got)
+	md := "第一段\n\n第二段\n\n第三段"
+	if got := MarkdownToPlainText(md); got != md {
+		t.Fatalf("段落边界丢失\n期望：%q\n实际：%q", md, got)
 	}
 
-	// <br> 只换行不分段
-	got = ToPlainText("第一行<br>第二行")
-	want = "第一行\n第二行"
+	// 单换行（行内断行）也要保留，只是不构成段落
+	got := MarkdownToPlainText("第一行\n第二行")
+	want := "第一行\n第二行"
 	if got != want {
-		t.Fatalf("<br> 处理错误\n期望：%q\n实际：%q", want, got)
+		t.Fatalf("单换行处理错误\n期望：%q\n实际：%q", want, got)
 	}
 }
 
@@ -324,31 +272,15 @@ func TestParagraphBreakPreserved(t *testing.T) {
 // 实测真实文章的第一块开头就有一个 \u200b：不显示、但占字符数，
 // 会让块首出现看不见的脏字符，也会让 CharCount 虚高。
 func TestZeroWidthRemoved(t *testing.T) {
-	got := ToPlainText("<p>\u200b正文\u200b内容\ufeff。</p>")
+	got := MarkdownToPlainText("\u200b正文\u200b内容\ufeff。")
 	want := "正文内容。"
 	if got != want {
 		t.Fatalf("零宽字符未被清除\n期望：%q\n实际：%q", want, got)
 	}
 
 	// 整个内容只有零宽字符，应当视为空
-	if s := ToPlainText("<p>\u200b\u200b</p>"); s != "" {
+	if s := MarkdownToPlainText("\u200b\u200b"); s != "" {
 		t.Fatalf("只有零宽字符应转成空串，实际 %q", s)
-	}
-}
-
-// TestTableCellSeparated 表格单元格之间要有分隔。
-//
-// 实测真实文章里出现过 "enctypeapplication/x-www-form-urlencoded" 这种
-// 粘在一起的内容——`</td>` 不在分段列表里，相邻单元格被直接拼接了。
-func TestTableCellSeparated(t *testing.T) {
-	html := "<table><tr><td>enctype</td><td>说明</td></tr></table>"
-	got := ToPlainText(html)
-
-	if strings.Contains(got, "enctype说明") {
-		t.Fatalf("单元格被拼接了：%q", got)
-	}
-	if !strings.Contains(got, "enctype") || !strings.Contains(got, "说明") {
-		t.Fatalf("单元格内容丢失：%q", got)
 	}
 }
 
@@ -398,13 +330,13 @@ func TestDefaultParams(t *testing.T) {
 
 // TestExtractText 导出函数的两种模式。
 func TestExtractText(t *testing.T) {
-	html := "<p>第一段</p><p>第二段</p>"
-	if got := ExtractText(html, true); got != "第一段\n\n第二段" {
-		t.Fatalf("stripHTML=true 结果错误：%q", got)
+	md := "## 第一段\n\n第二段**加粗**"
+	if got := ExtractText(md, true); got != "第一段\n\n第二段加粗" {
+		t.Fatalf("stripMarkup=true 结果错误：%q", got)
 	}
-	// 不剥标签时标签原样保留，但零宽字符仍要清掉
-	if got := ExtractText("<p>\u200b原样</p>", false); got != "<p>原样</p>" {
-		t.Fatalf("stripHTML=false 结果错误：%q", got)
+	// 不洗时标记原样保留，但零宽字符与多余空白仍要清掉
+	if got := ExtractText("\u200b##  原样  ", false); got != "## 原样" {
+		t.Fatalf("stripMarkup=false 结果错误：%q", got)
 	}
 }
 
@@ -448,22 +380,5 @@ func TestMarkdownCodeBlock(t *testing.T) {
 	// 段落边界要保住
 	if !strings.Contains(got, "\n\n") {
 		t.Fatalf("段落边界丢了：%q", got)
-	}
-}
-
-// TestMarkupAutoDetect 自动判断 HTML / Markdown。
-func TestMarkupAutoDetect(t *testing.T) {
-	html := "<p>第一段</p><p>第二段</p>"
-	if got := MarkupToPlainText(html); got != "第一段\n\n第二段" {
-		t.Fatalf("HTML 未被正确识别：%q", got)
-	}
-	md := "# 标题\n\n正文**加粗**"
-	if got := MarkupToPlainText(md); got != "标题\n\n正文加粗" {
-		t.Fatalf("Markdown 未被正确识别：%q", got)
-	}
-	// 开头不是标签的纯文本（正文中间出现 <tag> 示例）不该被判成 HTML
-	plain := "这段文字里有 <script> 标签的示例，讲的是 XSS"
-	if got := MarkupToPlainText(plain); !strings.Contains(got, "<script>") {
-		t.Fatalf("纯文本被误判为 HTML：%q", got)
 	}
 }

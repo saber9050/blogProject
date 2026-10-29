@@ -8,7 +8,6 @@ package chunker
 import (
 	"errors"
 	"fmt"
-	"html"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -43,8 +42,8 @@ type Params struct {
 	ChunkSize    int // 目标块大小（字符/rune）
 	ChunkOverlap int // 相邻块重叠字符数
 	MinChunkSize int // 小于该值的块并入相邻块
-	// StripMarkup 是否先把正文里的标记去掉、只留纯文本。
-	// HTML 和 Markdown 都支持，具体走哪套由内容自动判断（见 MarkupToPlainText）。
+	// StripMarkup 是否先把 Markdown 标记去掉、只留纯文本。
+	// 标记（# ** | ``` 等）对 embedding 是噪声，生产环境恒为 true。
 	StripMarkup bool
 }
 
@@ -102,50 +101,14 @@ func Split(content string, p Params) ([]Result, error) {
 
 // ExtractText 按参数把正文转成纯文本。单独导出是因为 service 层在报错时
 // 需要知道正文长度（判断「空」还是「太短」），不该为此把切分再跑一遍。
+//
+// 2026-10-29 起正文统一存 Markdown，所以只有一种清洗（不再判断 HTML）。
 func ExtractText(content string, stripMarkup bool) string {
 	if stripMarkup {
-		return MarkupToPlainText(content)
+		return MarkdownToPlainText(content)
 	}
 	// 不去标记时也要清洗零宽字符和多余空白，否则块首块尾会带看不见的脏字符
 	return normalizeSpace(content)
-}
-
-// MarkupToPlainText 自动判断正文是 HTML 还是 Markdown，再走对应的清洗。
-//
-// 之所以要判断而不是写死一种：2026-10-29 正文存储格式从 HTML 换成了 Markdown，
-// 本地库已全量转换，但**服务器上的旧数据仍是 HTML**。写死 Markdown 清洗会让
-// 老文章切出一堆 `<p>` `</div>` 标签；写死 HTML 清洗则会把新文章的 `**` `#`
-// 原样留在块里。两边的代价都不小，一个 HasPrefix 判断就能避开。
-func MarkupToPlainText(raw string) string {
-	if looksLikeHTML(raw) {
-		return ToPlainText(raw)
-	}
-	return MarkdownToPlainText(raw)
-}
-
-// looksLikeHTML 粗判：HTML 正文一定以标签开头（编辑器输出的都是 <p> / <h1> / <div>）。
-// 只看开头一小段，避免整篇扫描。
-func looksLikeHTML(s string) bool {
-	s = strings.TrimLeft(s, " \t\r\n")
-	if s == "" {
-		return false
-	}
-	if s[0] != '<' {
-		return false
-	}
-	// 只认真正的 HTML 标签名，避免把 `<script>` 这种纯文本内容（用户写代码示例）误判
-	i := strings.IndexAny(s, "> \t\r\n")
-	if i <= 1 {
-		return false
-	}
-	switch strings.ToLower(s[1:i]) {
-	case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
-		"table", "thead", "tbody", "tr", "td", "th", "blockquote", "pre",
-		"section", "article", "figure", "img", "br", "hr", "span", "strong", "em",
-		"style", "script", "noscript", "a", "code", "dl", "dt", "dd", "center", "font":
-		return true
-	}
-	return false
 }
 
 // Markdown 标记。顺序敏感：
@@ -215,10 +178,9 @@ func MarkdownToPlainText(md string) string {
 
 // withDefaults 兜住非法参数。
 //
-// 不做报错而是静默修正：参数合法性由 chunktemplate 服务在写入时校验，
-// 走到这里说明数据已经过校验，剩下的只可能是历史脏数据。让它跑出结果
-// 比让整个向量化任务失败更有用——失败原因里出现「chunk_size 不能为 0」
-// 对排查毫无帮助。
+// 不做报错而是静默修正：参数现在固化在 DefaultParams 里，走到这里的非法值
+// 只可能来自调用方手写的 Params（测试、临时脚本）。让它跑出结果比让整个
+// 向量化任务失败更有用——失败原因里出现「chunk_size 不能为 0」对排查毫无帮助。
 func (p Params) withDefaults() Params {
 	if p.ChunkSize <= 0 {
 		p.ChunkSize = DefaultChunkSize
@@ -239,21 +201,6 @@ func (p Params) withDefaults() Params {
 	return p
 }
 
-// 块级标签闭合后应该换段。
-//
-// 只列真正负责分段语义的标签，不加 span/a/strong 这类行内标签——
-// 按行内标签换段会把一句话切碎。
-//
-// td/th 虽然不算「块级」，但必须换行：表格里 `<td>enctype</td><td>file</td>`
-// 直接拼起来会变成 "enctypefile"，实测真实文章里就出现了
-// "enctypeapplication/x-www-form-urlencoded" 这种粘在一起的内容。
-var (
-	reScriptStyle = regexp.MustCompile(`(?is)<(script|style|noscript)[^>]*>.*?</(script|style|noscript)\s*>`)
-	reBr          = regexp.MustCompile(`(?i)<br\s*/?>`)
-	reBlockEnd    = regexp.MustCompile(`(?i)</(p|div|h[1-6]|li|tr|td|th|blockquote|pre|section|article|ul|ol|table|thead|tbody|figure|figcaption|dd|dt)\s*>`)
-	reAnyTag      = regexp.MustCompile(`(?s)<[^>]+>`)
-)
-
 // zeroWidth 富文本里常见的零宽字符。它们不显示但占字符数，
 // 会让块首出现看不见的脏字符、也会让 CharCount 虚高。实测真实文章块首就有 \u200b。
 var zeroWidth = strings.NewReplacer(
@@ -263,30 +210,6 @@ var zeroWidth = strings.NewReplacer(
 	"\u2060", "", // 词连接符
 	"\ufeff", "", // BOM
 )
-
-// ToPlainText 把 HTML 正文转成保留段落边界的纯文本。
-//
-// 2026-10-29 起新文章的正文是 Markdown（清洗走 MarkupToPlainText），
-// 这个函数只服务服务器上尚未迁移的 HTML 存量数据。
-//
-// 不能复用 llm_service 里的 stripHTMLTags：它把 `\s+` 压成单个空格，
-// 段落边界全丢，切出来的块毫无语义（整篇文章变成一行）。
-//
-// 步骤顺序有讲究：
-//  1. 先整段删除 script/style（连同内容）。如果先剥标签，脚本里的代码会残留。
-//  2. 再反转义 HTML 实体？不行——必须放在剥标签之后。
-//     否则 `&lt;script&gt;` 会被反转义成真标签，紧接着被当成标签删掉。
-func ToPlainText(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	s := reScriptStyle.ReplaceAllString(raw, "")
-	s = reBr.ReplaceAllString(s, "\n")
-	s = reBlockEnd.ReplaceAllString(s, "\n\n")
-	s = reAnyTag.ReplaceAllString(s, "")
-	s = html.UnescapeString(s)
-	return normalizeSpace(s)
-}
 
 // normalizeSpace 归一化空白，但保留段落/换行的结构。
 //
