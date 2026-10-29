@@ -4,10 +4,12 @@ import (
 	"blog/internal/api/v1/about"
 	adminArticle "blog/internal/api/v1/admin/article"
 	adminCategory "blog/internal/api/v1/admin/category"
+	adminChunk "blog/internal/api/v1/admin/chunk"
 	adminComment "blog/internal/api/v1/admin/comment"
 	adminLLMConfig "blog/internal/api/v1/admin/llmconfig"
 	adminTag "blog/internal/api/v1/admin/tag"
 	adminUser "blog/internal/api/v1/admin/user"
+	adminVector "blog/internal/api/v1/admin/vector"
 	"blog/internal/api/v1/article"
 	"blog/internal/api/v1/auth"
 	"blog/internal/api/v1/category"
@@ -19,11 +21,14 @@ import (
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
+	chunkSvc "blog/internal/service/chunk"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
 	llmconfigSvc "blog/internal/service/llmconfig"
 	tagSvc "blog/internal/service/tag"
 	user2 "blog/internal/service/user"
+	vectorizeSvc "blog/internal/service/vectorize"
+	vectorSvc "blog/internal/service/vectorschema"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,6 +44,8 @@ type Router struct {
 	adminTagCtrl      *adminTag.TagController
 	adminCommentCtrl  *adminComment.CommentController
 	adminLLMCtrl      *adminLLMConfig.Controller
+	adminVectorCtrl   *adminVector.Controller
+	adminChunkCtrl    *adminChunk.Controller
 	commentCtrl       *comment.Controller
 	categoryCtrl      *category.CategoryController
 	tagCtrl           *tag.TagController
@@ -57,17 +64,22 @@ func NewRouter(
 	aboutService aboutSvc.AboutService,
 	llmService llmSvc.LLMService,
 	llmConfigService llmconfigSvc.Service,
+	vectorService vectorSvc.Service,
+	vectorizeService vectorizeSvc.Service,
+	chunkService chunkSvc.Service,
 ) *Router {
 	return &Router{
 		authCtrl:          auth.NewController(authSvc),
 		userCtrl:          user.NewController(userSvc),
 		articleCtrl:       article.NewArticleController(articleService),
 		adminUserCtrl:     adminUser.NewUserController(userSvc),
-		adminArticleCtrl:  adminArticle.NewArticleController(articleService, llmService),
+		adminArticleCtrl:  adminArticle.NewArticleController(articleService, llmService, vectorizeService),
 		adminCategoryCtrl: adminCategory.NewCategoryController(categoryService),
 		adminTagCtrl:      adminTag.NewTagController(tagService),
 		adminCommentCtrl:  adminComment.NewCommentController(commentSvc),
 		adminLLMCtrl:      adminLLMConfig.NewController(llmConfigService),
+		adminVectorCtrl:   adminVector.NewController(vectorService),
+		adminChunkCtrl:    adminChunk.NewController(chunkService),
 		commentCtrl:       comment.NewController(commentSvc),
 		categoryCtrl:      category.NewCategoryController(categoryService),
 		tagCtrl:           tag.NewTagController(tagService),
@@ -132,6 +144,8 @@ func (r *Router) Setup(engine *gin.Engine) {
 			r.adminTagCtrl.RegisterRoutes(adminGroup)
 			r.adminCommentCtrl.RegisterRoutes(adminGroup)
 			r.adminLLMCtrl.RegisterRoutes(adminGroup)
+			r.adminVectorCtrl.RegisterRoutes(adminGroup)
+			r.adminChunkCtrl.RegisterRoutes(adminGroup)
 		}
 	}
 }

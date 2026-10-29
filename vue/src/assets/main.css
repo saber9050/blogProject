@@ -960,3 +960,59 @@ a {
     min-height: 46px;
   }
 }
+
+/* ---------- 后台列表分页（各列表共用，放在全局以被子组件复用） ---------- */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 0;
+  flex-wrap: wrap;
+  /* 后台列表页里分页条固定在面板底部，不随表格滚走 —— 列表很长时
+     也不影响翻页 */
+  flex-shrink: 0;
+}
+
+.pagination__btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination__btn:hover { border-color: #1677ff; color: #1677ff; }
+.pagination__btn--active { background: #1677ff; color: #fff; border-color: #1677ff; }
+.pagination__btn--active:hover { background: #4096ff; border-color: #4096ff; color: #fff; }
+.pagination__btn:disabled { color: #d9d9d9; border-color: #d9d9d9; cursor: not-allowed; background: #fafafa; }
+
+.pagination__ellipsis {
+  display: inline-block;
+  width: 24px;
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+}
+
+.pagination__info {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+.pagination__size {
+  margin-left: 4px;
+  padding: 4px 6px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
+}

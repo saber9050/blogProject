@@ -26,8 +26,13 @@
             <!-- 内容 -->
             <div class="form-group">
               <label class="form-label"><span class="required">*</span>内容</label>
-              <div ref="toolbarContainer" class="toolbar-container"></div>
-              <div ref="editorContainer" class="editor-content" :class="{ 'input-error': contentEmpty && submitted }"></div>
+              <MdEditor
+                v-model="form.content"
+                class="md-editor"
+                :class="{ 'input-error': contentEmpty && submitted }"
+                :on-upload-img="onUploadImg"
+                :style="{ height: '560px' }"
+              />
             </div>
           </div>
 
@@ -78,7 +83,7 @@
                 <option v-for="m in enabledModelConfigs" :key="m.id" :value="m.id">{{ m.model }}</option>
               </select>
               <p v-if="!enabledModelConfigs.length" class="summary-hint">
-                暂无启用的 AI 模型，请先在后台「AI 模型」页添加并启用后再生成摘要。
+                暂无已启用的对话模型，请先在后台「AI 模型」页添加并启用（向量模型不能用于生成摘要）。
               </p>
               <div class="summary-wrapper">
                 <textarea v-model="form.summary" class="form-input form-textarea" rows="3" placeholder="请输入文章摘要"></textarea>
@@ -108,12 +113,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import { showToast } from '../utils/toast'
-import type { IEditorConfig } from '@wangeditor/editor'
+// 正文以 Markdown 存储：编辑器写源码、右侧实时预览，落库就是编辑框里的文本
+import { MdEditor } from 'md-editor-v3'
+import 'md-editor-v3/lib/style.css'
 
 const route = useRoute()
 const router = useRouter()
@@ -141,15 +148,21 @@ const generating = ref(false)
 interface ModelOption {
   id: number
   model: string
+  type: number
   status: number
 }
 const modelConfigs = ref<ModelOption[]>([])
 const summaryModelId = ref(0)
-const enabledModelConfigs = computed(() => modelConfigs.value.filter(m => m.status === 1))
+// 只保留「对话模型 + 已启用」。type 再滤一遍是兜底：这个下拉是用来生成摘要的，
+// 万一接口没按 type 过滤（曾经就是这样），向量模型出现在选项里，选了必然失败。
+const enabledModelConfigs = computed(() =>
+  modelConfigs.value.filter(m => m.status === 1 && m.type === 1)
+)
 
 const loadModelConfigs = async () => {
   try {
-    const res = await api.get('/admin/llm-configs')
+    // type=1 只取对话模型：向量模型走 /embeddings，没有对话能力
+    const res = await api.get('/admin/llm-configs', { params: { type: 1 } })
     modelConfigs.value = res.data?.data || []
     const enabled = enabledModelConfigs.value
     if (enabled.length) summaryModelId.value = enabled[0].id
@@ -168,19 +181,14 @@ const categories = ref<CatTagItem[]>([])
 const tags = ref<CatTagItem[]>([])
 
 // ---------- 编辑器 ----------
-const toolbarContainer = ref<HTMLDivElement | null>(null)
-const editorContainer = ref<HTMLDivElement | null>(null)
-let editorInstance: any = null
+// 正文就是 form.content（Markdown 源码），MdEditor 双向绑定，不需要额外维护实例
 
 // ---------- 封面 ----------
 const coverInputRef = ref<HTMLInputElement | null>(null)
 const coverPreviewUrl = ref('')
 
 // ---------- 计算属性 ----------
-const contentEmpty = computed(() => {
-  const c = form.content
-  return !c || c === '<p><br></p>' || c === '<p></p>'
-})
+const contentEmpty = computed(() => !form.content?.trim())
 
 const canSave = computed(() => {
   return form.title?.trim() && form.type_id && !contentEmpty.value
@@ -230,116 +238,32 @@ const loadArticleDetail = async (id: number): Promise<Record<string, any> | null
   }
 }
 
-const initEditor = async (content: string) => {
-  if (!toolbarContainer.value || !editorContainer.value) return
-  const wangEditor = await import('@wangeditor/editor')
-
-  const uploadImage = (editor: any, file: File) => {
-    const fd = new FormData()
-    fd.append('file', file)
-    api.post('/admin/upload', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    }).then(res => {
-      const url = res.data?.data?.url || res.data?.url || ''
-      if (url) {
-        editor.restoreSelection()
-        editor.dangerouslyInsertHtml(`<img src="${url}" alt="" />`)
-      }
-    }).catch(err => {
-      console.error('图片上传失败:', err)
-    })
-  }
-
-  const editorConfig: Partial<IEditorConfig> = {
-    placeholder: '请输入文章内容...',
-    onChange: (editor: any) => {
-      form.content = editor.getHtml()
-    },
-    customPaste: (editor: any, event: ClipboardEvent) => {
-      const cd = event.clipboardData
-      if (!cd) return true
-
-      if (cd.items) {
-        for (let i = 0; i < cd.items.length; i++) {
-          const item = cd.items[i]
-          if (item.type.startsWith('image/')) {
-            const file = item.getAsFile()
-            if (file) {
-              event.preventDefault()
-              uploadImage(editor, file)
-              return false
-            }
-          }
-        }
-      }
-
-      if (cd.files && cd.files.length > 0) {
-        for (let i = 0; i < cd.files.length; i++) {
-          const file = cd.files[i]
-          if (file.type.startsWith('image/')) {
-            event.preventDefault()
-            uploadImage(editor, file)
-            return false
-          }
-        }
-      }
-
-      const text = cd.getData('text/plain')
-      if (text) {
-        const trimmed = text.trim()
-        if (/^https?:\/\/.+\.(jpe?g|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(trimmed)) {
-          event.preventDefault()
-          editor.restoreSelection()
-          editor.dangerouslyInsertHtml(`<img src="${trimmed}" alt="" />`)
-          return false
-        }
-      }
-
-      return true
-    },
-    MENU_CONF: {
-      uploadImage: {
-        allowedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-        customUpload: (file: File, insertFn: (src: string, alt: string, href: string) => void) => {
-          const fd = new FormData()
-          fd.append('file', file)
-          api.post('/admin/upload', fd, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          }).then(res => {
-            const url = res.data?.data?.url || res.data?.url || ''
-            if (url) insertFn(url, '', '')
-          }).catch(err => {
-            console.error('图片上传失败:', err)
-          })
-        }
-      }
+/**
+ * 编辑器里插入图片：走和封面同一个上传接口，把返回的 URL 交回给编辑器。
+ *
+ * md-editor-v3 的约定是「拿到全部 URL 后调 callback」，不是逐个插入——
+ * 它要靠这个数组决定占位符顺序，所以必须 Promise.all 等齐。
+ */
+const onUploadImg = async (files: File[], callback: (urls: string[]) => void) => {
+  try {
+    const urls = await Promise.all(
+      files.map(async (file) => {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await api.post('/admin/upload', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        return res.data?.data?.url || res.data?.url || ''
+      })
+    )
+    if (urls.some((u) => !u)) {
+      showToast('部分图片上传失败', 'error')
     }
-  }
-
-  if (editorInstance) {
-    editorInstance.destroy()
-    editorInstance = null
-  }
-  const editor = wangEditor.createEditor({
-    selector: editorContainer.value,
-    config: editorConfig,
-    html: content || undefined,
-    mode: 'default'
-  })
-  wangEditor.createToolbar({
-    editor,
-    selector: toolbarContainer.value,
-    config: {
-      excludeKeys: ['group-video', 'insertImage']
-    }
-  })
-  editorInstance = editor
-}
-
-const destroyEditor = () => {
-  if (editorInstance) {
-    try { editorInstance.destroy() } catch {}
-    editorInstance = null
+    callback(urls.filter(Boolean))
+  } catch (err: any) {
+    console.error('图片上传失败:', err)
+    showToast(err?.response?.data?.message || '图片上传失败', 'error')
+    callback([])
   }
 }
 
@@ -363,7 +287,6 @@ const handleGenerateSummary = async () => {
 }
 
 const goBack = () => {
-  destroyEditor()
   router.push('/admin?tab=articles')
 }
 
@@ -373,7 +296,7 @@ const handleSave = async () => {
   saving.value = true
 
   try {
-    const cleanContent = form.content === '<p><br></p>' || form.content === '<p></p>' ? '' : form.content
+    const cleanContent = form.content.trim()
 
     if (isEdit.value && articleId.value) {
       let updateData: Record<string, any> = {}
@@ -475,12 +398,6 @@ onMounted(async () => {
     }
   }
 
-  await nextTick()
-  initEditor(form.content || '')
-})
-
-onBeforeUnmount(() => {
-  destroyEditor()
 })
 </script>
 
@@ -711,24 +628,16 @@ select.form-input {
 }
 
 /* ---------- 编辑器 ---------- */
-.toolbar-container {
-  position: sticky;
-  top: 60px;          /* NavBar 高度，吸顶时保持在导航下方 */
-  z-index: 10;
-  background: #fff;
-  border: 1px solid #d9d9d9;
-  border-bottom: none;
-  border-radius: 4px 4px 0 0;
+/* md-editor-v3 自带完整样式，这里只做和页面风格的对齐 */
+.md-editor {
+  border-radius: 4px;
+  overflow: hidden;
 }
 
-.editor-content {
-  border: 1px solid #d9d9d9;
-  border-radius: 0 0 4px 4px;
-  min-height: 400px;
-}
-
-.editor-content :deep(.w-e-text-container) {
-  min-height: 360px;
+/* 校验失败时的红框：组件内部的边框要盖掉，用 outline 更省事 */
+.md-editor.input-error {
+  outline: 1px solid #ff4d4f;
+  outline-offset: -1px;
 }
 
 /* ---------- 按钮 ---------- */

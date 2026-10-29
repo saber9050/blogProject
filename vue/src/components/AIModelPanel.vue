@@ -3,6 +3,7 @@
     <div class="ai-panel__header">
       <h2 class="ai-panel__title">AI 模型配置</h2>
       <div class="ai-panel__actions">
+        <button class="btn-sm" :disabled="loading" @click="load">刷新</button>
         <button class="btn-sm btn-sm--primary" @click="openCreate">+ 新增配置</button>
       </div>
     </div>
@@ -12,42 +13,52 @@
       温度与状态，保存不再测试连接。使用 AI 功能（如文章「一键生成摘要」）时，选择要使用的模型配置。
     </p>
 
-    <table class="ai-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>模型 id</th>
-          <th>Base URL</th>
-          <th>密钥</th>
-          <th>状态</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in list" :key="row.id">
-          <td>{{ row.id }}</td>
-          <td>{{ row.model }}</td>
-          <td class="ai-table__url" :title="row.base_url">{{ row.base_url }}</td>
-          <td class="ai-table__mono">{{ row.api_key_masked || '—' }}</td>
-          <td>
-            <span class="ai-badge" :class="row.status === 1 ? 'ai-badge--on' : 'ai-badge--off'">
-              {{ row.status === 1 ? '启用' : '禁用' }}
-            </span>
-          </td>
-          <td>
-            <div class="ai-actions">
-              <button class="btn-sm" :disabled="busyId === row.id" @click="testRow(row)">
-                {{ busyId === row.id ? '测试中' : '测试' }}
-              </button>
-              <button class="btn-sm" @click="openEdit(row)">编辑</button>
-              <button class="btn-sm btn-sm--danger" @click="remove(row)">删除</button>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <div v-if="!loading && !list.length" class="ai-empty">暂无模型配置，点击「+ 新增配置」开始</div>
-    <div v-if="loading" class="ai-empty">加载中...</div>
+      <div class="ai-table-wrap">
+        <table class="ai-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>类型</th>
+              <th>模型 id</th>
+              <th>Base URL</th>
+              <th>维度</th>
+              <th>密钥</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in list" :key="row.id">
+              <td>{{ row.id }}</td>
+              <td>
+                <span class="ai-badge" :class="row.type === 2 ? 'ai-badge--embed' : 'ai-badge--chat'">
+                  {{ row.type === 2 ? '向量' : '对话' }}
+                </span>
+              </td>
+              <td>{{ row.model }}</td>
+              <td class="ai-table__url" :title="row.base_url">{{ row.base_url }}</td>
+              <td class="ai-table__mono">{{ row.type === 2 ? row.dimension : '—' }}</td>
+              <td class="ai-table__mono">{{ row.api_key_masked || '—' }}</td>
+              <td>
+                <span class="ai-badge" :class="row.status === 1 ? 'ai-badge--on' : 'ai-badge--off'">
+                  {{ row.status === 1 ? '启用' : '禁用' }}
+                </span>
+              </td>
+              <td>
+                <div class="ai-actions">
+                  <button class="btn-sm" :disabled="busyId === row.id" @click="testRow(row)">
+                    {{ busyId === row.id ? '测试中' : '测试' }}
+                  </button>
+                  <button class="btn-sm" @click="openEdit(row)">编辑</button>
+                  <button class="btn-sm btn-sm--danger" @click="remove(row)">删除</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="!loading && !list.length" class="ai-empty">暂无模型配置，点击「+ 新增配置」开始</div>
+        <div v-if="loading" class="ai-empty">加载中...</div>
+      </div>
 
     <!--
       新增 / 编辑弹窗。
@@ -60,6 +71,42 @@
           <h3 class="modal__title">{{ editingId === null ? '新增模型配置' : '编辑模型配置' }}</h3>
 
           <div class="modal__body">
+            <!-- 类型放在最上方：它决定了下面填什么、以及后端走哪个接口。
+                 编辑态只读，与 base_url / api_key / model 同规则——换类型等于换用途，应当删了重建。 -->
+            <div class="modal__field">
+              <label class="modal__label"><span class="required-mark">*</span>类型</label>
+              <select v-model.number="form.type" class="modal__input" :disabled="editingId !== null">
+                <option :value="1">对话模型（/chat/completions）</option>
+                <option :value="2">向量模型（/embeddings）</option>
+              </select>
+              <p v-if="editingId !== null" class="modal__hint">类型创建后不可修改，如需切换请删除后重建</p>
+            </div>
+
+            <div v-if="embeddingConflict" class="modal__alert">
+              已存在向量模型「{{ existingEmbedding?.model }}」（id={{ existingEmbedding?.id }}），
+              全局只允许一条。请先删除它，或改用对话模型。
+            </div>
+
+            <div v-if="form.type === 2" class="modal__field">
+              <label class="modal__label"><span class="required-mark">*</span>向量维度</label>
+              <input
+                v-model.number="form.dimension"
+                class="modal__input"
+                type="number"
+                min="128"
+                max="4096"
+                :disabled="dimensionLocked"
+              />
+              <p v-if="dimensionLocked" class="modal__hint">
+                当前向量表已是 {{ lockedDimension }} 维，新模型的维度必须与之一致。如需更换维度，
+                请先在「切分管理 → 向量表」清空向量数据。
+              </p>
+              <p v-else class="modal__hint">
+                常见取值：bge-m3 = 1024，nomic-embed-text = 768，text-embedding-3-small = 1536。
+                保存时会真实请求一次模型来核对维度，填错会当场被拒。
+              </p>
+            </div>
+
             <div class="modal__field">
               <label class="modal__label">
                 <span v-if="editingId === null" class="required-mark">*</span>Base URL
@@ -78,7 +125,7 @@
                 v-model="form.api_key"
                 class="modal__input"
                 type="password"
-                placeholder="请输入密钥"
+                placeholder="请输入密钥（ollama 可填任意非空值）"
                 autocomplete="new-password"
               />
             </div>
@@ -91,7 +138,7 @@
                 v-model="form.model"
                 class="modal__input"
                 :disabled="editingId !== null"
-                placeholder="如：deepseek-chat"
+                :placeholder="form.type === 2 ? '如：bge-m3' : '如：deepseek-chat'"
                 maxlength="128"
               />
             </div>
@@ -101,11 +148,12 @@
                 <label class="modal__label">超时（秒）</label>
                 <input v-model.number="form.timeout_sec" class="modal__input" type="number" min="1" max="300" />
               </div>
-              <div class="modal__field">
+              <!-- 向量模型没有 max_tokens / temperature 的概念，隐藏避免误导 -->
+              <div v-if="form.type === 1" class="modal__field">
                 <label class="modal__label">max_tokens</label>
                 <input v-model.number="form.max_tokens" class="modal__input" type="number" min="1" max="32768" />
               </div>
-              <div class="modal__field">
+              <div v-if="form.type === 1" class="modal__field">
                 <label class="modal__label">temperature</label>
                 <input v-model.number="form.temperature" class="modal__input" type="number" min="0" max="2" step="0.1" />
               </div>
@@ -161,6 +209,8 @@ interface ModelConfig {
   base_url: string
   api_key_masked: string
   model: string
+  type: number // 1=对话模型 2=向量模型
+  dimension: number // 仅 type=2 有效
   timeout_sec: number
   max_tokens: number
   temperature: number
@@ -179,6 +229,8 @@ const deleteModalVisible = ref(false)
 const deleteTarget = ref<ModelConfig | null>(null)
 
 const form = reactive({
+  type: 1,
+  dimension: 1024,
   base_url: '',
   api_key: '',
   model: '',
@@ -188,9 +240,37 @@ const form = reactive({
   status: 1
 })
 
+// 向量表现状。新建向量模型时维度必须与已有表的维度一致，所以要先查一次：
+// 表已存在时把维度输入框锁成只读，比让用户填完再收到 400 好一档。
+const schemaInfo = ref<{ table_exists: boolean; dimension: number } | null>(null)
+
+const loadSchema = async () => {
+  try {
+    const res = await api.get('/admin/vector/schema')
+    schemaInfo.value = res.data?.data || null
+  } catch {
+    // 查不到不影响正常编辑对话模型，只是维度不做锁定
+    schemaInfo.value = null
+  }
+}
+
+// 已存在的向量模型（全局只允许一条）
+const existingEmbedding = computed(() => list.value.find((m) => m.type === 2) || null)
+
+// 新建时选「向量模型」但已有另一条 → 直接拦住，不等提交才报错
+const embeddingConflict = computed(
+  () => editingId.value === null && form.type === 2 && existingEmbedding.value !== null
+)
+
+// 表已存在时，维度必须等于表的列维度，输入框锁死
+const dimensionLocked = computed(() => form.type === 2 && !!schemaInfo.value?.table_exists)
+const lockedDimension = computed(() => schemaInfo.value?.dimension || 0)
+
 // 新增：base_url、api_key、model 均填完后才可保存；编辑：仅改运行参数与状态，随时可保存
 const canSave = computed(() => {
   if (editingId.value !== null) return true
+  if (embeddingConflict.value) return false
+  if (form.type === 2 && (!form.dimension || form.dimension < 128 || form.dimension > 4096)) return false
   return !!(form.base_url.trim() && form.api_key.trim() && form.model.trim())
 })
 
@@ -220,7 +300,11 @@ const load = async () => {
 
 const openCreate = () => {
   editingId.value = null
+  // 首次配置：表还不存在，维度由用户决定；表已存在：预填表的维度并锁定
+  const dim = schemaInfo.value?.table_exists ? schemaInfo.value.dimension : 1024
   Object.assign(form, {
+    type: 1,
+    dimension: dim,
     base_url: '',
     api_key: '',
     model: '',
@@ -235,6 +319,8 @@ const openCreate = () => {
 const openEdit = (row: ModelConfig) => {
   editingId.value = row.id
   Object.assign(form, {
+    type: row.type || 1,
+    dimension: row.dimension || 0,
     base_url: row.base_url,
     api_key: '', // 编辑态不展示、也不允许改密钥
     model: row.model,
@@ -258,11 +344,14 @@ const testRow = async (row: ModelConfig) => {
       id: row.id,
       base_url: row.base_url,
       model: row.model,
-      timeout_sec: row.timeout_sec
+      timeout_sec: row.timeout_sec,
+      type: row.type || 1
     })
     const data = res.data?.data || {}
     if (data.ok) {
-      showToast(`连接正常 · ${data.latency_ms || 0}ms`, 'success')
+      // 向量模型会把实际维度带回来，顺便告诉用户对不对
+      const dimTip = data.dimension ? ` · ${data.dimension} 维` : ''
+      showToast(`连接正常 · ${data.latency_ms || 0}ms${dimTip}`, 'success')
     } else {
       showToast(data.error || '连接失败', 'error')
     }
@@ -277,16 +366,22 @@ const save = async () => {
   saving.value = true
   try {
     if (editingId.value === null) {
-      await api.post('/admin/llm-configs', {
+      const payload: Record<string, any> = {
         base_url: form.base_url.trim(),
         api_key: form.api_key.trim(),
         model: form.model.trim(),
+        type: form.type,
         timeout_sec: form.timeout_sec,
         max_tokens: form.max_tokens,
         temperature: form.temperature,
         status: form.status
-      })
-      showToast('配置已保存', 'success')
+      }
+      // 向量模型才传维度；对话模型传了也会被后端忽略，但少传一个字段更清楚
+      if (form.type === 2) {
+        payload.dimension = form.dimension
+      }
+      await api.post('/admin/llm-configs', payload)
+      showToast(form.type === 2 ? '向量模型已保存，向量表已就绪' : '配置已保存', 'success')
     } else {
       await api.put(`/admin/llm-configs/${editingId.value}`, {
         timeout_sec: form.timeout_sec,
@@ -297,7 +392,7 @@ const save = async () => {
       showToast('配置已更新', 'success')
     }
     closeModal()
-    await load()
+    await Promise.all([load(), loadSchema()])
   } catch (err: any) {
     showToast(errMsg(err, '保存失败'), 'error')
   } finally {
@@ -328,7 +423,10 @@ const confirmDelete = async () => {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadSchema()
+})
 </script>
 
 <style scoped>
@@ -336,6 +434,23 @@ onMounted(load)
   background: #fff;
   border-radius: var(--radius-md);
   padding: 20px 24px 24px;
+  /* 撑满父级 .admin-panel 并让表格区内部滚动：
+     页面本身不再滚动，列表再长也不会把侧边栏顶出视口 */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-panel__header,
+.ai-panel__tip {
+  flex-shrink: 0;
+}
+
+.ai-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .ai-panel__header {
@@ -343,6 +458,14 @@ onMounted(load)
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+}
+
+/* 原来只有一个按钮，所以没定义容器样式；加了「刷新」后必须给间距，
+   否则两个按钮只能靠 HTML 空白字符撑开，换行位置一变就贴在一起。
+   8px 与后台其它面板的 .admin-panel__actions 保持一致。 */
+.ai-panel__actions {
+  display: flex;
+  gap: 8px;
 }
 
 .ai-panel__title {
@@ -416,6 +539,36 @@ onMounted(load)
 .ai-badge--off {
   color: #888;
   background: rgba(148, 163, 184, 0.18);
+}
+
+/* 类型徽标：向量模型用实色区分，扫一眼就能看出哪条是给文章向量化用的 */
+.ai-badge--chat {
+  color: var(--primary-600);
+  background: var(--primary-soft);
+}
+
+.ai-badge--embed {
+  color: #fff;
+  background: #7c3aed;
+}
+
+/* 弹窗内的说明文字与警告条 */
+.modal__hint {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #888;
+}
+
+.modal__alert {
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #a8071a;
+  background: #fff1f0;
+  border: 1px solid #ffa39e;
 }
 
 .ai-empty {

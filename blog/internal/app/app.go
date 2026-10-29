@@ -7,6 +7,7 @@ import (
 	"blog/internal/model/entity"
 	"blog/internal/repository/about"
 	"blog/internal/repository/article"
+	articleChunkRepo "blog/internal/repository/articlechunk"
 	"blog/internal/repository/auth"
 	"blog/internal/repository/category"
 	commentRepo "blog/internal/repository/comment"
@@ -17,11 +18,14 @@ import (
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
+	chunkSvc "blog/internal/service/chunk"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
 	llmconfigSvc "blog/internal/service/llmconfig"
 	tagSvc "blog/internal/service/tag"
 	userSvc "blog/internal/service/user"
+	vectorizeSvc "blog/internal/service/vectorize"
+	vectorSvc "blog/internal/service/vectorschema"
 	"blog/pkg/config"
 	"blog/pkg/database"
 	"blog/pkg/logger"
@@ -44,14 +48,17 @@ import (
 
 // App 应用结构体
 type App struct {
-	cfg          *config.Config
-	pgDB         *gorm.DB
-	redis        *redis.Client
-	minioClient  *minioPkg.Client
-	router       *api.Router
-	server       *http.Server
-	workerCtx    context.Context
-	workerCancel context.CancelFunc
+	cfg         *config.Config
+	pgDB        *gorm.DB
+	redis       *redis.Client
+	minioClient *minioPkg.Client
+	router      *api.Router
+	server      *http.Server
+	// vectorSchemaSvc 在 initDatabase 里创建（启动时要先自检向量表），
+	// initRouter 复用同一个实例注入给 llmconfig 与路由
+	vectorSchemaSvc vectorSvc.Service
+	workerCtx       context.Context
+	workerCancel    context.CancelFunc
 }
 
 // NewApp 创建应用实例
@@ -143,6 +150,21 @@ func (a *App) initDatabase() error {
 	} else {
 		logger.Info("表结构同步完成（不含数据）")
 	}
+
+	// 向量相关初始化必须等 AutoMigrate 之后：部分唯一索引依赖 ai_model_configs 表已存在，
+	// 而向量表维度依赖 ai_model_configs 里的 dimension 值。
+	//
+	// 全段只 warn 不阻断启动：向量功能不可用，不该让整站打不开。
+	// 这也是把 article_chunks 排除在 AllModels() 之外的目的——没装 pgvector 扩展时，
+	// 失败的只是这一段，登录、文章、评论全都照常。
+	a.vectorSchemaSvc = vectorSvc.NewVectorSchemaService(a.pgDB)
+	if err := database.EnsureSingleEmbeddingModelIndex(a.pgDB); err != nil {
+		logger.Warn("向量模型唯一索引创建失败（可能库内已有多条向量模型记录），已跳过",
+			zap.Error(err))
+	}
+	// EnsureFromDB 内部已按情况分别打日志（未配置 / 维度不符 / 建表失败），这里不重复处理
+	_ = a.vectorSchemaSvc.EnsureFromDB()
+
 	// 初始化 Redis（可选）
 	rs, err := database.InitRedis(&a.cfg.Database.Redis)
 	if err != nil {
@@ -212,6 +234,7 @@ func (a *App) initDependencies() {
 	tRepo := tag.NewTagRepository(a.pgDB)
 	aboutRepo := about.NewAboutRepository(a.pgDB)
 	llmCfgRepo := llmconfigRepo.NewLLMConfigRepository(a.pgDB)
+	acRepo := articleChunkRepo.NewArticleChunkRepository(a.pgDB)
 
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
@@ -224,11 +247,23 @@ func (a *App) initDependencies() {
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
 	aboutSvc := aboutSvc.NewAboutService(aboutRepo, a.minioClient, uRepo)
-	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo)
+	// 向量表维护服务在 initDatabase 里就建好了（启动时要先自检一次），这里复用同一个实例：
+	// llmconfig 靠它实现「新建向量模型时按维度建表」
+	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo, a.vectorSchemaSvc)
 	lSvc := llmSvc.NewLLMService(llmCfgSvc)
+	vecSvc := vectorizeSvc.NewVectorizeService(a.pgDB, aRepo, acRepo, llmCfgSvc, a.vectorSchemaSvc)
+	ckSvc := chunkSvc.NewChunkService(a.pgDB, acRepo)
+
+	// 先把进程重启前遗留的「排队中/处理中」重置为失败，再启动 worker。
+	// 顺序不能反：worker 起来后如果有旧任务还挂在 1/2，抢锁会一直拒绝新提交。
+	if _, err := vecSvc.RecoverZombies(); err != nil {
+		logger.Warn("重置遗留向量化任务失败", zap.Error(err))
+	}
+	vecSvc.Start(a.workerCtx)
 
 	// 创建 Router
-	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc, lSvc, llmCfgSvc)
+	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc, lSvc, llmCfgSvc,
+		a.vectorSchemaSvc, vecSvc, ckSvc)
 }
 
 // initRouter 初始化路由

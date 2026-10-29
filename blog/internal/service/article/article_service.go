@@ -16,6 +16,7 @@ import (
 	"context"
 	"mime/multipart"
 	"regexp"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -252,23 +253,36 @@ func (s *articleService) UnlikeArticle(articleID, userID uint) error {
 }
 
 // AdminList 后台获取文章列表
-func (s *articleService) AdminList(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) (*response.ArticleListResponse, error) {
+//
+// 返回 AdminArticleListResponse 而不是公共的 ArticleListResponse：
+// 前者在 ArticleItem 之上追加了向量化相关字段，公共接口的契约不受影响。
+func (s *articleService) AdminList(page, pageSize int, status *int, categoryID uint, tagIDs []uint, keyword string) (*response.AdminArticleListResponse, error) {
 	list, total, err := s.articleRepo.List(page, pageSize, status, "", categoryID, tagIDs, keyword)
 	if err != nil {
 		logger.Error("获取文章列表失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取文章列表失败", err)
 	}
 
-	var items []*response.ArticleItem
+	items := make([]*response.AdminArticleItem, 0, len(list))
 	for _, article := range list {
-		item, err := s.buildArticleResponse(article, 0)
+		base, err := s.buildArticleResponse(article, 0)
 		if err != nil {
 			continue
+		}
+		item := &response.AdminArticleItem{
+			ArticleItem:      *base,
+			VectorStatus:     article.VectorStatus,
+			VectorChunkCount: article.VectorChunkCount,
+			VectorError:      article.VectorError,
+			UpdatedAt:        article.UpdatedAt.Format(time.RFC3339),
+		}
+		if article.VectorizedAt != nil {
+			item.VectorizedAt = article.VectorizedAt.Format(time.RFC3339)
 		}
 		items = append(items, item)
 	}
 
-	return &response.ArticleListResponse{
+	return &response.AdminArticleListResponse{
 		List:     items,
 		Total:    total,
 		Page:     page,
@@ -369,6 +383,22 @@ func (s *articleService) AdminUpdate(id uint, req *request.UpdateArticleRequest)
 	if req.Content != "" {
 		fields["content"] = req.Content
 
+		// 正文变了，库里已存的块与正文不再对应，把状态打回「未处理」。
+		//
+		// 但 vectorized_at 必须保留——它是前端区分「待更新」和「从未向量化」的唯一依据：
+		//   status=0 且 vectorized_at 非空 → 切过、但正文改了（显示「待更新」）
+		//   status=0 且 vectorized_at 为空 → 从没切过，或用户手动删过向量（显示「否」）
+		// 清掉它，改完正文就会显示「否」，和「从没向量化过」长得一模一样。
+		//
+		// chunk_count 也保留，前端用它提示「N 个旧分块已过期」。
+		// 块本身同样不删：留着能在「切分管理」里对比改之前的切分效果，
+		// 重新向量化时会整篇替换。
+		//
+		// 只改标题不重置——标题不进 chunk，不该作废。
+		if req.Content != article.Content {
+			fields["vector_status"] = entity.VectorStatusNone
+			fields["vector_error"] = ""
+		}
 	}
 
 	if req.Summary != "" {

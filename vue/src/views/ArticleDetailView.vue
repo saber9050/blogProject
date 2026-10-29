@@ -21,7 +21,9 @@
             </button>
             <span>&#128172; {{ article.comment_count || 0 }} 评论</span>
           </div>
-          <div class="article-content__body" v-html="displayContent"></div>
+          <div class="article-content__body">
+            <MdPreview :model-value="displayContent" />
+          </div>
         </section>
 
         <!-- 评论区 -->
@@ -178,6 +180,9 @@ import { useRoute } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import { showToast } from '../utils/toast'
+// 正文是 Markdown，交给 md-editor-v3 的预览组件渲染
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css'
 
 interface Article {
   id: number
@@ -232,11 +237,7 @@ const article = ref<Article>({
 })
 
 // 过滤空 HTML 内容（wangEditor 空内容返回 <p><br></p>）
-const displayContent = computed(() => {
-  const c = article.value.content
-  if (!c || c === '<p><br></p>' || c === '<p></p>') return ''
-  return c
-})
+const displayContent = computed(() => (article.value.content || '').trim())
 const comments = ref<Comment[]>([])
 const newComment = ref('')
 const replyText = ref('')

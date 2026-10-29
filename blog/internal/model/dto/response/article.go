@@ -37,6 +37,28 @@ type ArticleListResponse struct {
 	PageSize int         `json:"page_size"`
 }
 
+// AdminArticleItem 后台文章条目：在公共结构上追加管理侧字段。
+//
+// 刻意用独立结构而不是往 ArticleItem 里加字段：ArticleItem 被 ListPublic 和
+// GetDetail 共用，加进去前台文章列表的 JSON 里也会带出 vector_status 等内部状态。
+// 虽然不算敏感信息，但没必要暴露，也增加响应体积。
+type AdminArticleItem struct {
+	ArticleItem
+	VectorStatus     int8   `json:"vector_status"`
+	VectorChunkCount int    `json:"vector_chunk_count"`
+	VectorError      string `json:"vector_error"`
+	VectorizedAt     string `json:"vectorized_at"`
+	UpdatedAt        string `json:"updated_at"`
+}
+
+// AdminArticleListResponse 后台文章列表响应
+type AdminArticleListResponse struct {
+	List     []*AdminArticleItem `json:"list"`
+	Total    int64               `json:"total"`
+	Page     int                 `json:"page"`
+	PageSize int                 `json:"page_size"`
+}
+
 // ArticleDetailResponse 文章详情响应
 type ArticleDetailResponse struct {
 	ArticleItem

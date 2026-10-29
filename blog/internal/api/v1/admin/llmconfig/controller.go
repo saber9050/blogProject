@@ -19,9 +19,19 @@ func NewController(llmConfigService llmconfigSvc.Service) *Controller {
 	return &Controller{llmConfigService: llmConfigService}
 }
 
-// List 配置列表
+// List 配置列表。支持 ?type=1|2 过滤（1=对话模型 2=向量模型）
 func (ctrl *Controller) List(c *gin.Context) {
-	result, err := ctrl.llmConfigService.List()
+	var t int8
+	if v := c.Query("type"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || (n != 1 && n != 2) {
+			response.BadRequest(c, "type 只能是 1（对话模型）或 2（向量模型）")
+			return
+		}
+		t = int8(n)
+	}
+
+	result, err := ctrl.llmConfigService.ListByType(t)
 	if err != nil {
 		response.BizError(c, err)
 		return

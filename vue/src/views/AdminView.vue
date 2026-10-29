@@ -27,6 +27,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">用户管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadUsers(userPage)">刷新</button>
               <button class="btn-sm btn-sm--primary" @click="openModal('user')">+ 新增</button>
             </div>
           </div>
@@ -42,37 +43,39 @@
             <input type="date" v-model="userFilter.endTime" class="filter-date" @change="loadUsers(1)" title="注册结束" />
             <button class="btn-sm" @click="resetFilter(userFilter); loadUsers(1)">重置</button>
           </div>
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>昵称</th>
-                <th>头像</th>
-                <th>状态</th>
-                <th>注册时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="u in users" :key="u.id">
-                <td>{{ u.id }}</td>
-                <td>{{ u.user_name }}</td>
-                <td>
-                  <img v-if="u.avatar_url" :src="u.avatar_url" class="table-avatar" />
-                  <span v-else class="table-avatar table-avatar--placeholder">&#128100;</span>
-                </td>
-                <td>{{ u.status === 1 ? '正常' : '封禁' }}</td>
-                <td>{{ fmt(u.created_at) }}</td>
-                <td>
-                  <div class="table-actions">
-                    <button class="btn-sm" @click="openModal('user', u)">编辑</button>
-                    <button class="btn-sm btn-sm--danger" @click="handleDelete('user', u.id)">删除</button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-if="!users.length" class="admin-empty">暂无用户数据</div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>昵称</th>
+                  <th>头像</th>
+                  <th>状态</th>
+                  <th>注册时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in users" :key="u.id">
+                  <td>{{ u.id }}</td>
+                  <td>{{ u.user_name }}</td>
+                  <td>
+                    <img v-if="u.avatar_url" :src="u.avatar_url" class="table-avatar" />
+                    <span v-else class="table-avatar table-avatar--placeholder">&#128100;</span>
+                  </td>
+                  <td>{{ u.status === 1 ? '正常' : '封禁' }}</td>
+                  <td>{{ fmt(u.created_at) }}</td>
+                  <td>
+                    <div class="table-actions">
+                      <button class="btn-sm" @click="openModal('user', u)">编辑</button>
+                      <button class="btn-sm btn-sm--danger" @click="handleDelete('user', u.id)">删除</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="!users.length" class="admin-empty">暂无用户数据</div>
+          </div>
           <div v-if="users.length" class="pagination">
             <button class="pagination__btn" :disabled="userPage <= 1" @click="loadUsers(userPage - 1)">上一页</button>
             <template v-for="p in getPageRange(userPage, calcPages(userTotal, userPageSize))" :key="p">
@@ -94,6 +97,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">文章管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadArticles(articlePage)">刷新</button>
               <button class="btn-sm" @click="transferModalVisible = true">一键转移</button>
               <button class="btn-sm btn-sm--primary" @click="goToArticleEditor('/admin/article/new')">+ 新增</button>
             </div>
@@ -111,45 +115,67 @@
             </select>
             <button class="btn-sm" @click="resetFilter(articleFilter); loadArticles(1)">重置</button>
           </div>
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>文章标题</th>
-                <th>分类</th>
-                <th>标签</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="a in adminArticles" :key="a.id">
-                <td>{{ a.id }}</td>
-                <td>{{ a.title }}</td>
-                <td>
-                  <span class="cat-tag-badge">{{ a.category?.name || '-' }}</span>
-                </td>
-                <td>
-                  <template v-if="a.tags && a.tags.length">
-                    <span v-for="t in a.tags" :key="t.id" class="cat-tag-badge cat-tag-badge--tag">{{ t.name }}</span>
-                  </template>
-                  <span v-else>-</span>
-                </td>
-                <td>
-                  <span class="status-badge" :class="a.status === 1 ? 'status-badge--normal' : 'status-badge--draft'">
-                    {{ a.status === 1 ? '已发布' : '草稿' }}
-                  </span>
-                </td>
-                <td>
-                  <div class="table-actions">
-                    <button class="btn-sm" @click="goToArticleEditor('/admin/article/' + a.id + '/edit')">编辑</button>
-                    <button class="btn-sm btn-sm--danger" @click="handleDelete('article', a.id)">删除</button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-if="!adminArticles.length" class="admin-empty">暂无文章数据</div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>文章标题</th>
+                  <th>分类</th>
+                  <th>标签</th>
+                  <th>状态</th>
+                  <th>向量化</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="a in adminArticles" :key="a.id">
+                  <td>{{ a.id }}</td>
+                  <td>{{ a.title }}</td>
+                  <td>
+                    <span class="cat-tag-badge">{{ a.category?.name || '-' }}</span>
+                  </td>
+                  <td>
+                    <template v-if="a.tags && a.tags.length">
+                      <span v-for="t in a.tags" :key="t.id" class="cat-tag-badge cat-tag-badge--tag">{{ t.name }}</span>
+                    </template>
+                    <span v-else>-</span>
+                  </td>
+                  <td>
+                    <span class="status-badge" :class="a.status === 1 ? 'status-badge--normal' : 'status-badge--draft'">
+                      {{ a.status === 1 ? '已发布' : '草稿' }}
+                    </span>
+                  </td>
+                  <td>
+                    <!-- vector_state 返回文案与样式类；失败时 hover 显示原因 -->
+                    <span
+                      class="status-badge"
+                      :class="vectorState(a).cls"
+                      :title="a.vector_status === 4 ? a.vector_error : vectorState(a).tip"
+                    >
+                      {{ vectorState(a).text }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="table-actions">
+                      <!-- 草稿也允许向量化：发布前先看切分效果是正常诉求 -->
+                      <button
+                        class="btn-sm"
+                        :disabled="a.vector_status === 1 || a.vector_status === 2 || vectorBusyId === a.id"
+                        :title="a.vector_status === 3 ? '重新向量化会在完成后替换旧分块' : ''"
+                        @click="submitVectorize(a)"
+                      >
+                        {{ a.vector_status === 1 || a.vector_status === 2 ? '处理中' : '向量化' }}
+                      </button>
+                      <button class="btn-sm" @click="goToArticleEditor('/admin/article/' + a.id + '/edit')">编辑</button>
+                      <button class="btn-sm btn-sm--danger" @click="handleDelete('article', a.id)">删除</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="!adminArticles.length" class="admin-empty">暂无文章数据</div>
+          </div>
           <div v-if="adminArticles.length" class="pagination">
             <button class="pagination__btn" :disabled="articlePage <= 1" @click="loadArticles(articlePage - 1)">上一页</button>
             <template v-for="p in getPageRange(articlePage, calcPages(articleTotal, articlePageSize))" :key="p">
@@ -171,6 +197,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">评论管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadComments(commentPage)">刷新</button>
               <button v-if="!batchMode" class="btn-sm btn-sm--danger" @click="batchMode = true">批量删除</button>
               <template v-else>
                 <button class="btn-sm" @click="exitBatchMode">取消</button>
@@ -186,33 +213,35 @@
             <input type="date" v-model="commentFilter.endTime" class="filter-date" @change="loadComments(1)" title="结束时间" />
             <button class="btn-sm" @click="resetFilter(commentFilter); loadComments(1)">重置</button>
           </div>
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th v-if="batchMode"><input type="checkbox" :checked="allCommentsSelected" @change="toggleAllComments" /></th>
-                <th>ID</th>
-                <th>所属文章</th>
-                <th>评论者</th>
-                <th>评论内容</th>
-                <th>时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="c in adminComments" :key="c.id">
-                <td v-if="batchMode"><input type="checkbox" :value="c.id" v-model="selectedCommentIds" /></td>
-                <td>{{ c.id }}</td>
-                <td>{{ c.article_title }}</td>
-                <td>{{ c.user_name }}</td>
-                <td>{{ c.content }}</td>
-                <td>{{ fmt(c.created_at) }}</td>
-                <td>
-                  <button class="btn-sm btn-sm--danger" @click="handleDelete('comment', c.id)">删除</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-if="!adminComments.length" class="admin-empty">暂无评论数据</div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th v-if="batchMode"><input type="checkbox" :checked="allCommentsSelected" @change="toggleAllComments" /></th>
+                  <th>ID</th>
+                  <th>所属文章</th>
+                  <th>评论者</th>
+                  <th>评论内容</th>
+                  <th>时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in adminComments" :key="c.id">
+                  <td v-if="batchMode"><input type="checkbox" :value="c.id" v-model="selectedCommentIds" /></td>
+                  <td>{{ c.id }}</td>
+                  <td>{{ c.article_title }}</td>
+                  <td>{{ c.user_name }}</td>
+                  <td>{{ c.content }}</td>
+                  <td>{{ fmt(c.created_at) }}</td>
+                  <td>
+                    <button class="btn-sm btn-sm--danger" @click="handleDelete('comment', c.id)">删除</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="!adminComments.length" class="admin-empty">暂无评论数据</div>
+          </div>
           <div v-if="adminComments.length" class="pagination">
             <button class="pagination__btn" :disabled="commentPage <= 1" @click="loadComments(commentPage - 1)">上一页</button>
             <template v-for="p in getPageRange(commentPage, calcPages(commentTotal, commentPageSize))" :key="p">
@@ -234,6 +263,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">分类管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadCategories(categoryPage)">刷新</button>
               <button class="btn-sm btn-sm--primary" @click="openModal('category')">+ 新增</button>
             </div>
           </div>
@@ -249,36 +279,38 @@
             <input type="date" v-model="categoryFilter.endTime" class="filter-date" @change="loadCategories(1)" title="创建结束" />
             <button class="btn-sm" @click="resetFilter(categoryFilter); loadCategories(1)">重置</button>
           </div>
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>名称</th>
-                <th>状态</th>
-                <th>创建时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="c in adminCategories" :key="c.id">
-                <td>{{ c.id }}</td>
-                <td>{{ c.name }}</td>
-                <td>
-                  <span class="status-badge" :class="c.status === 1 ? 'status-badge--normal' : 'status-badge--banned'">
-                    {{ c.status === 1 ? '启用' : '禁用' }}
-                  </span>
-                </td>
-                <td>{{ fmt(c.created_at) }}</td>
-                <td>
-                  <div class="table-actions">
-                    <button class="btn-sm" @click="openModal('category', c)">编辑</button>
-                    <button class="btn-sm btn-sm--danger" @click="handleDelete('category', c.id)">删除</button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-if="!adminCategories.length" class="admin-empty">暂无分类数据</div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>名称</th>
+                  <th>状态</th>
+                  <th>创建时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in adminCategories" :key="c.id">
+                  <td>{{ c.id }}</td>
+                  <td>{{ c.name }}</td>
+                  <td>
+                    <span class="status-badge" :class="c.status === 1 ? 'status-badge--normal' : 'status-badge--banned'">
+                      {{ c.status === 1 ? '启用' : '禁用' }}
+                    </span>
+                  </td>
+                  <td>{{ fmt(c.created_at) }}</td>
+                  <td>
+                    <div class="table-actions">
+                      <button class="btn-sm" @click="openModal('category', c)">编辑</button>
+                      <button class="btn-sm btn-sm--danger" @click="handleDelete('category', c.id)">删除</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="!adminCategories.length" class="admin-empty">暂无分类数据</div>
+          </div>
           <div v-if="adminCategories.length" class="pagination">
             <button class="pagination__btn" :disabled="categoryPage <= 1" @click="loadCategories(categoryPage - 1)">上一页</button>
             <template v-for="p in getPageRange(categoryPage, calcPages(categoryTotal, categoryPageSize))" :key="p">
@@ -300,6 +332,7 @@
           <div class="admin-panel__header">
             <h2 class="admin-panel__title">标签管理</h2>
             <div class="admin-panel__actions">
+              <button class="btn-sm" @click="loadTags(tagPage)">刷新</button>
               <button class="btn-sm btn-sm--primary" @click="openModal('tag')">+ 新增</button>
             </div>
           </div>
@@ -315,36 +348,38 @@
             <input type="date" v-model="tagFilter.endTime" class="filter-date" @change="loadTags(1)" title="创建结束" />
             <button class="btn-sm" @click="resetFilter(tagFilter); loadTags(1)">重置</button>
           </div>
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>名称</th>
-                <th>状态</th>
-                <th>创建时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="t in adminTags" :key="t.id">
-                <td>{{ t.id }}</td>
-                <td>{{ t.name }}</td>
-                <td>
-                  <span class="status-badge" :class="t.status === 1 ? 'status-badge--normal' : 'status-badge--banned'">
-                    {{ t.status === 1 ? '启用' : '禁用' }}
-                  </span>
-                </td>
-                <td>{{ fmt(t.created_at) }}</td>
-                <td>
-                  <div class="table-actions">
-                    <button class="btn-sm" @click="openModal('tag', t)">编辑</button>
-                    <button class="btn-sm btn-sm--danger" @click="handleDelete('tag', t.id)">删除</button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-if="!adminTags.length" class="admin-empty">暂无标签数据</div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>名称</th>
+                  <th>状态</th>
+                  <th>创建时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="t in adminTags" :key="t.id">
+                  <td>{{ t.id }}</td>
+                  <td>{{ t.name }}</td>
+                  <td>
+                    <span class="status-badge" :class="t.status === 1 ? 'status-badge--normal' : 'status-badge--banned'">
+                      {{ t.status === 1 ? '启用' : '禁用' }}
+                    </span>
+                  </td>
+                  <td>{{ fmt(t.created_at) }}</td>
+                  <td>
+                    <div class="table-actions">
+                      <button class="btn-sm" @click="openModal('tag', t)">编辑</button>
+                      <button class="btn-sm btn-sm--danger" @click="handleDelete('tag', t.id)">删除</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="!adminTags.length" class="admin-empty">暂无标签数据</div>
+          </div>
           <div v-if="adminTags.length" class="pagination">
             <button class="pagination__btn" :disabled="tagPage <= 1" @click="loadTags(tagPage - 1)">上一页</button>
             <template v-for="p in getPageRange(tagPage, calcPages(tagTotal, tagPageSize))" :key="p">
@@ -364,6 +399,11 @@
         <!-- ========== AI 模型配置 ========== -->
         <section v-if="activeTab === 'ai'" class="admin-panel">
           <AIModelPanel />
+        </section>
+
+        <!-- ========== 切分管理（查看向量化后的分块原文） ========== -->
+        <section v-if="activeTab === 'chunks'" class="admin-panel">
+          <ChunkViewerPanel />
         </section>
       </main>
     </div>
@@ -491,12 +531,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, type Ref } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import AIModelPanel from '../components/AIModelPanel.vue'
+import ChunkViewerPanel from '../components/ChunkViewerPanel.vue'
 import { showToast } from '../utils/toast'
+import { calcPages, getPageRange } from '../utils/pagination'
 
 // ---------- 类型 ----------
 interface UserItem {
@@ -520,6 +562,12 @@ interface ArticleItem {
   status: number
   views?: number
   likes?: number
+  // ===== 向量化（仅后台列表返回）=====
+  vector_status?: number // 0未处理 1排队中 2处理中 3已完成 4失败
+  vector_chunk_count?: number
+  vector_error?: string
+  vectorized_at?: string
+  updated_at?: string
 }
 
 interface CatTagItem {
@@ -547,7 +595,8 @@ const tabs = [
   { key: 'comments', label: '评论管理', icon: '💬' },
   { key: 'categories', label: '分类管理', icon: '📁' },
   { key: 'tags', label: '标签管理', icon: '🏷️' },
-  { key: 'ai', label: 'AI 模型', icon: '🤖' }
+  { key: 'ai', label: 'AI 模型', icon: '🤖' },
+  { key: 'chunks', label: '切分管理', icon: '🧩' }
 ]
 
 const users = ref<UserItem[]>([])
@@ -721,6 +770,169 @@ const loadArticles = async (page = 1) => {
   } catch (e) { console.error('加载文章失败:', e) }
 }
 
+// ---------- 向量化 ----------
+// 不选切分模板：切分参数是全局固定的（后端 chunker.DefaultParams），
+// 按字符数切分只有三个旋钮，做成可选项的结果是多一个要维护的管理模块，
+// 块质量并没有变好。点一下就把这篇交给后台，切分、向量化都在队列里完成。
+const vectorSubmitting = ref(false)
+// 正在提交请求的那一行（与「已入队」状态区分开，避免按钮提前变灰引起困惑）
+const vectorBusyId = ref<number | null>(null)
+
+// 每个文章一个轮询定时器，页面卸载时统一清掉
+const pollTimers = new Map<number, number>()
+
+/**
+ * 向量化状态 → 文案与样式。
+ *
+ * 特意区分「排队中(1)」和「处理中(2)」：两者都属于同一条链路，
+ * 用同一个蓝但靠有无旋转图标区分（这里用文案前缀区分，样式相同）。
+ * 「待更新」是 3 且 vectorized_at 早于 updated_at —— 正文改过了，旧块已过期。
+ */
+const vectorState = (a: ArticleItem) => {
+  const s = a.vector_status ?? 0
+  if (s === 1) return { text: '排队中', cls: 'status-badge--queued', tip: '已提交，等待处理' }
+  if (s === 2) return { text: '处理中…', cls: 'status-badge--running', tip: '正在切分与向量化' }
+  if (s === 4) {
+    return { text: '失败', cls: 'status-badge--failed', tip: a.vector_error || '向量化失败' }
+  }
+
+  // 「待更新」有两种来源，必须都能识别出来：
+  //
+  // ① status=0 但 vectorized_at 还在
+  //    正文变更时后端只把状态打回 0、**不删块也不清 vectorized_at**，
+  //    因为块留着还能在「切分管理」里对比改之前的切分效果。
+  //    这个分支原来漏了，导致改完正文直接显示「否」——和「从没向量化过」
+  //    长得一样，用户完全看不出旧向量还在库里过期着。
+  //
+  // ② status=3 但 vectorized_at < updated_at
+  //    兜底：万一有别的路径改了正文却没重置状态（比如直接改库）。
+  //
+  // 三种「没向量化」的区分：
+  //    从没切过 → vectorized_at 为空 → 「否」
+  //    手动删了向量 → 后端会把 vectorized_at 置 NULL → 「否」
+  //    切过又改了正文 → vectorized_at 还在 → 「待更新」
+  if (s === 0 && a.vectorized_at) {
+    const n = a.vector_chunk_count || 0
+    return {
+      text: '待更新',
+      cls: 'status-badge--stale',
+      tip: n > 0
+        ? `正文已修改，${n} 个旧分块已过期，需要重新向量化`
+        : '正文已修改，需要重新向量化'
+    }
+  }
+
+  if (s === 3) {
+    const v = a.vectorized_at ? Date.parse(a.vectorized_at) : NaN
+    const u = a.updated_at ? Date.parse(a.updated_at) : NaN
+    if (!Number.isNaN(v) && !Number.isNaN(u) && v < u) {
+      return { text: '待更新', cls: 'status-badge--stale', tip: '正文已修改，需要重新向量化' }
+    }
+    return {
+      text: `是（${a.vector_chunk_count || 0} 块）`,
+      cls: 'status-badge--normal',
+      tip: '已向量化，可在「切分管理」查看分块原文'
+    }
+  }
+  return { text: '否', cls: 'status-badge--idle', tip: '尚未向量化' }
+}
+
+const stopPoll = (articleId: number) => {
+  const timer = pollTimers.get(articleId)
+  if (timer) {
+    clearTimeout(timer)
+    pollTimers.delete(articleId)
+  }
+}
+
+/**
+ * 轮询状态。
+ *
+ * 用 setTimeout 串行而不是 setInterval：上一次响应回来才排下一次，
+ * 避免接口变慢时请求堆叠（本项目的 axios 有 401 自动刷新，堆叠会放大刷新风暴）。
+ * 次数上限 100 次，避免用户忘了关页面而一直打接口。
+ */
+const startPoll = (articleId: number) => {
+  stopPoll(articleId)
+  let count = 0
+
+  const tick = async () => {
+    count += 1
+    if (count > 100) {
+      pollTimers.delete(articleId)
+      return
+    }
+    try {
+      const res = await api.get(`/admin/articles/${articleId}/vector-status`)
+      const st = res.data?.data
+      if (!st) {
+        pollTimers.delete(articleId)
+        return
+      }
+      const row = adminArticles.value.find((a) => a.id === articleId)
+      if (row) {
+        row.vector_status = st.vector_status
+        row.vector_chunk_count = st.vector_chunk_count
+        row.vector_error = st.vector_error
+        row.vectorized_at = st.vectorized_at
+        row.updated_at = st.updated_at
+      }
+      if (st.vector_status === 3) {
+        pollTimers.delete(articleId)
+        showToast(`《${row?.title || ''}》向量化完成，共 ${st.vector_chunk_count} 块`, 'success')
+        return
+      }
+      if (st.vector_status === 4) {
+        pollTimers.delete(articleId)
+        showToast(`《${row?.title || ''}》向量化失败：${st.vector_error || '未知原因'}`, 'error')
+        return
+      }
+      pollTimers.set(articleId, window.setTimeout(tick, 3000))
+    } catch {
+      pollTimers.delete(articleId)
+    }
+  }
+
+  pollTimers.set(articleId, window.setTimeout(tick, 1000))
+}
+
+/**
+ * 提交向量化。
+ *
+ * 点一下直接进后台队列，不再弹窗选模板：切分参数是全局固定的，
+ * 让用户每篇选一次「怎么切」既没有决策依据，也把内部参数暴露成了产品概念。
+ * 已有块的文章会被覆盖（后端同事务内删旧写新），这里给一句提示避免误解。
+ */
+const submitVectorize = async (a: ArticleItem) => {
+  if (!a) return
+  vectorBusyId.value = a.id
+  vectorSubmitting.value = true
+  try {
+    const res = await api.post(`/admin/articles/${a.id}/vectorize`)
+    const d = res.data?.data
+    const row = adminArticles.value.find((x) => x.id === a.id)
+    if (row && d) row.vector_status = d.vector_status
+    showToast(
+      a.vector_status === 3 ? '已提交，旧分块会在完成后被替换' : '已提交，后台排队处理中',
+      'success'
+    )
+    startPoll(a.id)
+  } catch (err: any) {
+    showToast(err?.response?.data?.message || '提交失败', 'error')
+  } finally {
+    vectorBusyId.value = null
+    vectorSubmitting.value = false
+  }
+}
+
+// 离开页面必须清掉所有定时器，否则会一直在后台打接口
+onBeforeUnmount(() => {
+  for (const timer of pollTimers.values()) {
+    clearTimeout(timer)
+  }
+  pollTimers.clear()
+})
+
 const loadComments = async (page = 1) => {
   commentPage.value = page
   try {
@@ -761,25 +973,6 @@ const loadTags = async (page = 1) => {
     adminTags.value = res.data.data?.list || []
     tagTotal.value = res.data.data?.total || 0
   } catch (e) { console.error('加载标签失败:', e) }
-}
-
-const calcPages = (total: number, size: number) => Math.ceil(total / size) || 1
-
-const getPageRange = (current: number, total: number): (number | '...')[] => {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const pages: (number | '...')[] = []
-  if (current <= 4) {
-    for (let i = 1; i <= 5; i++) pages.push(i)
-    pages.push('...'); pages.push(total)
-  } else if (current >= total - 3) {
-    pages.push(1); pages.push('...')
-    for (let i = total - 4; i <= total; i++) pages.push(i)
-  } else {
-    pages.push(1); pages.push('...')
-    for (let i = current - 1; i <= current + 1; i++) pages.push(i)
-    pages.push('...'); pages.push(total)
-  }
-  return pages
 }
 
 // 保存按钮是否禁用（新增用户时，昵称或校验失败或未通过唯一性校验时禁用）
@@ -1058,9 +1251,22 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.admin-layout {
+/* 整页不滚动：导航栏 + 侧边栏固定，只有列表区内部滚。
+   这样列表再长也不用滚回顶部才能切管理项。 */
+.admin-page {
+  height: 100vh;
   display: flex;
-  min-height: calc(100vh - 50px);
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-layout {
+  flex: 1;
+  display: flex;
+  /* min-height:0 是关键：flex 子项的 min-height 默认是 auto，
+     不加这一行内部滚动区会被内容撑开，等于白做 */
+  min-height: 0;
+  overflow: hidden;
 }
 
 .admin-sidebar {
@@ -1069,6 +1275,11 @@ onMounted(async () => {
   border-right: 1px solid #e8e8e8;
   padding: 16px 0;
   flex-shrink: 0;
+  /* 只写 overflow-y 的话，overflow-x 会从 visible 隐式变成 auto：
+     侧边栏原本就有极少量横向溢出（被 visible 直接画到边界外，看不见），
+     一旦变成滚动容器就会冒出横向滚动条。侧边栏永远不需要横向滚动，显式禁掉。 */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .admin-sidebar__title {
@@ -1109,7 +1320,39 @@ onMounted(async () => {
 .admin-sidebar__link:hover { background: #e8f4ff; }
 .admin-sidebar__link--active { background: #e8f4ff; color: #1677ff; font-weight: 500; }
 
-.admin-main { flex: 1; padding: 20px; overflow-x: auto; }
+/* 主区自身不滚动，交给面板内部的 .admin-table-wrap。
+   原来这里是 overflow-x: auto，整页跟着表格一起拉长——列表一长，
+   侧边栏的管理项就被顶出视口，切个 tab 得先滚回顶部。 */
+.admin-main {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 面板占满主区高度：头部/筛选/分页固定，中间表格区自己滚 */
+.admin-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-panel__header,
+.filter-bar {
+  flex-shrink: 0;
+}
+
+/* 表格滚动区：占满「头部 + 筛选栏」与「分页条」之间的空间，自己出滚动条。
+   横向也在这里滚，避免宽表格把整个主区撑开。 */
+.admin-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
 
 .admin-panel__header {
   display: flex;
@@ -1162,6 +1405,14 @@ onMounted(async () => {
 .status-badge--normal { background: #f6ffed; color: #52c41a; }
 .status-badge--banned { background: #fff2f0; color: #ff4d4f; }
 .status-badge--draft { background: #fffbe6; color: #faad14; }
+
+/* ===== 向量化状态 ===== */
+/* 排队中与处理中同色：同一条链路不该用两个色相，否则会让人以为是两种不同的问题 */
+.status-badge--queued { background: #e6f4ff; color: #1677ff; }
+.status-badge--running { background: #e6f4ff; color: #1677ff; }
+.status-badge--failed { background: #fff2f0; color: #ff4d4f; }
+.status-badge--stale { background: #fff7e6; color: #fa8c16; }
+.status-badge--idle { background: #f5f5f5; color: #999; }
 
 .cat-tag-badge { background: #f0f5ff; color: #2f54eb; margin-right: 4px; }
 .cat-tag-badge--tag { background: #f0f0f0; color: #666; }
@@ -1332,58 +1583,6 @@ select.modal__input { appearance: auto; }
   margin: 8px 0 0;
 }
 
-/* ---------- 分页 ---------- */
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  padding: 16px 0;
-  flex-wrap: wrap;
-}
-
-.pagination__btn {
-  min-width: 32px;
-  height: 32px;
-  padding: 0 8px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  background: #fff;
-  color: #333;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.pagination__btn:hover { border-color: #1677ff; color: #1677ff; }
-.pagination__btn--active { background: #1677ff; color: #fff; border-color: #1677ff; }
-.pagination__btn--active:hover { background: #4096ff; border-color: #4096ff; color: #fff; }
-.pagination__btn:disabled { color: #d9d9d9; border-color: #d9d9d9; cursor: not-allowed; background: #fafafa; }
-
-.pagination__ellipsis {
-  display: inline-block;
-  width: 24px;
-  text-align: center;
-  color: #999;
-  font-size: 13px;
-}
-
-.pagination__info {
-  margin-left: 8px;
-  font-size: 13px;
-  color: #666;
-}
-
-.pagination__size {
-  margin-left: 4px;
-  padding: 4px 6px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  font-size: 13px;
-  color: #333;
-  background: #fff;
-  cursor: pointer;
-}
 
 /* ---------- 筛选栏 ---------- */
 .filter-bar {
