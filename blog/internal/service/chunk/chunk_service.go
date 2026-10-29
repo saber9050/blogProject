@@ -261,6 +261,8 @@ func toItem(r *repo.ChunkRow, truncate bool) *response.ChunkItem {
 		ID:             r.ID,
 		ArticleID:      r.ArticleID,
 		ArticleTitle:   r.ArticleTitle,
+		HeadingPath:    r.HeadingPath,
+		SectionIndex:   r.SectionIndex,
 		ChunkIndex:     r.ChunkIndex,
 		CharCount:      r.CharCount,
 		Content:        r.Content,

@@ -16,6 +16,7 @@ const chunkTable = "article_chunks"
 // join 条件带 deleted_at IS NULL，否则软删除文章的块会让列表出现「标题为空的孤儿行」。
 const selectChunkRow = `
 	SELECT c.id, c.article_id, COALESCE(a.title, '') AS article_title,
+	       c.section_index, COALESCE(c.heading_path, '') AS heading_path,
 	       c.chunk_index, c.char_count, c.content,
 	       COALESCE(c.embedding_model, '') AS embedding_model,
 	       c.created_at

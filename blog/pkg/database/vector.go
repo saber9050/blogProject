@@ -68,6 +68,11 @@ func EnsureSchema(db *gorm.DB, dim int) error {
 	// 顺序不能反：只删表不删列的话，重建出来的表仍然带着 template_id。
 	cleanupLegacyTemplateSchema(db)
 
+	// 后加的列要在「表已存在」的分支补上，CREATE TABLE IF NOT EXISTS 覆盖不到
+	if err := ensureChunkColumns(db); err != nil {
+		return err
+	}
+
 	current, exists, err := CurrentDimension(db)
 	if err != nil {
 		return err
@@ -166,6 +171,8 @@ func ensureChunkTable(db *gorm.DB, dim int) error {
 		CREATE TABLE IF NOT EXISTS %s (
 			id              bigserial PRIMARY KEY,
 			article_id      bigint      NOT NULL,
+			section_index   integer     NOT NULL DEFAULT 0,
+			heading_path    varchar(512) NOT NULL DEFAULT '',
 			chunk_index     integer     NOT NULL,
 			content         text        NOT NULL,
 			char_count      integer     NOT NULL DEFAULT 0,
@@ -209,4 +216,24 @@ func ensureChunkIndexes(db *gorm.DB) error {
 func cleanupLegacyTemplateSchema(db *gorm.DB) {
 	_ = db.Exec("ALTER TABLE " + chunkTable + " DROP COLUMN IF EXISTS template_id").Error
 	_ = db.Exec("DROP TABLE IF EXISTS chunk_templates").Error
+}
+
+// ensureChunkColumns 补上后加的列。
+//
+// 这张表不进 AutoMigrate（vector(n) 维度要动态生成），所以新列只能自己 ALTER。
+// ADD COLUMN IF NOT EXISTS 是 PG 9.6+ 的能力，重复执行安全。
+//
+// 2026-10-29 加的 section_index / heading_path 服务于「结构感知切分 + 父子块」：
+// 旧数据补上默认值（0 和空串），语义上等于「未知小节」，重新向量化时会被覆盖。
+func ensureChunkColumns(db *gorm.DB) error {
+	stmts := []string{
+		`ALTER TABLE ` + chunkTable + ` ADD COLUMN IF NOT EXISTS section_index integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE ` + chunkTable + ` ADD COLUMN IF NOT EXISTS heading_path varchar(512) NOT NULL DEFAULT ''`,
+	}
+	for _, s := range stmts {
+		if err := db.Exec(s).Error; err != nil {
+			return fmt.Errorf("补充向量表字段失败: %w", err)
+		}
+	}
+	return nil
 }

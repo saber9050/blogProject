@@ -16,6 +16,8 @@ type ChunkRow struct {
 	ID             uint
 	ArticleID      uint
 	ArticleTitle   string
+	SectionIndex   int
+	HeadingPath    string
 	ChunkIndex     int
 	CharCount      int
 	Content        string

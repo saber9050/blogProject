@@ -263,7 +263,7 @@ func (s *vectorizeService) doVectorize(ctx context.Context, t task) error {
 		return err
 	}
 
-	chunks, err := chunker.Split(article.Content, chunker.DefaultParams())
+	chunks, err := chunker.Split(article.Content, article.Title, chunker.DefaultParams())
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,9 @@ func (s *vectorizeService) doVectorize(ctx context.Context, t task) error {
 	rows := make([]*entity.ArticleChunk, 0, len(chunks))
 	for i, c := range chunks {
 		rows = append(rows, &entity.ArticleChunk{
-			ArticleID: t.articleID,
+			ArticleID:    t.articleID,
+			SectionIndex: c.SectionIndex,
+			HeadingPath:  c.HeadingPath,
 			// TemplateID 留零值：模板概念已下线，这一列随 DDL 一起等下一轮清理。
 			// 不写死 0 而是不赋值，是为了让「这里没这个概念」在代码里也是一致的。
 			ChunkIndex:     i,

@@ -2,9 +2,12 @@ package response
 
 // ChunkItem 切分块列表项
 type ChunkItem struct {
-	ID               uint   `json:"id"`
-	ArticleID        uint   `json:"article_id"`
-	ArticleTitle     string `json:"article_title"`
+	ID           uint   `json:"id"`
+	ArticleID    uint   `json:"article_id"`
+	ArticleTitle string `json:"article_title"`
+	// HeadingPath 标题路径，如 "redis发布订阅和Stream > 二，Stream"
+	HeadingPath      string `json:"heading_path"`
+	SectionIndex     int    `json:"section_index"`
 	ChunkIndex       int    `json:"chunk_index"`
 	CharCount        int    `json:"char_count"`
 	Content          string `json:"content"`

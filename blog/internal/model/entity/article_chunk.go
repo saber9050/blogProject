@@ -19,8 +19,14 @@ import (
 // 不嵌 BaseEntity：块是「整篇替换」的产物，没有独立生命周期，不需要 updated_at /
 // deleted_at（加了反而会在删旧写新时被软删除逻辑干扰）。
 type ArticleChunk struct {
-	ID             uint   `gorm:"primaryKey" json:"id"`
-	ArticleID      uint   `gorm:"not null;index:idx_article_chunks_article" json:"article_id"`
+	ID        uint `gorm:"primaryKey" json:"id"`
+	ArticleID uint `gorm:"not null;index:idx_article_chunks_article" json:"article_id"`
+	// SectionIndex 所属小节序号（0 起）。同一小节切出的多块共享该值，
+	// 将来做「小块检索、整节喂模型」时靠它把块拼回整节。
+	SectionIndex int `gorm:"not null;default:0;comment:所属小节序号,从0开始" json:"section_index"`
+	// HeadingPath 标题路径，如 "redis发布订阅和Stream > 二，Stream"。
+	// 同时拼在 Content 首行参与 embedding（标题词是很好的召回信号）。
+	HeadingPath    string `gorm:"type:varchar(512);not null;default:'';comment:标题路径" json:"heading_path"`
 	ChunkIndex     int    `gorm:"not null;comment:块序号,从0开始" json:"chunk_index"`
 	Content        string `gorm:"type:text;not null;comment:切分后的原文" json:"content"`
 	CharCount      int    `gorm:"not null;default:0;comment:字符数" json:"char_count"`

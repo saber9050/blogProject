@@ -7,10 +7,10 @@ import (
 	"unicode/utf8"
 )
 
-// mustSplit 测试辅助：切分并断言无错误
+// mustSplit 测试辅助：切分并断言无错误（不传文章标题）
 func mustSplit(t *testing.T, content string, p Params) []Result {
 	t.Helper()
-	got, err := Split(content, p)
+	got, err := Split(content, "", p)
 	if err != nil {
 		t.Fatalf("Split 返回错误：%v", err)
 	}
@@ -35,7 +35,7 @@ func TestSplitEmptyContent(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := Split(c.content, Params{ChunkSize: 800, MinChunkSize: 100, StripMarkup: true})
+			got, err := Split(c.content, "", Params{ChunkSize: 800, MinChunkSize: 100, StripMarkup: true})
 			if !errors.Is(err, ErrEmptyContent) {
 				t.Fatalf("期望 ErrEmptyContent，实际 err=%v got=%+v", err, got)
 			}
@@ -57,7 +57,7 @@ func TestSplitRejectsTooShort(t *testing.T) {
 		"哦",
 	}
 	for _, c := range cases {
-		_, err := Split(c, Params{ChunkSize: 800, MinChunkSize: 0, StripMarkup: true})
+		_, err := Split(c, "", Params{ChunkSize: 800, MinChunkSize: 0, StripMarkup: true})
 		if !errors.Is(err, ErrContentTooShort) {
 			t.Fatalf("%q 期望 ErrContentTooShort，实际 %v", c, err)
 		}
@@ -177,15 +177,14 @@ func TestOverlapApplied(t *testing.T) {
 	}
 }
 
-// TestMergeSmallChunks 碎块被合并，结果里不该有小于阈值的块。
+// TestMergeSmallChunks 小节内的碎块被合并。
 //
-// 碎块来源很实际：小标题单独一行、列表项很短。几个字的块拿去 embedding
-// 是纯浪费——向量里几乎没有信息，却占一次 API 调用和一行存储。
+// 结构感知切分之后，「小标题单独成块」这个问题不存在了（标题就是边界）。
+// 但小节内部仍会产生碎块：一段短说明后面跟一大段正文，按字数切完尾巴会剩几十字。
+// 几个字的块拿去 embedding 是纯浪费——向量里几乎没有信息，却占一次 API 调用。
 func TestMergeSmallChunks(t *testing.T) {
-	md := "## 一、背景\n\n" +
-		strings.Repeat("正", 300) + "\n\n" +
-		"## 二、方法"
-
+	// 450 字硬切成 200 / 200 / 50，尾巴 50 字低于 minSize，应当并进前一块
+	md := "## 小结\n\n" + strings.Repeat("设", 450)
 	got := mustSplit(t, md, Params{ChunkSize: 200, ChunkOverlap: 0, MinChunkSize: 100, StripMarkup: true})
 
 	if len(got) == 0 {
@@ -197,13 +196,12 @@ func TestMergeSmallChunks(t *testing.T) {
 				i, r.CharCount, r.Content)
 		}
 	}
-	joined := ""
-	for _, r := range got {
-		joined += r.Content
+	if len(got) != 2 {
+		t.Fatalf("450 字按 200 切应该得到 2 块（尾块被合并），实际 %d 块", len(got))
 	}
-	for _, want := range []string{"一、背景", "二、方法"} {
-		if !strings.Contains(joined, want) {
-			t.Fatalf("合并后丢失了 %q", want)
+	for _, r := range got {
+		if !strings.HasPrefix(r.Content, "小结") {
+			t.Fatalf("块首缺少标题路径：%q", r.Content)
 		}
 	}
 }
@@ -380,5 +378,134 @@ func TestMarkdownCodeBlock(t *testing.T) {
 	// 段落边界要保住
 	if !strings.Contains(got, "\n\n") {
 		t.Fatalf("段落边界丢了：%q", got)
+	}
+}
+
+// TestSplitBySection 块不跨小节，且带上标题路径。
+func TestSplitBySection(t *testing.T) {
+	md := "## 一、背景\n\n" + strings.Repeat("甲", 300) +
+		"\n\n## 二、方法\n\n" + strings.Repeat("乙", 300) +
+		"\n\n## 三、结论\n\n" + strings.Repeat("丙", 300)
+
+	got := mustSplit(t, md, Params{ChunkSize: 800, ChunkOverlap: 0, MinChunkSize: 0, StripMarkup: true})
+	if len(got) != 3 {
+		t.Fatalf("三个小节应切成 3 块，实际 %d 块", len(got))
+	}
+	for i, want := range []string{"一、背景", "二、方法", "三、结论"} {
+		if got[i].HeadingPath != want {
+			t.Fatalf("第 %d 块路径期望 %q，实际 %q", i, want, got[i].HeadingPath)
+		}
+		if !strings.HasPrefix(got[i].Content, want) {
+			t.Fatalf("第 %d 块开头应是路径：%q", i, got[i].Content)
+		}
+		// 不跨小节：不该出现别的段落标记
+		other := []string{"二、方法", "三、结论", "一、背景"}[i]
+		for j, o := range []string{"一、背景", "二、方法", "三、结论"} {
+			if j != i && strings.Contains(got[i].Content, o) {
+				t.Fatalf("第 %d 块混入了 %q", i, o)
+			}
+		}
+		_ = other
+	}
+}
+
+// TestHeadingPathWithDocTitle 路径带上文章标题，且只取两级小节。
+func TestHeadingPathWithDocTitle(t *testing.T) {
+	md := "## 一级\n\n正文一\n\n### 二级\n\n正文二\n\n#### 三级\n\n正文三"
+	got, err := Split(md, "我的文章", Params{ChunkSize: 800, ChunkOverlap: 0, MinChunkSize: 0, StripMarkup: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("期望 3 块，实际 %d", len(got))
+	}
+	wants := []string{"我的文章 > 一级", "我的文章 > 一级 > 二级", "我的文章 > 二级 > 三级"}
+	for i, w := range wants {
+		if got[i].HeadingPath != w {
+			t.Fatalf("第 %d 块路径期望 %q，实际 %q", i, w, got[i].HeadingPath)
+		}
+	}
+}
+
+// TestAtomicTable 表格不被切断，哪怕它超长。
+func TestAtomicTable(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("## 命令表\n\n")
+	b.WriteString("| 命令 | 说明 |\n| --- | --- |\n")
+	for i := 0; i < 60; i++ {
+		b.WriteString("| XADD" + strings.Repeat("x", 20) + " | 向流末尾追加消息的说明文字 |\n")
+	}
+
+	got := mustSplit(t, b.String(), Params{ChunkSize: 200, ChunkOverlap: 0, MinChunkSize: 0, StripMarkup: true})
+	if len(got) != 1 {
+		t.Fatalf("整张表格应作为 1 块，实际 %d 块", len(got))
+	}
+	// 表格所有行都在同一块里
+	if n := strings.Count(got[0].Content, "XADD"); n != 60 {
+		t.Fatalf("表格被切断了：只保留 %d 行，期望 60 行", n)
+	}
+}
+
+// TestAtomicCodeBlock 代码块不被切断。
+func TestAtomicCodeBlock(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("## 示例代码\n\n```go\n")
+	for i := 0; i < 50; i++ {
+		b.WriteString("func handler" + strings.Repeat("x", 10) + "() { return }\n")
+	}
+	b.WriteString("```\n")
+
+	got := mustSplit(t, b.String(), Params{ChunkSize: 200, ChunkOverlap: 0, MinChunkSize: 0, StripMarkup: true})
+	if len(got) != 1 {
+		t.Fatalf("整个代码块应作为 1 块，实际 %d 块", len(got))
+	}
+	if n := strings.Count(got[0].Content, "func handler"); n != 50 {
+		t.Fatalf("代码块被切断了：只保留 %d 行，期望 50 行", n)
+	}
+	if strings.Contains(got[0].Content, "```") {
+		t.Fatalf("围栏没去掉：%.60q", got[0].Content)
+	}
+}
+
+// TestNoHeadingFallsBack 没有标题的文章退化为递归切分，不能报错。
+func TestNoHeadingFallsBack(t *testing.T) {
+	md := strings.Repeat("这是一段没有标题的正文。", 100)
+	got := mustSplit(t, md, Params{ChunkSize: 200, ChunkOverlap: 0, MinChunkSize: 0, StripMarkup: true})
+	if len(got) < 2 {
+		t.Fatalf("700 字按 200 切应得到多块，实际 %d 块", len(got))
+	}
+	for i, r := range got {
+		if r.HeadingPath != "" {
+			t.Fatalf("第 %d 块不该有路径，实际 %q", i, r.HeadingPath)
+		}
+		if r.SectionIndex != 0 {
+			t.Fatalf("第 %d 块小节序号应为 0，实际 %d", i, r.SectionIndex)
+		}
+	}
+}
+
+// TestSectionIndexShared 同一小节切出的多块共享 section_index（父子块的基础）。
+func TestSectionIndexShared(t *testing.T) {
+	md := "## 长小节\n\n" + strings.Repeat("甲", 500) + "\n\n## 下一节\n\n" + strings.Repeat("乙", 100)
+	got := mustSplit(t, md, Params{ChunkSize: 200, ChunkOverlap: 0, MinChunkSize: 0, StripMarkup: true})
+
+	first := got[0].SectionIndex
+	n := 0
+	for _, r := range got {
+		if r.HeadingPath == "长小节" {
+			if r.SectionIndex != first {
+				t.Fatalf("同一小节的多块 section_index 不一致：%d vs %d", first, r.SectionIndex)
+			}
+			n++
+		}
+	}
+	if n < 2 {
+		t.Fatalf("长小节应切成多块，实际 %d 块", n)
+	}
+	// 下一节必须是不同的序号
+	for _, r := range got {
+		if r.HeadingPath == "下一节" && r.SectionIndex == first {
+			t.Fatal("不同小节不该共享 section_index")
+		}
 	}
 }

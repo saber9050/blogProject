@@ -51,6 +51,14 @@ type Params struct {
 type Result struct {
 	Content   string
 	CharCount int // rune 数，不是字节数
+
+	// HeadingPath 该块所属的标题路径，如 "redis发布订阅和Stream > 二，Stream"。
+	// 会拼在 Content 最前面参与 embedding —— 中文技术博客的查询词往往就是小节标题，
+	// 让标题进向量是最便宜的召回提升。同时单独返回一份供 UI 展示与按章节过滤。
+	HeadingPath string
+	// SectionIndex 小节序号（0 起）。同一小节切出的多块共享这个值，
+	// 将来做「小块检索、整节喂模型」时靠它把块拼回整节。
+	SectionIndex int
 }
 
 // DefaultParams 生产环境使用的切分参数。
@@ -68,35 +76,259 @@ func DefaultParams() Params {
 	}
 }
 
-// Split 把正文切成块。
+// Split 按 Markdown 结构切成块。
 //
-// 返回的三类错误要分开处理，因为给用户的提示完全不同：
-//   - ErrEmptyContent    正文是空的（编辑器清空后存的是 `<p><br></p>`）
-//   - ErrContentTooShort 正文不足 MinContentChars
-//   - 其它               不应该发生
-func Split(content string, p Params) ([]Result, error) {
+// 流程：解析标题 → 逐小节切分（超长才递归降级）→ 小节内合并碎块 → 加重叠 → 拼标题路径。
+//
+// 为什么不直接对全文递归切：小节边界是作者亲手划的主题边界，比任何字符分隔符
+// 都准。实测旧方案在 14 篇真实文章上，80 块里有 29 块跨了小节。
+//
+// docTitle 用于拼标题路径（参与 embedding），传空则路径只含小节标题。
+func Split(content, docTitle string, p Params) ([]Result, error) {
 	p = p.withDefaults()
 
-	text := ExtractText(content, p.StripMarkup)
-	if text == "" {
+	// 整体校验用清洗后的全文：小节可能都合法但合计太短
+	full := ExtractText(content, p.StripMarkup)
+	if full == "" {
 		return nil, ErrEmptyContent
 	}
-	if n := runeLen(text); n < MinContentChars {
+	if n := runeLen(full); n < MinContentChars {
 		return nil, fmt.Errorf("%w（当前 %d 字，至少 %d 字）", ErrContentTooShort, n, MinContentChars)
 	}
 
-	chunks := splitRecursive(text, 0, p.ChunkSize)
-	chunks = mergeSmall(chunks, p.MinChunkSize, p.ChunkSize+p.MinChunkSize)
-	chunks = applyOverlap(chunks, p.ChunkOverlap)
+	sections := parseSections(content)
+	out := make([]Result, 0, len(sections))
+	for _, sec := range sections {
+		path := buildHeadingPath(docTitle, sec.path)
 
-	out := make([]Result, 0, len(chunks))
-	for _, c := range chunks {
-		if c == "" {
+		pieces := splitSectionBody(sec.body, p)
+		if len(pieces) == 0 {
+			// 只有标题没有正文的小节跳过：标题信息已经进了后续块的路径前缀，
+			// 单独成块只会多出一堆几字长的碎块
 			continue
 		}
-		out = append(out, Result{Content: c, CharCount: runeLen(c)})
+		pieces = mergeSmall(pieces, p.MinChunkSize, p.ChunkSize+p.MinChunkSize)
+		pieces = applyOverlap(pieces, p.ChunkOverlap)
+
+		for _, c := range pieces {
+			c = strings.TrimSpace(c)
+			if c == "" {
+				continue
+			}
+			full := c
+			if path != "" {
+				full = path + "\n\n" + c
+			}
+			out = append(out, Result{
+				Content:      full,
+				CharCount:    runeLen(full),
+				HeadingPath:  path,
+				SectionIndex: sec.index,
+			})
+		}
+	}
+
+	if len(out) == 0 {
+		return nil, ErrEmptyContent
 	}
 	return out, nil
+}
+
+// section 一个 Markdown 小节：标题 + 标题下的正文
+type section struct {
+	index int
+	level int // 0 表示「第一个标题之前的引子」
+	title string
+	path  []string // 祖先标题链（不含自己），最多保留两级
+	body  string   // 原始 Markdown，尚未清洗
+}
+
+// reATXHeading 匹配 ATX 风格标题：`## 标题`（允许前面不超过 3 个空格）
+var reATXHeading = regexp.MustCompile(`^[ \t]{0,3}(#{1,6})[ \t]+(.*)$`)
+
+// parseSections 按标题把正文切成小节。
+//
+// 代码块里的 `#` 不算标题（`inFence` 判断）；`#` 一级标题当作文章标题的重复，
+// 不进路径栈，否则路径里会出现 "标题 > 标题"。
+func parseSections(md string) []section {
+	var out []section
+	var stack []string // 当前标题链（只含 ## 及以下）
+	cur := section{index: 0}
+	inFence := false
+
+	flush := func() {
+		out = append(out, cur)
+		cur = section{index: len(out), level: cur.level, path: cur.path}
+	}
+
+	for _, line := range strings.Split(md, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			cur.body += line + "\n"
+			continue
+		}
+		if !inFence {
+			if m := reATXHeading.FindStringSubmatch(line); m != nil {
+				lv := len(m[1])
+				title := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(m[2]), "#"))
+				if lv >= 2 {
+					// 弹掉同层及更深的，再压入自己
+					for len(stack) >= lv-1 {
+						stack = stack[:len(stack)-1]
+					}
+					stack = append(stack, title)
+				}
+				flush()
+				cur.level = lv
+				cur.title = title
+				// path 含当前标题：buildHeadingPath 取最后两级，少了自己就只剩祖先
+				cur.path = append([]string{}, stack...)
+				continue
+			}
+		}
+		cur.body += line + "\n"
+	}
+	flush()
+	return out
+}
+
+// buildHeadingPath 拼标题路径：文章标题 + 当前小节及其上一级。
+//
+// 只取两级小节是刻意的：路径会拼进块正文参与 embedding，太长会挤占 800 字的预算。
+// 取「当前 + 上一级」而不是「最顶层两级」，保证当前标题一定在路径里——
+// 三级标题下的小节若只取顶层，当前标题就丢了。
+func buildHeadingPath(docTitle string, path []string) string {
+	parts := make([]string, 0, 3)
+	if t := strings.TrimSpace(docTitle); t != "" {
+		parts = append(parts, t)
+	}
+	start := 0
+	if len(path) > 2 {
+		start = len(path) - 2
+	}
+	for _, t := range path[start:] {
+		if t != "" {
+			parts = append(parts, t)
+		}
+	}
+	return strings.Join(parts, " > ")
+}
+
+// splitSectionBody 切一个小节的正文。
+//
+// 与全文切分的区别：表格和代码块是原子单位，永不切开——半张表格喂给 embedding
+// 是纯噪声。原子段塞得进当前块就塞，塞不下就单独成块（允许超长）。
+func splitSectionBody(body string, p Params) []string {
+	paras := splitParagraphs(body)
+
+	var chunks []string
+	var buf []string
+	bufLen := 0
+
+	flush := func() {
+		if len(buf) > 0 {
+			c := strings.TrimSpace(strings.Join(buf, "\n\n"))
+			if c != "" {
+				chunks = append(chunks, c)
+			}
+			buf = nil
+			bufLen = 0
+		}
+	}
+	push := func(text string, n int) {
+		if bufLen > 0 && bufLen+n > p.ChunkSize {
+			flush()
+		}
+		buf = append(buf, text)
+		bufLen += n + 2
+	}
+
+	for _, para := range paras {
+		// 按参数决定要不要去标记：StripMarkup=false 时保留原始 Markdown
+		// （调试、以及想在块里看结构的场景要用）
+		var text string
+		if p.StripMarkup {
+			text = MarkdownToPlainText(para)
+		} else {
+			text = normalizeSpace(para)
+		}
+		if text == "" {
+			continue
+		}
+		n := runeLen(text)
+
+		if isAtomicBlock(para) {
+			// 原子段：塞不下就单独成块，绝不切断
+			if bufLen > 0 && bufLen+n <= p.ChunkSize {
+				buf = append(buf, text)
+				bufLen += n + 2
+				continue
+			}
+			flush()
+			chunks = append(chunks, text)
+			continue
+		}
+
+		if n <= p.ChunkSize {
+			push(text, n)
+			continue
+		}
+
+		// 超长普通段：降级到字符分隔符递归切
+		flush()
+		for _, sub := range splitRecursive(text, 0, p.ChunkSize) {
+			if c := strings.TrimSpace(sub); c != "" {
+				chunks = append(chunks, c)
+			}
+		}
+	}
+	flush()
+	return chunks
+}
+
+// splitParagraphs 按空行切段，但代码块内部的空行不算段落边界。
+func splitParagraphs(body string) []string {
+	var out []string
+	var cur []string
+	inFence := false
+
+	for _, line := range strings.Split(body, "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "```") {
+			inFence = !inFence
+		}
+		if !inFence && t == "" {
+			if len(cur) > 0 {
+				out = append(out, strings.Join(cur, "\n"))
+				cur = nil
+			}
+			continue
+		}
+		cur = append(cur, line)
+	}
+	if len(cur) > 0 {
+		out = append(out, strings.Join(cur, "\n"))
+	}
+	return out
+}
+
+// isAtomicBlock 判断一段是否不可切分：代码块，或至少两行以 `|` 开头的表格。
+func isAtomicBlock(para string) bool {
+	t := strings.TrimSpace(para)
+	if strings.HasPrefix(t, "```") {
+		return true
+	}
+	lines := strings.Split(t, "\n")
+	if len(lines) < 2 {
+		return false
+	}
+	rows := 0
+	for _, l := range lines {
+		if strings.HasPrefix(strings.TrimSpace(l), "|") {
+			rows++
+		}
+	}
+	return rows >= 2
 }
 
 // ExtractText 按参数把正文转成纯文本。单独导出是因为 service 层在报错时

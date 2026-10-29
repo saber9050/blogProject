@@ -68,6 +68,7 @@
             <tr>
               <th class="cv-col--id">块 ID</th>
               <th>文章</th>
+              <th class="cv-col--section">所属小节</th>
               <th class="cv-col--idx">序号</th>
               <th class="cv-col--num">字符数</th>
               <th class="cv-col--preview">原文预览</th>
@@ -79,6 +80,9 @@
               <td class="cv-mono">{{ c.id }}</td>
               <td class="cv-ellipsis" :title="c.article_title">
                 <span class="cv-muted">#{{ c.article_id }}</span> {{ c.article_title || '（已删除）' }}
+              </td>
+              <td class="cv-ellipsis cv-section" :title="c.heading_path">
+                {{ sectionLabel(c.heading_path) }}
               </td>
               <td class="cv-mono">{{ c.chunk_index }}</td>            <td class="cv-mono">{{ c.char_count }}</td>
               <td class="cv-preview">
@@ -237,6 +241,8 @@ interface ChunkItem {
   id: number
   article_id: number
   article_title: string
+  heading_path: string
+  section_index: number
   chunk_index: number
   char_count: number
   content: string
@@ -351,6 +357,16 @@ const resetFilter = async () => {
   filter.article_id = ''
   filter.keyword = ''
   await loadChunks(1)
+}
+
+/**
+ * 小节路径去掉开头的文章标题，只留小节部分。
+ * 完整路径在 title 里，鼠标悬停能看到。
+ */
+const sectionLabel = (path: string) => {
+  if (!path) return '—'
+  const i = path.indexOf(' > ')
+  return i >= 0 ? path.slice(i + 3) : path
 }
 
 const openFull = (row: ChunkItem) => {
@@ -721,6 +737,16 @@ onMounted(loadAll)
 
 .cv-col--preview {
   width: 180px;
+}
+
+.cv-col--section {
+  width: 160px;
+}
+
+/* 小节路径用弱化色：它是辅助信息，不该和文章标题抢注意力 */
+.cv-section {
+  color: #666;
+  font-size: 0.78rem;
 }
 
 .cv-col--ops {
