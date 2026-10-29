@@ -6,6 +6,16 @@ const (
 	ModelTypeEmbedding int8 = 2 // 向量模型：打 /embeddings，全局只允许一条
 )
 
+// 向量维度边界。
+//
+// 下限 128：低于这个数的 embedding 基本没有区分度，多半是填错了。
+// 上限 4096：主流模型目前最大 3072（text-embedding-3-large），4096 留了余量；
+// 再大就要考虑 pgvector 的 HNSW 2000 维限制和存储成本，不该由用户随手填。
+const (
+	MinEmbeddingDimension = 128
+	MaxEmbeddingDimension = 4096
+)
+
 // AIModelConfig 大模型配置
 type AIModelConfig struct {
 	BaseEntity

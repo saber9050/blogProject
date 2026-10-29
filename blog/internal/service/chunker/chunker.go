@@ -12,8 +12,6 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
-
-	"blog/internal/model/entity"
 )
 
 // 默认参数。块大小取 800 字：一篇 5000 字的文章切成 6~7 块，
@@ -66,27 +64,6 @@ func DefaultParams() Params {
 		ChunkOverlap: DefaultChunkOverlap,
 		MinChunkSize: DefaultMinChunkSize,
 		StripHTML:    true,
-	}
-}
-
-// ParamsFromTemplate 用切分模板构造参数
-//
-// 模板管理界面已下线，这个函数仅为兼容 DDL 里保留的 template_id 列与
-// 后续可能的「按标题层级切分」实验保留；生产链路走 DefaultParams。
-func ParamsFromTemplate(t *entity.ChunkTemplate) Params {
-	if t == nil {
-		return Params{
-			ChunkSize:    DefaultChunkSize,
-			ChunkOverlap: DefaultChunkOverlap,
-			MinChunkSize: DefaultMinChunkSize,
-			StripHTML:    true,
-		}
-	}
-	return Params{
-		ChunkSize:    t.ChunkSize,
-		ChunkOverlap: t.ChunkOverlap,
-		MinChunkSize: t.MinChunkSize,
-		StripHTML:    t.StripHTML,
 	}
 }
 

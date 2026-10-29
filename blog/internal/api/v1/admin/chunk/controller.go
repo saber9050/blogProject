@@ -21,21 +21,12 @@ func NewController(chunkService chunk.Service) *Controller {
 
 // List 切分块明细分页
 //
-// template_id 与 article_id 都不传时返回全部块（按文章倒序），
-// 用于「最近切分情况」总览。
+// article_id 不传时返回全部块（按文章倒序），用于「最近切分情况」总览。
 func (ctrl *Controller) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-	var templateID, articleID uint
-	if v := c.Query("template_id"); v != "" {
-		n, err := strconv.ParseUint(v, 10, 32)
-		if err != nil {
-			response.BadRequest(c, "template_id 无效")
-			return
-		}
-		templateID = uint(n)
-	}
+	var articleID uint
 	if v := c.Query("article_id"); v != "" {
 		n, err := strconv.ParseUint(v, 10, 32)
 		if err != nil {
@@ -45,7 +36,7 @@ func (ctrl *Controller) List(c *gin.Context) {
 		articleID = uint(n)
 	}
 
-	result, err := ctrl.chunkService.List(templateID, articleID, c.Query("keyword"), page, pageSize)
+	result, err := ctrl.chunkService.List(articleID, c.Query("keyword"), page, pageSize)
 	if err != nil {
 		response.BizError(c, err)
 		return
@@ -53,9 +44,9 @@ func (ctrl *Controller) List(c *gin.Context) {
 	response.Success(c, result)
 }
 
-// Stat 聚合统计。?group_by=template|article
+// Stat 聚合统计（按文章分组）
 func (ctrl *Controller) Stat(c *gin.Context) {
-	result, err := ctrl.chunkService.Stat(c.Query("group_by"))
+	result, err := ctrl.chunkService.Stat()
 	if err != nil {
 		response.BizError(c, err)
 		return

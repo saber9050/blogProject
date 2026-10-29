@@ -155,12 +155,10 @@ func (s *vectorSchemaService) Reset() (*response.VectorResetResponse, error) {
 		if err := database.DropSchema(tx); err != nil {
 			return fmt.Errorf("删除向量表失败: %w", err)
 		}
-		// 向量字段归零。vector_template_id 也清掉——它指向的模板已经不再
-		// 对应该文章的任何块，留着会误导「这篇文章是用 X 模板切的」
+		// 向量字段归零
 		res := tx.Model(&entity.Article{}).Where("vector_status <> ?", entity.VectorStatusNone).
 			Updates(map[string]interface{}{
 				"vector_status":      entity.VectorStatusNone,
-				"vector_template_id": 0,
 				"vector_chunk_count": 0,
 				"vector_error":       "",
 				"vectorized_at":      nil,

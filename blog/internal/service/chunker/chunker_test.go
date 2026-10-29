@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
-
-	"blog/internal/model/entity"
 )
 
 // mustSplit 测试辅助：切分并断言无错误
@@ -387,20 +385,13 @@ func TestParamsDefaults(t *testing.T) {
 	}
 }
 
-// TestParamsFromTemplate 模板参数能正确映射，nil 模板走默认值。
-func TestParamsFromTemplate(t *testing.T) {
-	tpl := &entity.ChunkTemplate{
-		ChunkSize: 600, ChunkOverlap: 60, MinChunkSize: 80, StripHTML: false,
-	}
-	got := ParamsFromTemplate(tpl)
-	want := Params{ChunkSize: 600, ChunkOverlap: 60, MinChunkSize: 80, StripHTML: false}
+// TestDefaultParams 生产参数已固化，改这三个数会影响全部已切好的块，
+// 用例在这里钉死，改常量时必须同步改测试——等于强制停下来想一次。
+func TestDefaultParams(t *testing.T) {
+	got := DefaultParams()
+	want := Params{ChunkSize: 800, ChunkOverlap: 80, MinChunkSize: 100, StripHTML: true}
 	if got != want {
-		t.Fatalf("期望 %+v，实际 %+v", want, got)
-	}
-
-	got = ParamsFromTemplate(nil)
-	if got.ChunkSize != DefaultChunkSize || !got.StripHTML {
-		t.Fatalf("nil 模板应走默认值，实际 %+v", got)
+		t.Fatalf("默认参数变化了：期望 %+v，实际 %+v", want, got)
 	}
 }
 

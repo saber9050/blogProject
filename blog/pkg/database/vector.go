@@ -64,13 +64,19 @@ func EnsureSchema(db *gorm.DB, dim int) error {
 		return err
 	}
 
+	// 先清掉模板概念的遗留结构，再判断表是否存在。
+	// 顺序不能反：只删表不删列的话，重建出来的表仍然带着 template_id。
+	cleanupLegacyTemplateSchema(db)
+
 	current, exists, err := CurrentDimension(db)
 	if err != nil {
 		return err
 	}
 	if exists {
 		if current == dim {
-			return nil
+			// 索引也要在这个分支补：表可能是更早的版本建的，缺后来新增的索引。
+			// CREATE INDEX IF NOT EXISTS 是幂等的，每次启动都跑一遍代价可忽略。
+			return ensureChunkIndexes(db)
 		}
 		var chunks int64
 		if err := db.Table(chunkTable).Count(&chunks).Error; err != nil {
@@ -147,7 +153,7 @@ func ensureVectorExtension(db *gorm.DB) error {
 
 // ensureChunkTable 按 dim 建表。
 //
-// 索引说明：只建 article_id / template_id 的普通索引，**不建 HNSW**。
+// 索引说明：只建 article_id 与 (article_id, chunk_index) 两个普通索引，**不建 HNSW**。
 // 本模块没有检索出口，HNSW 只会在每次 INSERT/DELETE 时维护，纯开销；
 // 等做语义检索时再执行
 //
@@ -160,7 +166,6 @@ func ensureChunkTable(db *gorm.DB, dim int) error {
 		CREATE TABLE IF NOT EXISTS %s (
 			id              bigserial PRIMARY KEY,
 			article_id      bigint      NOT NULL,
-			template_id     bigint      NOT NULL,
 			chunk_index     integer     NOT NULL,
 			content         text        NOT NULL,
 			char_count      integer     NOT NULL DEFAULT 0,
@@ -171,11 +176,18 @@ func ensureChunkTable(db *gorm.DB, dim int) error {
 	if err := db.Exec(ddl).Error; err != nil {
 		return fmt.Errorf("创建向量表失败: %w", err)
 	}
+	return ensureChunkIndexes(db)
+}
 
+// ensureChunkIndexes 幂等地建表索引。
+//
+// 单独拆出来是因为「表已存在且维度一致」那条分支也要跑：表可能是更早的版本建的，
+// 缺后来新增的索引，而 EnsureSchema 在那条分支上原本直接 return，永远补不上。
+func ensureChunkIndexes(db *gorm.DB) error {
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_article_chunks_article ON ` + chunkTable + ` (article_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_article_chunks_template ON ` + chunkTable + ` (template_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_article_chunks_article_template ON ` + chunkTable + ` (article_id, template_id)`,
+		// 明细列表按「文章倒序 + 块序号正序」分页，这个组合索引直接覆盖排序
+		`CREATE INDEX IF NOT EXISTS idx_article_chunks_article_index ON ` + chunkTable + ` (article_id, chunk_index)`,
 	}
 	for _, idx := range indexes {
 		if err := db.Exec(idx).Error; err != nil {
@@ -183,4 +195,18 @@ func ensureChunkTable(db *gorm.DB, dim int) error {
 		}
 	}
 	return nil
+}
+
+// cleanupLegacyTemplateSchema 清掉「切分模板」下线后遗留的结构。
+//
+// 模板概念已在 2026-10-29 移除，但已有库里还留着 article_chunks.template_id 列和
+// chunk_templates 表。EnsureSchema 用的是 CREATE TABLE IF NOT EXISTS，改 DDL
+// 影响不到已经存在的表——而 template_id 是 NOT NULL 且没有默认值，代码又不再写它，
+// 不清理的话下一次插入块会直接报 not-null violation。
+//
+// 失败只忽略不报错：表可能本来就不存在，或者当前库用户没有 DDL 权限；
+// 真要出问题会在插入时暴露，不必让整个启动流程卡在「清理历史结构」这一步。
+func cleanupLegacyTemplateSchema(db *gorm.DB) {
+	_ = db.Exec("ALTER TABLE " + chunkTable + " DROP COLUMN IF EXISTS template_id").Error
+	_ = db.Exec("DROP TABLE IF EXISTS chunk_templates").Error
 }

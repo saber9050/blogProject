@@ -12,18 +12,15 @@ const chunkTable = "article_chunks"
 
 // selectChunkRow 列表与详情共用的列。
 //
-// join 两张表只为带出标题和模板名：块单独看只有 article_id / template_id，
-// 界面上必须显示人看得懂的标题。articles 的 join 带 deleted_at IS NULL，
-// 否则软删除的文章块会让列表出现「标题为空的孤儿行」。
+// join articles 只为带出标题：块单独看只有 article_id，界面上必须显示人看得懂的标题。
+// join 条件带 deleted_at IS NULL，否则软删除文章的块会让列表出现「标题为空的孤儿行」。
 const selectChunkRow = `
 	SELECT c.id, c.article_id, COALESCE(a.title, '') AS article_title,
-	       c.template_id, COALESCE(t.name, '') AS template_name,
 	       c.chunk_index, c.char_count, c.content,
 	       COALESCE(c.embedding_model, '') AS embedding_model,
 	       c.created_at
 	FROM ` + chunkTable + ` c
-	LEFT JOIN articles a        ON a.id = c.article_id AND a.deleted_at IS NULL
-	LEFT JOIN chunk_templates t ON t.id = c.template_id`
+	LEFT JOIN articles a ON a.id = c.article_id AND a.deleted_at IS NULL`
 
 type articleChunkRepository struct {
 	db *gorm.DB
@@ -123,31 +120,6 @@ func (r *articleChunkRepository) Summary() (int64, int64, error) {
 	return row.ChunkTotal, row.ArticleTotal, err
 }
 
-// StatByTemplate 按模板聚合。
-//
-// 用 chunk_templates LEFT JOIN article_chunks（而不是反过来）：
-// 这样「建了但还没用过的模板」也会出现，count 为 0。
-// 统计视图里看不到自己刚建的模板，比看到一个 0 更让人困惑。
-func (r *articleChunkRepository) StatByTemplate() ([]*TemplateStatRow, error) {
-	ok, err := r.TableReady()
-	if err != nil || !ok {
-		return nil, err
-	}
-
-	var rows []*TemplateStatRow
-	err = r.db.Raw(`
-		SELECT t.id AS template_id, t.name AS template_name, t.status,
-		       count(DISTINCT c.article_id) AS article_count,
-		       count(c.id)                  AS chunk_count,
-		       COALESCE(AVG(c.char_count), 0)::float8 AS avg_chars,
-		       max(c.created_at)            AS last_chunk_at
-		FROM chunk_templates t
-		LEFT JOIN ` + chunkTable + ` c ON c.template_id = t.id
-		GROUP BY t.id, t.name, t.status
-		ORDER BY chunk_count DESC, t.id ASC`).Scan(&rows).Error
-	return rows, err
-}
-
 // StatByArticle 按文章聚合
 func (r *articleChunkRepository) StatByArticle() ([]*ArticleStatRow, error) {
 	ok, err := r.TableReady()
@@ -158,14 +130,12 @@ func (r *articleChunkRepository) StatByArticle() ([]*ArticleStatRow, error) {
 	var rows []*ArticleStatRow
 	err = r.db.Raw(`
 		SELECT a.id AS article_id, a.title AS article_title,
-		       c.template_id, COALESCE(t.name, '') AS template_name,
 		       count(c.id) AS chunk_count,
 		       COALESCE(AVG(c.char_count), 0)::float8 AS avg_chars,
 		       max(c.created_at) AS last_chunk_at
 		FROM ` + chunkTable + ` c
-		JOIN articles a             ON a.id = c.article_id AND a.deleted_at IS NULL
-		LEFT JOIN chunk_templates t ON t.id = c.template_id
-		GROUP BY a.id, a.title, c.template_id, t.name
+		JOIN articles a ON a.id = c.article_id AND a.deleted_at IS NULL
+		GROUP BY a.id, a.title
 		ORDER BY chunk_count DESC, a.id DESC`).Scan(&rows).Error
 	return rows, err
 }
@@ -185,10 +155,6 @@ func buildWhere(q Query) (string, []interface{}) {
 	var args []interface{}
 	sb.WriteString(" WHERE 1=1")
 
-	if q.TemplateID > 0 {
-		sb.WriteString(" AND c.template_id = ?")
-		args = append(args, q.TemplateID)
-	}
 	if q.ArticleID > 0 {
 		sb.WriteString(" AND c.article_id = ?")
 		args = append(args, q.ArticleID)

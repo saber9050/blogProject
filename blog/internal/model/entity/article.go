@@ -32,11 +32,10 @@ type Article struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 
 	// ===== 向量化相关（模块 02）=====
-	// 这五个字段让「是否向量化」有真实粒度：
+	// 这四个字段让「是否向量化」有真实粒度：
 	//   - vector_status 区分排队/处理/完成/失败
 	//   - vectorized_at 与 updated_at 一比就知道正文改过没（不一致 = 待更新）
 	VectorStatus     int8       `gorm:"type:smallint;not null;default:0;comment:向量化状态:0未处理,1排队中,2处理中,3已完成,4失败" json:"vector_status"`
-	VectorTemplateID uint       `gorm:"not null;default:0;comment:最近一次向量化使用的模板id" json:"vector_template_id"`
 	VectorChunkCount int        `gorm:"not null;default:0;comment:切分块数" json:"vector_chunk_count"`
 	VectorError      string     `gorm:"type:varchar(255);comment:失败原因(脱敏后)" json:"vector_error"`
 	VectorizedAt     *time.Time `gorm:"comment:向量化完成时间" json:"vectorized_at"`

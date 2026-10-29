@@ -8,9 +8,9 @@ import (
 
 // ArticleChunk 文章切分块（含向量）
 //
-// 单表存储，用 template_id 区分模板。不分表的原因：
-// 只允许一个向量模型 ⇒ 维度固定 ⇒ 分表唯一的好处（不同表不同维度）不存在，
-// 而「按文章查」在分表方案下要跨 N 张表 UNION 分页，成本远高于收益。
+// 单表存储，不按模板分表：只允许一个向量模型 ⇒ 维度固定 ⇒ 分表唯一的好处
+// （不同表不同维度）不存在，而「按文章查」在分表方案下要跨 N 张表 UNION 分页，
+// 成本远高于收益。切分参数也已固化为 chunker.DefaultParams，没有模板概念。
 //
 // 这张表**不进 entity.AllModels()**，由 pkg/database/vector.go 的 EnsureSchema 手写 DDL：
 // vector(n) 的维度来自运行时配置（ai_model_configs.dimension），AutoMigrate 表达不了；
@@ -21,7 +21,6 @@ import (
 type ArticleChunk struct {
 	ID             uint   `gorm:"primaryKey" json:"id"`
 	ArticleID      uint   `gorm:"not null;index:idx_article_chunks_article" json:"article_id"`
-	TemplateID     uint   `gorm:"not null;index:idx_article_chunks_template" json:"template_id"`
 	ChunkIndex     int    `gorm:"not null;comment:块序号,从0开始" json:"chunk_index"`
 	Content        string `gorm:"type:text;not null;comment:切分后的原文" json:"content"`
 	CharCount      int    `gorm:"not null;default:0;comment:字符数" json:"char_count"`

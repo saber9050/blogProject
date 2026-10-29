@@ -10,7 +10,6 @@ import (
 	articleChunkRepo "blog/internal/repository/articlechunk"
 	"blog/internal/repository/auth"
 	"blog/internal/repository/category"
-	chunkTplRepo "blog/internal/repository/chunktemplate"
 	commentRepo "blog/internal/repository/comment"
 	llmconfigRepo "blog/internal/repository/llmconfig"
 	"blog/internal/repository/tag"
@@ -20,7 +19,6 @@ import (
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
 	chunkSvc "blog/internal/service/chunk"
-	chunkTplSvc "blog/internal/service/chunktemplate"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
 	llmconfigSvc "blog/internal/service/llmconfig"
@@ -236,7 +234,6 @@ func (a *App) initDependencies() {
 	tRepo := tag.NewTagRepository(a.pgDB)
 	aboutRepo := about.NewAboutRepository(a.pgDB)
 	llmCfgRepo := llmconfigRepo.NewLLMConfigRepository(a.pgDB)
-	ctRepo := chunkTplRepo.NewChunkTemplateRepository(a.pgDB)
 	acRepo := articleChunkRepo.NewArticleChunkRepository(a.pgDB)
 
 	// 创建 Service
@@ -250,7 +247,6 @@ func (a *App) initDependencies() {
 	catSvc := categorySvc.NewCategoryService(catRepo)
 	tSvc := tagSvc.NewTagService(tRepo)
 	aboutSvc := aboutSvc.NewAboutService(aboutRepo, a.minioClient, uRepo)
-	ctSvc := chunkTplSvc.NewChunkTemplateService(ctRepo)
 	// 向量表维护服务在 initDatabase 里就建好了（启动时要先自检一次），这里复用同一个实例：
 	// llmconfig 靠它实现「新建向量模型时按维度建表」
 	llmCfgSvc := llmconfigSvc.NewLLMConfigService(llmCfgRepo, a.vectorSchemaSvc)
@@ -267,7 +263,7 @@ func (a *App) initDependencies() {
 
 	// 创建 Router
 	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc, lSvc, llmCfgSvc,
-		ctSvc, a.vectorSchemaSvc, vecSvc, ckSvc)
+		a.vectorSchemaSvc, vecSvc, ckSvc)
 }
 
 // initRouter 初始化路由

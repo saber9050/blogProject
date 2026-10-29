@@ -5,7 +5,6 @@ import (
 	adminArticle "blog/internal/api/v1/admin/article"
 	adminCategory "blog/internal/api/v1/admin/category"
 	adminChunk "blog/internal/api/v1/admin/chunk"
-	adminChunkTpl "blog/internal/api/v1/admin/chunktemplate"
 	adminComment "blog/internal/api/v1/admin/comment"
 	adminLLMConfig "blog/internal/api/v1/admin/llmconfig"
 	adminTag "blog/internal/api/v1/admin/tag"
@@ -23,7 +22,6 @@ import (
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
 	chunkSvc "blog/internal/service/chunk"
-	chunkTplSvc "blog/internal/service/chunktemplate"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
 	llmconfigSvc "blog/internal/service/llmconfig"
@@ -46,7 +44,6 @@ type Router struct {
 	adminTagCtrl      *adminTag.TagController
 	adminCommentCtrl  *adminComment.CommentController
 	adminLLMCtrl      *adminLLMConfig.Controller
-	adminChunkTplCtrl *adminChunkTpl.Controller
 	adminVectorCtrl   *adminVector.Controller
 	adminChunkCtrl    *adminChunk.Controller
 	commentCtrl       *comment.Controller
@@ -67,7 +64,6 @@ func NewRouter(
 	aboutService aboutSvc.AboutService,
 	llmService llmSvc.LLMService,
 	llmConfigService llmconfigSvc.Service,
-	chunkTplService chunkTplSvc.Service,
 	vectorService vectorSvc.Service,
 	vectorizeService vectorizeSvc.Service,
 	chunkService chunkSvc.Service,
@@ -82,7 +78,6 @@ func NewRouter(
 		adminTagCtrl:      adminTag.NewTagController(tagService),
 		adminCommentCtrl:  adminComment.NewCommentController(commentSvc),
 		adminLLMCtrl:      adminLLMConfig.NewController(llmConfigService),
-		adminChunkTplCtrl: adminChunkTpl.NewController(chunkTplService),
 		adminVectorCtrl:   adminVector.NewController(vectorService),
 		adminChunkCtrl:    adminChunk.NewController(chunkService),
 		commentCtrl:       comment.NewController(commentSvc),
@@ -149,7 +144,6 @@ func (r *Router) Setup(engine *gin.Engine) {
 			r.adminTagCtrl.RegisterRoutes(adminGroup)
 			r.adminCommentCtrl.RegisterRoutes(adminGroup)
 			r.adminLLMCtrl.RegisterRoutes(adminGroup)
-			r.adminChunkTplCtrl.RegisterRoutes(adminGroup)
 			r.adminVectorCtrl.RegisterRoutes(adminGroup)
 			r.adminChunkCtrl.RegisterRoutes(adminGroup)
 		}

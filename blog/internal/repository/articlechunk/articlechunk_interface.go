@@ -8,16 +8,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// ChunkRow 切分块 + join 出来的文章标题与模板名。
+// ChunkRow 切分块 + join 出来的文章标题。
 //
-// 用独立的行结构而不是在 entity.ArticleChunk 上加字段：那两个字段不属于块本身，
+// 用独立的行结构而不是在 entity.ArticleChunk 上加字段：标题不属于块本身，
 // 只是查询时为了少一次往返带出来的。
 type ChunkRow struct {
 	ID             uint
 	ArticleID      uint
 	ArticleTitle   string
-	TemplateID     uint
-	TemplateName   string
 	ChunkIndex     int
 	CharCount      int
 	Content        string
@@ -27,30 +25,16 @@ type ChunkRow struct {
 
 // Query 列表查询条件
 type Query struct {
-	TemplateID uint
-	ArticleID  uint
-	Keyword    string // 在 content 里模糊匹配
-	Page       int
-	PageSize   int
-}
-
-// TemplateStatRow 按模板聚合的原始行
-type TemplateStatRow struct {
-	TemplateID   uint
-	TemplateName string
-	Status       int8
-	ArticleCount int64
-	ChunkCount   int64
-	AvgChars     float64
-	LastChunkAt  *time.Time
+	ArticleID uint
+	Keyword   string // 在 content 里模糊匹配
+	Page      int
+	PageSize  int
 }
 
 // ArticleStatRow 按文章聚合的原始行
 type ArticleStatRow struct {
 	ArticleID    uint
 	ArticleTitle string
-	TemplateID   uint
-	TemplateName string
 	ChunkCount   int64
 	AvgChars     float64
 	LastChunkAt  *time.Time
@@ -76,8 +60,6 @@ type Repository interface {
 	FindByID(id uint) (*ChunkRow, error)
 	// Summary 总块数与涉及文章数
 	Summary() (chunkTotal int64, articleTotal int64, err error)
-	// StatByTemplate 按模板聚合。未被使用的模板也会出现（count 为 0）
-	StatByTemplate() ([]*TemplateStatRow, error)
 	// StatByArticle 按文章聚合
 	StatByArticle() ([]*ArticleStatRow, error)
 	// TableReady 向量表是否已创建

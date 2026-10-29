@@ -39,7 +39,7 @@ func NewChunkService(db *gorm.DB, r repo.Repository) Service {
 
 // List 分页查询
 func (s *chunkService) List(
-	templateID, articleID uint, keyword string, page, pageSize int,
+	articleID uint, keyword string, page, pageSize int,
 ) (*response.ChunkListResponse, error) {
 	if page <= 0 {
 		page = 1
@@ -52,11 +52,10 @@ func (s *chunkService) List(
 	}
 
 	rows, total, err := s.repo.List(repo.Query{
-		TemplateID: templateID,
-		ArticleID:  articleID,
-		Keyword:    keyword,
-		Page:       page,
-		PageSize:   pageSize,
+		ArticleID: articleID,
+		Keyword:   keyword,
+		Page:      page,
+		PageSize:  pageSize,
 	})
 	if err != nil {
 		logger.Error("查询切分块失败", zap.Error(err))
@@ -88,74 +87,40 @@ func (s *chunkService) Get(id uint) (*response.ChunkItem, error) {
 	return toItem(row, false), nil
 }
 
-// Stat 聚合统计
-func (s *chunkService) Stat(groupBy string) (*response.ChunkStatResponse, error) {
-	if groupBy == "" {
-		groupBy = "template"
-	}
-	if groupBy != "template" && groupBy != "article" {
-		return nil, errors.New(errors.CodeBadRequest, "group_by 只能是 template 或 article")
-	}
-
+// Stat 聚合统计（只有「按文章」一个维度）
+func (s *chunkService) Stat() (*response.ChunkStatResponse, error) {
 	chunkTotal, articleTotal, err := s.repo.Summary()
 	if err != nil {
 		logger.Error("统计切分块总数失败", zap.Error(err))
 		return nil, errors.NewWithErr(errors.CodeInternalError, "统计切分数据失败", err)
 	}
 
-	out := &response.ChunkStatResponse{GroupBy: groupBy}
+	out := &response.ChunkStatResponse{}
 	out.Summary = response.ChunkStatSummary{
 		ChunkTotal:   chunkTotal,
 		ArticleTotal: articleTotal,
 	}
-	if articleTotal > 0 {
-		out.Summary.AvgChunkPerArticle = round1(float64(chunkTotal) / float64(articleTotal))
-	}
 
-	switch groupBy {
-	case "template":
-		rows, err := s.repo.StatByTemplate()
-		if err != nil {
-			logger.Error("按模板统计失败", zap.Error(err))
-			return nil, errors.NewWithErr(errors.CodeInternalError, "按模板统计失败", err)
-		}
-		list := make([]*response.ChunkTemplateStat, 0, len(rows))
-		for _, r := range rows {
-			list = append(list, &response.ChunkTemplateStat{
-				TemplateID:     r.TemplateID,
-				TemplateName:   r.TemplateName,
-				TemplateStatus: r.Status,
-				ArticleCount:   r.ArticleCount,
-				ChunkCount:     r.ChunkCount,
-				AvgChars:       int(r.AvgChars + 0.5),
-				LastChunkAt:    formatTime(r.LastChunkAt),
-			})
-		}
-		out.List = list
-	case "article":
-		rows, err := s.repo.StatByArticle()
-		if err != nil {
-			logger.Error("按文章统计失败", zap.Error(err))
-			return nil, errors.NewWithErr(errors.CodeInternalError, "按文章统计失败", err)
-		}
-		list := make([]*response.ChunkArticleStat, 0, len(rows))
-		for _, r := range rows {
-			list = append(list, &response.ChunkArticleStat{
-				ArticleID:    r.ArticleID,
-				ArticleTitle: r.ArticleTitle,
-				TemplateID:   r.TemplateID,
-				TemplateName: r.TemplateName,
-				ChunkCount:   r.ChunkCount,
-				AvgChars:     int(r.AvgChars + 0.5),
-				LastChunkAt:  formatTime(r.LastChunkAt),
-			})
-		}
-		out.List = list
+	rows, err := s.repo.StatByArticle()
+	if err != nil {
+		logger.Error("按文章统计失败", zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "按文章统计失败", err)
 	}
+	list := make([]*response.ChunkArticleStat, 0, len(rows))
+	for _, r := range rows {
+		list = append(list, &response.ChunkArticleStat{
+			ArticleID:    r.ArticleID,
+			ArticleTitle: r.ArticleTitle,
+			ChunkCount:   r.ChunkCount,
+			AvgChars:     int(r.AvgChars + 0.5),
+			LastChunkAt:  formatTime(r.LastChunkAt),
+		})
+	}
+	out.List = list
 	return out, nil
 }
 
-// errStateConflict 删除时文章正在向量化，本次跳过
+// errStateConflict 删除时该文章正在向量化，本次跳过
 var errStateConflict = stderrors.New("该文章正在向量化")
 
 // DeleteArticles 批量删除多个文章的向量
@@ -296,8 +261,6 @@ func toItem(r *repo.ChunkRow, truncate bool) *response.ChunkItem {
 		ID:             r.ID,
 		ArticleID:      r.ArticleID,
 		ArticleTitle:   r.ArticleTitle,
-		TemplateID:     r.TemplateID,
-		TemplateName:   r.TemplateName,
 		ChunkIndex:     r.ChunkIndex,
 		CharCount:      r.CharCount,
 		Content:        r.Content,
@@ -319,9 +282,4 @@ func formatTime(t *time.Time) string {
 		return ""
 	}
 	return t.Format(time.RFC3339)
-}
-
-// round1 保留一位小数
-func round1(f float64) float64 {
-	return float64(int(f*10+0.5)) / 10
 }

@@ -5,8 +5,6 @@ type ChunkItem struct {
 	ID               uint   `json:"id"`
 	ArticleID        uint   `json:"article_id"`
 	ArticleTitle     string `json:"article_title"`
-	TemplateID       uint   `json:"template_id"`
-	TemplateName     string `json:"template_name"`
 	ChunkIndex       int    `json:"chunk_index"`
 	CharCount        int    `json:"char_count"`
 	Content          string `json:"content"`
@@ -23,30 +21,19 @@ type ChunkListResponse struct {
 	List     []*ChunkItem `json:"list"`
 }
 
-// ChunkStatSummary 切分统计概览（页面顶部三张卡片）
+// ChunkStatSummary 切分统计概览（页面顶部卡片）
 type ChunkStatSummary struct {
-	ChunkTotal         int64   `json:"chunk_total"`
-	ArticleTotal       int64   `json:"article_total"`
-	AvgChunkPerArticle float64 `json:"avg_chunk_per_article"`
-}
-
-// ChunkTemplateStat 按模板聚合
-type ChunkTemplateStat struct {
-	TemplateID     uint   `json:"template_id"`
-	TemplateName   string `json:"template_name"`
-	TemplateStatus int8   `json:"template_status"`
-	ArticleCount   int64  `json:"article_count"`
-	ChunkCount     int64  `json:"chunk_count"`
-	AvgChars       int    `json:"avg_chars"`
-	LastChunkAt    string `json:"last_chunk_at"`
+	ChunkTotal   int64 `json:"chunk_total"`
+	ArticleTotal int64 `json:"article_total"`
 }
 
 // ChunkArticleStat 按文章聚合
+//
+// 只有「按文章」一个维度：模板概念已下线，切分参数全局固定，
+// 按模板分组的结果只剩一行「默认参数」，没有信息量。
 type ChunkArticleStat struct {
 	ArticleID    uint   `json:"article_id"`
 	ArticleTitle string `json:"article_title"`
-	TemplateID   uint   `json:"template_id"`
-	TemplateName string `json:"template_name"`
 	ChunkCount   int64  `json:"chunk_count"`
 	AvgChars     int    `json:"avg_chars"`
 	LastChunkAt  string `json:"last_chunk_at"`
@@ -54,7 +41,6 @@ type ChunkArticleStat struct {
 
 // ChunkStatResponse 切分统计
 type ChunkStatResponse struct {
-	GroupBy string           `json:"group_by"` // template / article
 	Summary ChunkStatSummary `json:"summary"`
 	List    interface{}      `json:"list"`
 }

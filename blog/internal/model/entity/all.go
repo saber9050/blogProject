@@ -30,9 +30,6 @@ func AllModels() []interface{} {
 
 		// 大模型配置
 		&AIModelConfig{},
-
-		// 文章切分模板（article_chunks 见上，不在此列）
-		&ChunkTemplate{},
 	}
 }
 

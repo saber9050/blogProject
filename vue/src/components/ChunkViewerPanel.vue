@@ -293,7 +293,7 @@ const loadSchema = async () => {
 // summary 是全局的，不受筛选影响，所以单独从 stat 接口取一次
 const loadSummary = async () => {
   try {
-    const res = await api.get('/admin/chunks/stat', { params: { group_by: 'article' } })
+    const res = await api.get('/admin/chunks/stat')
     const s = res.data?.data?.summary || {}
     summary.chunk_total = s.chunk_total || 0
     summary.article_total = s.article_total || 0
@@ -330,7 +330,7 @@ const loadChunks = async (p = 1) => {
 
 const loadStat = async () => {
   try {
-    const res = await api.get('/admin/chunks/stat', { params: { group_by: 'article' } })
+    const res = await api.get('/admin/chunks/stat')
     artStats.value = res.data?.data?.list || []
   } catch (err: any) {
     artStats.value = []
@@ -384,7 +384,7 @@ const openDeleteArticles = async () => {
   delSelected.value = []
   delLoading.value = true
   try {
-    const res = await api.get('/admin/chunks/stat', { params: { group_by: 'article' } })
+    const res = await api.get('/admin/chunks/stat')
     delOptions.value = res.data?.data?.list || []
   } catch (err: any) {
     delOptions.value = []
