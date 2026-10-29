@@ -12,6 +12,10 @@ type Service interface {
 	Get(id uint) (*response.ChunkItem, error)
 	// Stat 聚合统计（按文章分组）
 	Stat() (*response.ChunkStatResponse, error)
+	// Section 取某文章某小节的完整内容，块之间的重叠会被裁掉。
+	//
+	// 这是父子块的「父块」：检索命中其中一个块后，调用它把整节交给模型。
+	Section(articleID uint, sectionIndex int) (*response.ChunkSectionResponse, error)
 	// DeleteArticles 批量删除多篇文章的全部块，并把这些文章的向量状态重置为「未处理」。
 	//
 	// 逐篇独立事务：勾选 10 篇里有 1 篇正在向量化时，跳过它、其余照删，

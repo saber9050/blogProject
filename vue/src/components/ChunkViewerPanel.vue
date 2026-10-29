@@ -82,7 +82,10 @@
                 <span class="cv-muted">#{{ c.article_id }}</span> {{ c.article_title || '（已删除）' }}
               </td>
               <td class="cv-ellipsis cv-section" :title="c.heading_path">
-                {{ sectionLabel(c.heading_path) }}
+                <button v-if="c.heading_path" class="cv-section__btn" @click="openSection(c)">
+                  {{ sectionLabel(c.heading_path) }}
+                </button>
+                <span v-else>—</span>
               </td>
               <td class="cv-mono">{{ c.chunk_index }}</td>            <td class="cv-mono">{{ c.char_count }}</td>
               <td class="cv-preview">
@@ -156,6 +159,28 @@
     </template>
 
     <Teleport to="body">
+      <!-- 整节：同一小节的块拼回原文 -->
+      <div v-if="sectionView" class="modal-overlay" @click.self="sectionView = null">
+        <div class="modal modal--wide" role="dialog" aria-modal="true">
+          <h3 class="modal__title">
+            {{ sectionView.heading_path || sectionView.article_title }}
+            <span v-if="!sectionLoading" class="cv-muted" style="font-weight: 400">
+              · {{ sectionView.chunk_count }} 块 / {{ sectionView.char_count }} 字
+            </span>
+          </h3>
+          <div class="modal__body">
+            <div v-if="sectionLoading" class="cv-empty">加载中…</div>
+            <pre v-else class="cv-full">{{ sectionView.content }}</pre>
+          </div>
+          <div class="modal__footer">
+            <span class="cv-section__hint">
+              同一小节的块拼回的整节，块之间的重叠已裁掉
+            </span>
+            <button class="btn" @click="sectionView = null">关闭</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 全文：white-space: pre-wrap 保留换行，切分后的换行就是段落边界 -->
       <div v-if="fullChunk" class="modal-overlay" @click.self="fullChunk = null">
         <div class="modal" role="dialog" aria-modal="true">
@@ -248,6 +273,17 @@ interface ChunkItem {
   content: string
   content_truncated: boolean
   created_at: string
+}
+
+// 一个小节的完整内容（父子块里的父块）
+interface SectionView {
+  article_id: number
+  article_title: string
+  section_index: number
+  heading_path: string
+  chunk_count: number
+  content: string
+  char_count: number
 }
 
 interface VectorSchema {
@@ -367,6 +403,39 @@ const sectionLabel = (path: string) => {
   if (!path) return '—'
   const i = path.indexOf(' > ')
   return i >= 0 ? path.slice(i + 3) : path
+}
+
+/**
+ * 打开整节：把同一小节的块拼回原文。
+ *
+ * 这是父子块方案里「大块」的样子——检索用小块的向量命中，再把整节交给模型。
+ * 现在没有检索出口，所以它同时是「切分结果能不能拼回通顺原文」的验证入口。
+ */
+const sectionView = ref<SectionView | null>(null)
+const sectionLoading = ref(false)
+
+const openSection = async (row: ChunkItem) => {
+  sectionLoading.value = true
+  sectionView.value = {
+    article_id: row.article_id,
+    article_title: row.article_title,
+    section_index: row.section_index,
+    heading_path: row.heading_path,
+    chunk_count: 0,
+    content: '',
+    char_count: 0
+  }
+  try {
+    const res = await api.get('/admin/chunks/section', {
+      params: { article_id: row.article_id, section_index: row.section_index }
+    })
+    sectionView.value = res.data?.data || null
+  } catch (err: any) {
+    showToast(errMsg(err, '加载整节失败'), 'error')
+    sectionView.value = null
+  } finally {
+    sectionLoading.value = false
+  }
 }
 
 const openFull = (row: ChunkItem) => {
@@ -747,6 +816,31 @@ onMounted(loadAll)
 .cv-section {
   color: #666;
   font-size: 0.78rem;
+}
+
+/* 做成看起来像链接的按钮：能点开整节，但不在表格里抢视觉 */
+.cv-section__btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #1677ff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-section__btn:hover {
+  text-decoration: underline;
+}
+
+.cv-section__hint {
+  margin-right: auto;
+  font-size: 0.76rem;
+  color: #999;
 }
 
 .cv-col--ops {

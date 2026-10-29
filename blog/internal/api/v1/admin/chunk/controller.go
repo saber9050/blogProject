@@ -70,6 +70,30 @@ func (ctrl *Controller) Get(c *gin.Context) {
 	response.Success(c, result)
 }
 
+// Section 某文章某小节的完整内容（父子块里的「父块」）
+//
+// 参数用 query 而不是路径段：article_id 与 section_index 是二元组，
+// 塞进路径会变成 /chunks/:a/sections/:b，和现有的 /chunks/:id 更容易撞。
+func (ctrl *Controller) Section(c *gin.Context) {
+	aid, err := strconv.ParseUint(c.Query("article_id"), 10, 32)
+	if err != nil || aid == 0 {
+		response.BadRequest(c, "article_id 无效")
+		return
+	}
+	si, err := strconv.Atoi(c.DefaultQuery("section_index", "0"))
+	if err != nil || si < 0 {
+		response.BadRequest(c, "section_index 无效")
+		return
+	}
+
+	result, err := ctrl.chunkService.Section(uint(aid), si)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 // DeleteArticles 批量删除文章向量
 //
 // 只有整篇删除，没有单块删除：块是「整篇重新切分、整体替换」的产物，

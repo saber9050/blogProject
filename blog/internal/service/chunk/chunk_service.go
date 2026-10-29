@@ -2,7 +2,9 @@ package chunk
 
 import (
 	stderrors "errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"blog/internal/model/dto/response"
 	"blog/internal/model/entity"
@@ -253,6 +255,95 @@ func uniquePositive(ids []uint) []uint {
 		out = append(out, id)
 	}
 	return out
+}
+
+// sectionOverlapCandidates 拼接整节时尝试裁掉的最大重叠长度。
+// 比默认的 80 略大：块尾经过 TrimSpace，实际重叠会少几个字，留点余量才能对上。
+const sectionOverlapCandidates = 120
+
+// Section 取某文章某小节的完整内容（父子块里的「父块」）
+//
+// 检索用小块的向量命中，再把整节交给模型——小块够准，整节够全。
+// 库里存的是切好的块（每块都带标题路径前缀、块间还有重叠），所以拼回来要做两件事：
+// 去掉每块的路径前缀、裁掉相邻块的重叠部分。
+func (s *chunkService) Section(articleID uint, sectionIndex int) (*response.ChunkSectionResponse, error) {
+	rows, err := s.repo.ListBySection(articleID, sectionIndex)
+	if err != nil {
+		logger.Error("查询小节失败", zap.Uint("article_id", articleID),
+			zap.Int("section_index", sectionIndex), zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询小节失败", err)
+	}
+	if len(rows) == 0 {
+		return nil, errors.New(errors.CodeNotFound, "该小节不存在，可能已被重新切分或删除")
+	}
+
+	path := rows[0].HeadingPath
+	parts := make([]string, 0, len(rows))
+	for _, r := range rows {
+		parts = append(parts, stripHeadingPath(r.Content, path))
+	}
+
+	content := joinSectionChunks(parts)
+	if path != "" {
+		content = path + "\n\n" + content
+	}
+
+	return &response.ChunkSectionResponse{
+		ArticleID:    articleID,
+		ArticleTitle: rows[0].ArticleTitle,
+		SectionIndex: sectionIndex,
+		HeadingPath:  path,
+		ChunkCount:   len(rows),
+		Content:      content,
+		CharCount:    utf8.RuneCountInString(content),
+	}, nil
+}
+
+// stripHeadingPath 去掉块开头的标题路径前缀
+func stripHeadingPath(content, path string) string {
+	if path == "" {
+		return content
+	}
+	if strings.HasPrefix(content, path) {
+		return strings.TrimSpace(strings.TrimPrefix(content, path))
+	}
+	return content
+}
+
+// joinSectionChunks 把同小节的块拼回整节，裁掉相邻块之间重复的部分
+func joinSectionChunks(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(parts[0])
+	for i := 1; i < len(parts); i++ {
+		b.WriteString(dedupOverlap(parts[i-1], parts[i]))
+	}
+	return b.String()
+}
+
+// dedupOverlap 找到上一块末尾与本块开头的最大重合段并裁掉。
+//
+// 超过 8 个字的重合才算重叠：短重合大概率是「的」「我们」这类巧合，
+// 裁掉反而会吃掉正文。
+func dedupOverlap(prev, cur string) string {
+	pr := []rune(prev)
+	cr := []rune(cur)
+	max := sectionOverlapCandidates
+	if max > len(pr) {
+		max = len(pr)
+	}
+	if max > len(cr) {
+		max = len(cr)
+	}
+	for n := max; n >= 8; n-- {
+		if string(pr[len(pr)-n:]) == string(cr[:n]) {
+			return string(cr[n:])
+		}
+	}
+	// 没匹配上说明这块没有重叠，补个空行避免文字粘连
+	return "\n\n" + cur
 }
 
 // toItem 行转 DTO。truncate=true 时 content 截断到 previewRunes。

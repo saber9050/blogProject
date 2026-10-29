@@ -11,6 +11,7 @@ func (ctrl *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	g := r.Group("/chunks")
 	g.GET("", ctrl.List)
 	g.GET("/stat", ctrl.Stat)
+	g.GET("/section", ctrl.Section)
 	g.GET("/:id", ctrl.Get)
 	// 批量删除文章向量。用 POST 而不是 DELETE：要传 id 数组，
 	// 而 DELETE 带 body 在部分代理上会被丢掉。

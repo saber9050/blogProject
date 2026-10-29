@@ -48,6 +48,20 @@ type ChunkStatResponse struct {
 	List    interface{}      `json:"list"`
 }
 
+// ChunkSectionResponse 一个小节的完整内容（父子块里的「父块」）
+//
+// 检索用小块的向量命中，再把这一节完整交给模型——小块够准，整节够全。
+// 现在没有检索出口，所以先作为「切分结果能不能拼回通顺原文」的验证入口。
+type ChunkSectionResponse struct {
+	ArticleID    uint   `json:"article_id"`
+	ArticleTitle string `json:"article_title"`
+	SectionIndex int    `json:"section_index"`
+	HeadingPath  string `json:"heading_path"`
+	ChunkCount   int    `json:"chunk_count"`
+	Content      string `json:"content"`
+	CharCount    int    `json:"char_count"`
+}
+
 // ChunkDeleteSkipped 批量删除时被跳过的一篇及原因
 //
 // 之所以「跳过」而不是「整批失败」：用户一次勾十篇，其中一篇可能正在向量化，

@@ -141,6 +141,18 @@ func (r *articleChunkRepository) StatByArticle() ([]*ArticleStatRow, error) {
 	return rows, err
 }
 
+// ListBySection 某文章某小节的全部块，按块序号升序
+func (r *articleChunkRepository) ListBySection(articleID uint, sectionIndex int) ([]*ChunkRow, error) {
+	ok, err := r.TableReady()
+	if err != nil || !ok {
+		return nil, err
+	}
+	var rows []*ChunkRow
+	err = r.db.Raw(selectChunkRow+" WHERE c.article_id = ? AND c.section_index = ? ORDER BY c.chunk_index",
+		articleID, sectionIndex).Scan(&rows).Error
+	return rows, err
+}
+
 // TableReady 向量表是否已创建
 func (r *articleChunkRepository) TableReady() (bool, error) {
 	var name *string

@@ -64,6 +64,9 @@ type Repository interface {
 	Summary() (chunkTotal int64, articleTotal int64, err error)
 	// StatByArticle 按文章聚合
 	StatByArticle() ([]*ArticleStatRow, error)
+	// ListBySection 某文章某小节的全部块，按块序号升序。
+	// 同一 section_index 的块拼起来就是整节原文——父子块方案里「大块」的来源。
+	ListBySection(articleID uint, sectionIndex int) ([]*ChunkRow, error)
 	// TableReady 向量表是否已创建
 	TableReady() (bool, error)
 }
