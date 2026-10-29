@@ -32,6 +32,16 @@ func (ctrl *Controller) Schema(c *gin.Context) {
 
 // Reset 清空向量数据（危险操作）
 //
+// **前端入口已移除**（2026-10-29，叶子要求），界面上不再有「清空向量数据」按钮：
+// 平时要清某一篇走「删除文章向量」，而这个接口的用途窄得多——只用于
+// 「换一个维度不同的向量模型」。维度写死在 DDL 里改不了，只能删表重建。
+//
+// 接口保留而不是一起删掉，是因为它是这件事**唯一的程序化出口**。删了以后
+// 换维度就只能登服务器手工 DROP TABLE，既没有 confirm 校验也没有状态检查。
+// 需要时用 curl 调用：
+//
+//	curl -X POST $BASE/admin/vector/reset -H "$AUTH" -H "$JSON" -d '{"confirm":"RESET"}'
+//
 // confirm 校验放在 controller 而不是 service：它属于「接口层的误操作防护」，
 // 换个调用方（比如将来的批量任务）不该被这个字符串绑住。
 func (ctrl *Controller) Reset(c *gin.Context) {

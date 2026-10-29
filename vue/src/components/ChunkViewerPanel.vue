@@ -5,7 +5,6 @@
       <div class="cv-panel__actions">
         <button class="btn-sm" @click="loadAll">刷新</button>
         <button class="btn-sm btn-sm--danger" @click="openDeleteArticles">删除文章向量</button>
-        <button class="btn-sm btn-sm--danger" @click="openReset">清空向量数据</button>
       </div>
     </div>
 
@@ -220,31 +219,6 @@
         </div>
       </div>
 
-      <!-- 清空向量数据：二次确认，且必须手输 RESET -->
-      <div v-if="resetVisible" class="modal-overlay" @click.self="resetVisible = false">
-        <div class="modal modal--delete" role="dialog" aria-modal="true">
-          <h3 class="modal__title">清空向量数据</h3>
-          <div class="modal__body">
-            <div class="modal__alert">
-              将永久删除全部 {{ summary.chunk_total }} 个向量块，并把 {{ summary.article_total }} 篇文章的向量化状态归零。
-              此操作不可恢复。
-            </div>
-            <p class="modal__hint">
-              用于「换向量模型且维度不同」的场景。清空后向量表会被删除，需要重新配置向量模型来按新维度重建。
-            </p>
-            <div class="modal__field" style="margin-top: 12px">
-              <label class="modal__label">输入 RESET 确认</label>
-              <input v-model="resetConfirm" class="modal__input" placeholder="RESET" />
-            </div>
-          </div>
-          <div class="modal__footer">
-            <button class="btn" @click="resetVisible = false">取消</button>
-            <button class="btn btn--danger" :disabled="resetConfirm !== 'RESET' || resetting" @click="doReset">
-              {{ resetting ? '清空中…' : '确认清空' }}
-            </button>
-          </div>
-        </div>
-      </div>
     </Teleport>
   </div>
 </template>
@@ -304,10 +278,6 @@ const delOptions = ref<DelOption[]>([])
 const delSelected = ref<number[]>([])
 const delLoading = ref(false)
 const deleting = ref(false)
-
-const resetVisible = ref(false)
-const resetConfirm = ref('')
-const resetting = ref(false)
 
 const errMsg = (err: any, fallback: string) => err?.response?.data?.message || fallback
 
@@ -400,11 +370,6 @@ const loadAll = async () => {
   }
 }
 
-const openReset = () => {
-  resetConfirm.value = ''
-  resetVisible.value = true
-}
-
 /**
  * 删除文章向量：多选后批量删除。
  *
@@ -461,21 +426,6 @@ const doDeleteArticles = async () => {
     showToast(errMsg(err, '删除失败'), 'error')
   } finally {
     deleting.value = false
-  }
-}
-
-const doReset = async () => {
-  resetting.value = true
-  try {
-    const res = await api.post('/admin/vector/reset', { confirm: 'RESET' })
-    const d = res.data?.data || {}
-    showToast(`已清空 ${d.deleted_chunks || 0} 个块，重置 ${d.reset_articles || 0} 篇文章`, 'success')
-    resetVisible.value = false
-    await loadAll()
-  } catch (err: any) {
-    showToast(errMsg(err, '清空失败'), 'error')
-  } finally {
-    resetting.value = false
   }
 }
 
@@ -796,10 +746,6 @@ onMounted(loadAll)
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
 }
 
-.modal--delete {
-  max-width: 460px;
-}
-
 .modal__title {
   margin: 0;
   padding: 14px 20px;
@@ -816,41 +762,11 @@ onMounted(loadAll)
   overflow-y: auto;
 }
 
-.modal__field {
-  margin-bottom: 12px;
-}
-
-.modal__label {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 0.78rem;
-  color: #555;
-}
-
-.modal__input {
-  width: 100%;
-  padding: 7px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.5);
-  border-radius: 6px;
-  font-size: 0.82rem;
-  box-sizing: border-box;
-}
-
 .modal__hint {
   margin: 8px 0 0;
   font-size: 0.76rem;
   line-height: 1.55;
   color: #888;
-}
-
-.modal__alert {
-  padding: 8px 10px;
-  border-radius: 6px;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: #a8071a;
-  background: #fff1f0;
-  border: 1px solid #ffa39e;
 }
 
 .modal__footer {
