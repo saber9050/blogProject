@@ -146,13 +146,19 @@ type section struct {
 // reATXHeading 匹配 ATX 风格标题：`## 标题`（允许前面不超过 3 个空格）
 var reATXHeading = regexp.MustCompile(`^[ \t]{0,3}(#{1,6})[ \t]+(.*)$`)
 
+// headItem 标题栈里的一项
+type headItem struct {
+	level int
+	title string
+}
+
 // parseSections 按标题把正文切成小节。
 //
 // 代码块里的 `#` 不算标题（`inFence` 判断）；`#` 一级标题当作文章标题的重复，
 // 不进路径栈，否则路径里会出现 "标题 > 标题"。
 func parseSections(md string) []section {
 	var out []section
-	var stack []string // 当前标题链（只含 ## 及以下）
+	var stack []headItem // 当前标题链
 	cur := section{index: 0}
 	inFence := false
 
@@ -171,18 +177,26 @@ func parseSections(md string) []section {
 			if m := reATXHeading.FindStringSubmatch(line); m != nil {
 				lv := len(m[1])
 				title := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(m[2]), "#"))
-				if lv >= 2 {
-					// 弹掉同层及更深的，再压入自己
-					for len(stack) >= lv-1 {
-						stack = stack[:len(stack)-1]
-					}
-					stack = append(stack, title)
+				// 所有级别都进栈。一级标题（`#`）也当小节标题——
+				// 不少文章就是用它分大节的（实测 #30 是 `# 一，发布订阅`），
+				// 跳过它会让这些块丢掉小节信息。
+				//
+				// 按 level 弹栈而不是按栈深度：`## A` 后面紧跟 `## B` 时，
+				// 两个都是第二级，B 要顶掉 A；用深度判断会因为 A 前面没有 `#`
+				// 而只占了一层，导致 B 叠在 A 后面变成 "A > B"。
+				for len(stack) > 0 && stack[len(stack)-1].level >= lv {
+					stack = stack[:len(stack)-1]
 				}
+				stack = append(stack, headItem{level: lv, title: title})
 				flush()
 				cur.level = lv
 				cur.title = title
 				// path 含当前标题：buildHeadingPath 取最后两级，少了自己就只剩祖先
-				cur.path = append([]string{}, stack...)
+				titles := make([]string, len(stack))
+				for i, it := range stack {
+					titles[i] = it.title
+				}
+				cur.path = titles
 				continue
 			}
 		}
@@ -207,9 +221,14 @@ func buildHeadingPath(docTitle string, path []string) string {
 		start = len(path) - 2
 	}
 	for _, t := range path[start:] {
-		if t != "" {
-			parts = append(parts, t)
+		if t == "" {
+			continue
 		}
+		// 文章正文第一行常是 `# 标题`，和 docTitle 重复，跳过
+		if len(parts) == 1 && t == parts[0] {
+			continue
+		}
+		parts = append(parts, t)
 	}
 	return strings.Join(parts, " > ")
 }

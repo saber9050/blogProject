@@ -509,3 +509,37 @@ func TestSectionIndexShared(t *testing.T) {
 		}
 	}
 }
+
+// TestHashHeadingAsSection 一级标题也当小节标题。
+//
+// 不少文章直接用 `# 一，发布订阅` 分大节（实测 #30 就是），早期实现把 `#`
+// 当成「文章标题的重复」跳过，导致这些块丢掉小节信息。
+func TestHashHeadingAsSection(t *testing.T) {
+	md := "# 一，发布订阅\n\n正文一\n\n# 二，Stream\n\n正文二"
+	got := mustSplit(t, md, Params{ChunkSize: 800, ChunkOverlap: 0, MinChunkSize: 0, StripMarkup: true})
+	if len(got) != 2 {
+		t.Fatalf("期望 2 块，实际 %d", len(got))
+	}
+	if got[0].HeadingPath != "一，发布订阅" {
+		t.Fatalf("第 0 块路径期望 %q，实际 %q", "一，发布订阅", got[0].HeadingPath)
+	}
+	if got[1].HeadingPath != "二，Stream" {
+		t.Fatalf("第 1 块路径期望 %q，实际 %q（同级标题不该叠加）", "二，Stream", got[1].HeadingPath)
+	}
+}
+
+// TestDocTitleNotDuplicated 正文首行的 `# 标题` 与文章标题重复时不重复拼。
+func TestDocTitleNotDuplicated(t *testing.T) {
+	md := "# 我的文章\n\n## 节一\n\n正文"
+	got, err := Split(md, "我的文章", Params{ChunkSize: 800, ChunkOverlap: 0, MinChunkSize: 0, StripMarkup: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("期望 1 块，实际 %d", len(got))
+	}
+	want := "我的文章 > 节一"
+	if got[0].HeadingPath != want {
+		t.Fatalf("路径期望 %q，实际 %q", want, got[0].HeadingPath)
+	}
+}
