@@ -16,7 +16,7 @@
 | 存储 | MinIO（图片/文件） |
 | 邮件 | gomail |
 | 验证码 | base64Captcha |
-| AI 能力 | 大模型（OpenAI 兼容协议，后台可配置） |
+| AI 能力 | 大模型（OpenAI 兼容协议，后台可配置）：文章摘要生成、正文向量化（pgvector） |
 
 ## 目录结构
 
@@ -45,19 +45,28 @@ blog/
 │   │   └── entity/      # GORM 实体
 │   ├── repository/      # 数据访问层
 │   └── service/         # 业务逻辑层
+│       ├── chunker/     # 正文切分（纯函数，可按单测钉死边界）
+│       ├── vectorize/   # 向量化任务链路（队列 + worker）
+│       ├── vectorschema/# 向量表 DDL 与维度维护
+│       ├── llmconfig/   # 模型配置与连接测试
+│       ├── chunk/       # 切分结果查询与整节拼接
+│       ├── article/     # 文章
+│       ├── auth/        # 认证
+│       ├── user/        # 用户
+│       └── llm/         # 摘要生成
 ├── pkg/                 # 公共工具包
 │   ├── config/          # 配置加载
-│   ├── database/        # PostgreSQL/Redis 初始化
+│   ├── database/        # PostgreSQL/Redis 初始化、向量表 DDL
 │   ├── email/           # 邮件发送
 │   ├── errors/          # 业务错误码
 │   ├── jwt/             # JWT 令牌
 │   ├── logger/          # 日志
 │   ├── minio/           # MinIO 对象存储
-│   ├── llmclient/       # 大模型客户端（OpenAI 兼容 chat/completions）
+│   ├── llmclient/       # 大模型客户端（chat/completions + embeddings）
 │   ├── response/        # 统一 HTTP 响应
 │   └── utils/           # 工具函数（密码哈希、RSA 加密等）
 ├── logs/                # 运行日志
-├── docs/                # API 接口文档
+├── docs/                # API 文档（按模块拆分，含 DEVELOPMENT.md）
 └── go.mod
 ```
 
@@ -202,8 +211,18 @@ go run main.go
 | GET/POST/PUT/DELETE | `/admin/users` | 用户 CRUD |
 | POST | `/admin/upload` | 图片上传（MinIO） |
 | POST | `/admin/articles/generate-summary` | AI 生成文章摘要（请求体指定 `config_id`，选择使用哪条模型配置） |
-| GET/POST/PUT/DELETE | `/admin/llm-configs` | 大模型配置 CRUD |
+| GET/POST/PUT/DELETE | `/admin/llm-configs` | 大模型配置 CRUD（`?type=1` 对话模型 / `?type=2` 向量模型） |
 | POST | `/admin/llm-configs/test` | 测试模型连接（不落库） |
+| POST | `/admin/articles/:id/vectorize` | 提交向量化（异步，立即返回） |
+| GET | `/admin/articles/:id/vector-status` | 查询向量化状态与块数 |
+| GET | `/admin/vector/schema` | 向量表是否存在、当前维度、块数 |
+| POST | `/admin/vector/reset` | 删除向量表（仅换维度时手工调用，前端无入口） |
+| GET | `/admin/chunks` | 切分块明细（支持 `article_id`、`keyword`） |
+| GET | `/admin/chunks/stat` | 按文章聚合的切分统计 |
+| GET | `/admin/chunks/section` | 取整节内容（父子块的父块） |
+| POST | `/admin/chunks/articles/delete` | 批量删除文章向量 |
+
+> 请求/响应示例见各模块文档，见下方「API 文档」一节。
 
 ## 中间件
 
@@ -221,7 +240,7 @@ go run main.go
 - 邮箱验证码登录 / 双 Token 认证（Access Token + Refresh Token 自动轮换）
 - JWT 认证 + 角色鉴权（普通用户 / 管理员），Refresh Token 校验实现单设备踢出
 - Token 自动刷新：Access Token 过期后通过过期 JWT 中的 `tid` 字段提取 refresh token 进行轮换
-- 文章 CRUD + 富文本编辑
+- 文章 CRUD + **Markdown 编辑与渲染**（`content` 存 Markdown 源码，不再是 HTML）
 - 随机一篇文章
 - 文章点赞/取消点赞
 - 文章统计（总文章数、总浏览量、总点赞数）
@@ -236,24 +255,80 @@ go run main.go
 - 启动时自动创建默认管理员
 - AI 生成文章摘要（后台编辑器调用；使用哪条模型配置由调用方在选择框中指定）
 - 大模型配置管理（后台「AI 模型」页：CRUD + 测试连接；新增配置测试通过才允许入库）
+- **正文向量化**：按 Markdown 结构切分 → embedding → 存 pgvector，为将来的检索问答做准备
+- **切分管理**：块明细分页、按文章统计、整节回看（验证「小块拼回原文」是否通顺）
+
+## 数据格式与向量化
+
+### 正文是 Markdown
+
+`articles.content` 存的是 **Markdown 源码**，不是 HTML。
+
+- 编辑端用 `md-editor-v3`（左源码右预览），落库就是编辑框里的文本
+- 前台用 `MdPreview` 渲染，不用 `v-html`
+- 做切分/摘要前会先剥掉 Markdown 标记（`#` `**` `|` ```` ``` ```` 等），代码块内容保留
+
+### 切分规则
+
+按 Markdown 标题切小节，每块前置标题路径：
+
+```text
+Redis 持久化策略 > 二、AOF
+
+AOF 是追加写日志……
+```
+
+| 参数 | 值 | 说明 |
+|---|---|---|
+| 块大小 | 800 字 | 小节内超长才降级到「段落 → 行 → 句号 → 逗号」逐级切 |
+| 重叠 | 80 字 | 防止句子卡在块边界上 |
+| 碎块阈值 | 100 字 | 低于此值并入同小节前一块 |
+| 表格/代码块 | 原子 | 永不切断，允许超长 |
+
+标题路径会拼进块正文参与 embedding——中文技术博客的查询词往往就是小节标题。
+
+### 父子块
+
+同一小节切出的多块共享 `section_index`，检索命中任一块后可按小节取回整节：
+
+```
+GET /api/v1/admin/chunks/section?article_id=19&section_index=2
+```
+
+拼接时自动去掉重复的路径前缀、裁掉块间重叠。这是「小块检索、整节喂模型」的数据基础。
+
+### 处理链路
+
+```text
+POST /admin/articles/:id/vectorize
+  → 条件 UPDATE 抢锁（防重复提交）
+  → 内存队列（容量 64）
+  → 单 worker 串行：切分 → 调 embedding → 事务内「删旧块 + 插新块 + 回写状态」
+  → GET /admin/articles/:id/vector-status 轮询
+```
+
+未配置向量模型时提交会返回 `503`。
 
 ## API 文档
 
-接口文档位于 `docs/` 目录：
+接口文档按模块拆分，位于 `docs/` 目录：
 
 | 文档 | 说明 |
 |---|---|
-| `article_api.md` | 前台文章（列表、详情、随机文章） |
-| `auth_api.md` | 认证相关（登录、注册、验证码、密码重置） |
-| `user_api.md` | 用户信息 |
-| `comment_api.md` | 评论 |
-| `about_api.md` | 关于页面 |
-| `admin_article_api.md` | 后台文章管理 |
-| `admin_category_api.md` | 后台分类管理 |
-| `admin_tag_api.md` | 后台标签管理 |
-| `admin_comment_api.md` | 后台评论管理 |
-| `admin_user_api.md` | 后台用户管理 |
-| `DEVELOPMENT.md` | 开发指南 |
+| [article_api.md](./docs/article_api.md) | 前台文章（列表、详情、随机、点赞、统计） |
+| [auth_api.md](./docs/auth_api.md) | 认证（注册、登录、验证码、密码重置、双 Token） |
+| [user_api.md](./docs/user_api.md) | 用户信息 |
+| [comment_api.md](./docs/comment_api.md) | 评论与回复 |
+| [about_api.md](./docs/about_api.md) | 关于页面 |
+| [admin_article_api.md](./docs/admin_article_api.md) | 后台文章（CRUD、摘要、**向量化提交与状态**） |
+| [admin_category_api.md](./docs/admin_category_api.md) | 后台分类 |
+| [admin_tag_api.md](./docs/admin_tag_api.md) | 后台标签 |
+| [admin_comment_api.md](./docs/admin_comment_api.md) | 后台评论 |
+| [admin_user_api.md](./docs/admin_user_api.md) | 后台用户 |
+| [admin_llmconfig_api.md](./docs/admin_llmconfig_api.md) | **后台 AI 模型配置**（对话/向量模型、连接测试） |
+| [admin_vector_api.md](./docs/admin_vector_api.md) | **后台向量表**（状态查询、清空重建） |
+| [admin_chunk_api.md](./docs/admin_chunk_api.md) | **后台切分管理**（块明细、统计、整节回看、批量删除） |
+| [DEVELOPMENT.md](./docs/DEVELOPMENT.md) | 开发指南 |
 
 ## 扩展开发
 

@@ -145,7 +145,7 @@ GET /articles/{id}
   "data": {
     "id": 123,
     "title": "文章标题",
-    "content": "文章完整内容（Markdown/HTML）",
+    "content": "## 一、RDB\n\nRDB 是把内存快照写入磁盘……",
     "cover_url": "https://example.com/cover.jpg",
     "summary": "文章摘要",
     "views": 1000,
@@ -167,6 +167,10 @@ GET /articles/{id}
 ```
 
 **字段说明**：同文章列表中的文章对象，但包含 `content` 字段。
+
+> ⚠️ **`content` 是 Markdown 源码，不是 HTML**（2026-10-29 起）。
+> 前端用 Markdown 组件渲染（`MdPreview`），**不要用 `v-html` 直接注入**——
+> 那样会把 `##` `**` `|` 原样显示成纯文本。
 
 **注意事项**：每次调用此接口，文章的 `views` 字段会自动 +1。
 
@@ -367,6 +371,9 @@ GET /articles/random
 | 500 | 服务器内部错误 |
 
 ## 注意事项
+
+> **正文格式**：`content` 为 Markdown 源码，渲染请用 Markdown 组件，不要 `v-html` 注入。
+> 示例：`"## 一、RDB\n\nRDB 是把内存快照写入磁盘……"`
 
 1. 文章列表和详情接口的 `is_liked` 字段仅在携带有效 Token 时返回准确值，否则始终为 `false`。
 2. 点赞/取消点赞接口要求用户已登录，否则返回 401。
