@@ -9,7 +9,8 @@
 
 ## 快速导航
 
-- [后端 README](./blog/README.md) — 技术栈、配置项说明、API 路由、中间件
+- [API 文档](./blog/docs/api.md) — 全部接口清单、请求/响应示例、错误码
+- [后端 README](./blog/README.md) — 技术栈、配置项说明、切分与向量化设计、中间件
 - [前端 README](./vue/README.md) — 技术栈、目录结构、页面路由、Axios 拦截器
 - [CI/CD 说明](./docs/CI-CD.md) — 流水线设计、Secrets 清单、部署排错手册
 
@@ -30,8 +31,20 @@
 生产环境（Docker）下前端由 Nginx 托管并监听 `80`，同时把 `/api` 反向代理到后端 `9527`；
 后端与 PostgreSQL / Redis / MinIO 通过 `blog-network` 内部网络以服务名互访，数据库端口不对公网开放。
 
-- **后端**：Go + Gin + GORM + JWT（双 Token）+ Redis + MinIO
-- **前端**：Vue 3 + TypeScript + Vite + Pinia + Vue Router + Axios + wangEditor
+- **后端**：Go + Gin + GORM + JWT（双 Token）+ Redis + MinIO + PostgreSQL(pgvector)
+- **前端**：Vue 3 + TypeScript + Vite + Pinia + Vue Router + Axios + md-editor-v3
+
+### AI 能力
+
+大模型配置**存库**（后台「AI 模型」页维护），不写进 `config.yaml`：
+
+| 能力 | 说明 |
+|---|---|
+| 文章摘要 | 编辑器里一键生成，需选一条已启用的对话模型（`type=1`） |
+| 正文向量化 | 按 Markdown 标题切分后调 embedding，存 pgvector，为后续检索问答打底 |
+
+未配置模型时，相关接口返回「请先配置模型」。切分规则、父子块设计见
+[后端 README 的「数据格式与向量化」](./blog/README.md#数据格式与向量化)。
 
 详情见各子项目 README。
 
@@ -41,7 +54,8 @@
 .
 ├── blog/                     # 后端（Go）
 │   ├── configs/              # 配置模板与本地配置
-│   └── cmd/server/           # 程序入口
+│   ├── cmd/server/           # 程序入口
+│   └── docs/api.md           # API 文档
 ├── vue/                      # 前端（Vue 3 + Vite）
 ├── scripts/
 │   ├── setup-server.sh       # 服务器初始化（Docker / swap / 镜像加速）
