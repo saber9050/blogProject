@@ -328,6 +328,7 @@ POST /admin/articles/:id/vectorize
 | [admin_llmconfig_api.md](./docs/admin_llmconfig_api.md) | **后台 AI 模型配置**（对话/向量模型、连接测试） |
 | [admin_vector_api.md](./docs/admin_vector_api.md) | **后台向量表**（状态查询、清空重建） |
 | [admin_chunk_api.md](./docs/admin_chunk_api.md) | **后台切分管理**（块明细、统计、整节回看、批量删除） |
+| [CHUNKING.md](./docs/CHUNKING.md) | **正文清洗与切分方案**（规则、代码路径、验证方法） |
 | [DEVELOPMENT.md](./docs/DEVELOPMENT.md) | 开发指南 |
 
 ## 扩展开发
