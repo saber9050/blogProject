@@ -16,6 +16,7 @@ import (
 	"context"
 	"mime/multipart"
 	"regexp"
+	"sort"
 	"time"
 
 	"go.uber.org/zap"
@@ -496,20 +497,52 @@ func (s *articleService) UploadImage(fileHeader *multipart.FileHeader) (string, 
 	return s.minio.GetFileURL(str), nil
 }
 
-// extractImageURLs 从 HTML 内容中提取所有 <img> 标签的 src 属性值
-func extractImageURLs(html string) []string {
-	re := regexp.MustCompile(`<img[^>]+src="([^"]+)"`)
-	matches := re.FindAllStringSubmatch(html, -1)
-	var urls []string
-	seen := make(map[string]struct{})
-	for _, m := range matches {
-		if len(m) >= 2 {
-			u := m[1]
-			if _, ok := seen[u]; !ok && u != "" {
-				seen[u] = struct{}{}
-				urls = append(urls, u)
-			}
+// 图片地址的两套语法。正文自 2026-10-29 起是 Markdown，但用户手写 HTML 的情况
+// 仍然存在（Markdown 允许内嵌），两套都要认。
+var (
+	// HTML：<img src="...">
+	reHTMLImgSrc = regexp.MustCompile(`<img[^>]+src="([^"]+)"`)
+	// Markdown：![alt](url)、![alt](url "title")、![](<url with space>)
+	// alt 允许为空；url 取到第一个空白或右括号为止；title 用引号包裹时一并跳过
+	reMarkdownImg = regexp.MustCompile(`!\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+"[^"]*")?\s*\)`)
+)
+
+// extractImageURLs 从正文中提取所有图片地址，按在正文中出现的顺序返回。
+//
+// 只认图片语法，不认普通链接：`[文字](url)` 是超链接，不是图片，不该进 article_images。
+//
+// 两套正则分别跑再合并：如果先跑完 HTML 再跑完 Markdown，顺序就变成「所有 HTML 图在前、
+// 所有 Markdown 图在后」，与实际排版不符。所以带上位置信息排序。
+func extractImageURLs(content string) []string {
+	type hit struct {
+		pos int
+		url string
+	}
+
+	var hits []hit
+	for _, loc := range reHTMLImgSrc.FindAllStringSubmatchIndex(content, -1) {
+		hits = append(hits, hit{pos: loc[0], url: content[loc[2]:loc[3]]})
+	}
+	for _, loc := range reMarkdownImg.FindAllStringSubmatchIndex(content, -1) {
+		hits = append(hits, hit{pos: loc[0], url: content[loc[2]:loc[3]]})
+	}
+
+	if len(hits) == 0 {
+		return nil
+	}
+	sort.Slice(hits, func(i, j int) bool { return hits[i].pos < hits[j].pos })
+
+	urls := make([]string, 0, len(hits))
+	seen := make(map[string]struct{}, len(hits))
+	for _, h := range hits {
+		if h.url == "" {
+			continue
 		}
+		if _, ok := seen[h.url]; ok {
+			continue
+		}
+		seen[h.url] = struct{}{}
+		urls = append(urls, h.url)
 	}
 	return urls
 }
