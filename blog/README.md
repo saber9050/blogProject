@@ -66,7 +66,7 @@ blog/
 │   ├── response/        # 统一 HTTP 响应
 │   └── utils/           # 工具函数（密码哈希、RSA 加密等）
 ├── logs/                # 运行日志
-├── docs/api.md          # 完整 API 文档
+├── docs/                # API 文档（按模块拆分，含 DEVELOPMENT.md）
 └── go.mod
 ```
 
@@ -222,7 +222,7 @@ go run main.go
 | GET | `/admin/chunks/section` | 取整节内容（父子块的父块） |
 | POST | `/admin/chunks/articles/delete` | 批量删除文章向量 |
 
-> 完整请求/响应示例见 [docs/api.md](./docs/api.md)。
+> 请求/响应示例见各模块文档，见下方「API 文档」一节。
 
 ## 中间件
 
@@ -311,9 +311,24 @@ POST /admin/articles/:id/vectorize
 
 ## API 文档
 
-- **[docs/api.md](./docs/api.md)** — 完整接口文档，**以这份为准**（含向量化、切分管理）
-- `docs/*_api.md` — 早期按模块拆分的历史文档，未覆盖向量化相关接口
-- [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) — 开发指南
+接口文档按模块拆分，位于 `docs/` 目录：
+
+| 文档 | 说明 |
+|---|---|
+| [article_api.md](./docs/article_api.md) | 前台文章（列表、详情、随机、点赞、统计） |
+| [auth_api.md](./docs/auth_api.md) | 认证（注册、登录、验证码、密码重置、双 Token） |
+| [user_api.md](./docs/user_api.md) | 用户信息 |
+| [comment_api.md](./docs/comment_api.md) | 评论与回复 |
+| [about_api.md](./docs/about_api.md) | 关于页面 |
+| [admin_article_api.md](./docs/admin_article_api.md) | 后台文章（CRUD、摘要、**向量化提交与状态**） |
+| [admin_category_api.md](./docs/admin_category_api.md) | 后台分类 |
+| [admin_tag_api.md](./docs/admin_tag_api.md) | 后台标签 |
+| [admin_comment_api.md](./docs/admin_comment_api.md) | 后台评论 |
+| [admin_user_api.md](./docs/admin_user_api.md) | 后台用户 |
+| [admin_llmconfig_api.md](./docs/admin_llmconfig_api.md) | **后台 AI 模型配置**（对话/向量模型、连接测试） |
+| [admin_vector_api.md](./docs/admin_vector_api.md) | **后台向量表**（状态查询、清空重建） |
+| [admin_chunk_api.md](./docs/admin_chunk_api.md) | **后台切分管理**（块明细、统计、整节回看、批量删除） |
+| [DEVELOPMENT.md](./docs/DEVELOPMENT.md) | 开发指南 |
 
 ## 扩展开发
 

@@ -9,7 +9,7 @@
 
 ## 快速导航
 
-- [API 文档](./blog/docs/api.md) — 全部接口清单、请求/响应示例、错误码
+- [API 文档](./blog/docs/) — 按模块拆分的接口文档（认证 / 文章 / 评论 / 后台各模块）
 - [后端 README](./blog/README.md) — 技术栈、配置项说明、切分与向量化设计、中间件
 - [前端 README](./vue/README.md) — 技术栈、目录结构、页面路由、Axios 拦截器
 - [CI/CD 说明](./docs/CI-CD.md) — 流水线设计、Secrets 清单、部署排错手册
@@ -55,7 +55,7 @@
 ├── blog/                     # 后端（Go）
 │   ├── configs/              # 配置模板与本地配置
 │   ├── cmd/server/           # 程序入口
-│   └── docs/api.md           # API 文档
+│   └── docs/                 # API 文档（按模块拆分）
 ├── vue/                      # 前端（Vue 3 + Vite）
 ├── scripts/
 │   ├── setup-server.sh       # 服务器初始化（Docker / swap / 镜像加速）
