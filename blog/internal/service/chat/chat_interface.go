@@ -1,6 +1,8 @@
 package chat
 
 import (
+	"context"
+
 	"blog/internal/model/dto/request"
 	"blog/internal/model/dto/response"
 )
@@ -40,6 +42,13 @@ type Service interface {
 
 	// ListArticleCandidates `/` 选择器的候选源，只返回已发布文章。
 	ListArticleCandidates(keyword string, excludeID uint, limit int) ([]*response.ChatArticleCandidateItem, error)
+
+	// SendMessage 发消息并跑 agent。
+	//
+	// sink 非 nil 时边跑边推事件（流式）；为 nil 时只返回最终结果（非流式）。
+	// ctx 取消即中断整条链（含正在执行的检索），已生成内容照常落库并标记 interrupted。
+	SendMessage(ctx context.Context, userID, sessionID uint,
+		req *request.SendChatMessageRequest, sink StreamSink) (*response.SendChatMessageResponse, error)
 }
 
 // 编译期断言：防止实现与接口签名单边漂移。

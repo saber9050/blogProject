@@ -19,13 +19,16 @@ import (
 // timeLayout 沿用项目其它 response 的格式，前端直接 new Date() 能解析。
 const timeLayout = "2006-01-02T15:04:05Z"
 
-// 会话标题上限，与 chat_sessions.title 的 varchar(120) 对齐。
+// maxTitleFieldRunes 标题字段的存储上限，与 chat_sessions.title 的 varchar(120) 对齐。
 // 超过会被 PG 拒绝（真到这一步就是 500，而不是友好的 400），所以在服务层先挡。
-const maxTitleRunes = 120
+// ⚠️ 与 titleSnippetRunes（自动生成标题时截前 30 字）是两个不同的数，别合并。
+const maxTitleFieldRunes = 120
 
 type chatService struct {
 	repo   repo.Repository
 	llmCfg llmconfigSvc.Service
+	// agents 按模型配置 id 缓存 agent（构建一次，跨请求复用）。
+	agents *agentBuilder
 }
 
 // NewChatService 创建助手服务。
@@ -35,7 +38,11 @@ type chatService struct {
 // AI 侧读文章若走它，用户每问一句文章浏览量就涨一次，统计直接失真。
 // 文章校验用仓储里的只读查询（FindArticle），一次 select 两列。
 func NewChatService(r repo.Repository, llmCfg llmconfigSvc.Service) Service {
-	return &chatService{repo: r, llmCfg: llmCfg}
+	return &chatService{
+		repo:   r,
+		llmCfg: llmCfg,
+		agents: newAgentBuilder(llmCfg),
+	}
 }
 
 // ===== Context =====
@@ -223,7 +230,7 @@ func (s *chatService) UpdateSession(userID, sessionID uint, req *request.UpdateC
 	fields := make(map[string]any, 2)
 	if req.Title != nil {
 		title := strings.TrimSpace(*req.Title)
-		if utf8.RuneCountInString(title) > maxTitleRunes {
+		if utf8.RuneCountInString(title) > maxTitleFieldRunes {
 			return errors.New(errors.CodeBadRequest, "标题过长")
 		}
 		fields["title"] = title

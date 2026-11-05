@@ -77,3 +77,29 @@ type ChatArticleCandidateItem struct {
 	ID    uint   `json:"id"`
 	Title string `json:"title"`
 }
+
+// SendChatMessageResponse 非流式发消息的返回（`stream:false` 时用）。
+//
+// 流式模式下这些字段分散在 SSE 的 meta / tool / delta / done 事件里，
+// 两者字段语义完全一致，只是投递方式不同。
+type SendChatMessageResponse struct {
+	UserMessageID      uint   `json:"user_message_id"`
+	AssistantMessageID uint   `json:"assistant_message_id"`
+	Content            string `json:"content"`
+	Model              string `json:"model"`
+	ModelFallback      bool   `json:"model_fallback"`
+	// Refs 本次回答用到的切分块；nil 表示没检索或走了全文降级。
+	Refs []entity.ChatRefChunk `json:"refs"`
+	// ArticleRefs 本轮实际生效的引用文章（回显给前端拼 pill）。
+	ArticleRefs []entity.ChatArticleRef `json:"article_refs"`
+	// SearchedArticles 实际检索过的文章 id。比 ArticleRefs 少是正常的：
+	// ArticleRefs 是「允许检索的范围」，这个才是「真的查了哪几篇」。
+	SearchedArticles []uint `json:"searched_articles"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	Refused          bool   `json:"refused"`
+	Interrupted      bool   `json:"interrupted"`
+	Rounds           int    `json:"rounds"`
+	ToolCalls        int    `json:"tool_calls"`
+	Degraded         bool   `json:"degraded"`
+}

@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,6 +33,10 @@ func (f *fakeService) UpdateSession(userID, sessionID uint, req *request.UpdateC
 func (f *fakeService) DeleteSession(userID, sessionID uint) error { return nil }
 func (f *fakeService) ListArticleCandidates(keyword string, excludeID uint, limit int) ([]*response.ChatArticleCandidateItem, error) {
 	return nil, nil
+}
+func (f *fakeService) SendMessage(ctx context.Context, userID, sessionID uint,
+	req *request.SendChatMessageRequest, sink chatSvc.StreamSink) (*response.SendChatMessageResponse, error) {
+	return &response.SendChatMessageResponse{}, nil
 }
 
 var _ chatSvc.Service = (*fakeService)(nil)
@@ -71,6 +76,7 @@ func TestChatRoutesRegisteredAndGuarded(t *testing.T) {
 		{http.MethodGet, "/api/v1/articles/12/chat/context"},
 		{http.MethodPost, "/api/v1/chat/sessions"},
 		{http.MethodGet, "/api/v1/chat/sessions/1/messages"},
+		{http.MethodPost, "/api/v1/chat/sessions/1/messages"},
 		{http.MethodPatch, "/api/v1/chat/sessions/1"},
 		{http.MethodDelete, "/api/v1/chat/sessions/1"},
 		{http.MethodGet, "/api/v1/chat/article-candidates"},

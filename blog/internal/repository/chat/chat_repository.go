@@ -148,6 +148,20 @@ func (r *chatRepository) ListMessages(sessionID, beforeID uint, limit int) ([]*e
 	return list, err
 }
 
+func (r *chatRepository) UpdateMessage(id uint, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	res := r.db.Model(&entity.ChatMessage{}).Where("id = ?", id).Updates(fields)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *chatRepository) ListAllMessages(sessionID uint) ([]*entity.ChatMessage, error) {
 	var list []*entity.ChatMessage
 	err := r.db.Where("session_id = ?", sessionID).Order("id ASC").Find(&list).Error

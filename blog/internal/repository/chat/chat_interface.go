@@ -74,6 +74,9 @@ type Repository interface {
 	// ListMessages 倒序取 limit 条（id 从大到小），调用方需要正序时自行反转。
 	// beforeID = 0 表示取最新一页。
 	ListMessages(sessionID, beforeID uint, limit int) ([]*entity.ChatMessage, error)
+	// UpdateMessage 更新消息的可变字段（流结束后回填 content / usage / error 等）。
+	// 空 map 直接返回。
+	UpdateMessage(id uint, fields map[string]any) error
 	// ListAllMessages 取会话全部消息，正序。仅后台详情与历史组装用（会话有 400 条上限，
 	// 一次性取完可控；真要流式再看是否需要游标）。
 	ListAllMessages(sessionID uint) ([]*entity.ChatMessage, error)

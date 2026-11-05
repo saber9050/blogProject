@@ -1,11 +1,13 @@
 package chat
 
 import (
+	stderrors "errors"
 	"strconv"
 
 	"blog/internal/middleware"
 	"blog/internal/model/dto/request"
 	chatSvc "blog/internal/service/chat"
+	"blog/pkg/errors"
 	"blog/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +44,7 @@ func (ctrl *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	cg := r.Group("/chat", middleware.Auth())
 	cg.POST("/sessions", ctrl.CreateSession)
 	cg.GET("/sessions/:sessionId/messages", ctrl.ListMessages)
+	cg.POST("/sessions/:sessionId/messages", ctrl.SendMessage)
 	cg.PATCH("/sessions/:sessionId", ctrl.UpdateSession)
 	cg.DELETE("/sessions/:sessionId", ctrl.DeleteSession)
 	cg.GET("/article-candidates", ctrl.ListArticleCandidates)
@@ -95,6 +98,50 @@ func (ctrl *Controller) ListMessages(c *gin.Context) {
 		return
 	}
 	response.Success(c, res)
+}
+
+// SendMessage 发消息。stream=true 走 SSE，false 走一次性 JSON。
+func (ctrl *Controller) SendMessage(c *gin.Context) {
+	sessionID, ok := parseIDParam(c, "sessionId")
+	if !ok {
+		response.BadRequest(c, "无效的会话ID")
+		return
+	}
+	var req request.SendChatMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数错误")
+		return
+	}
+
+	userID := middleware.GetUserID(c)
+	// 用请求自带的 ctx：客户端断开 / 浏览器关页面时它会被取消，
+	// 从而中断 agent 循环和正在执行的检索——否则用户点了停止，后端还在烧 token。
+	ctx := c.Request.Context()
+
+	if !req.WantsStream() {
+		res, err := ctrl.svc.SendMessage(ctx, userID, sessionID, &req, nil)
+		if err != nil {
+			response.BizError(c, err)
+			return
+		}
+		response.Success(c, res)
+		return
+	}
+
+	sink := newSSESink(c)
+	res, err := ctrl.svc.SendMessage(ctx, userID, sessionID, &req, sink)
+	if err != nil {
+		if !sink.started {
+			// meta 还没发出去，HTTP 状态码还没定型，仍能返回正常的 404/400/503。
+			// 这正是 sseSink 延迟写 header 的目的。
+			response.BizError(c, err)
+			return
+		}
+		// 已经开始推流，只能靠 error 事件表达；状态码无法再改。
+		_ = sink.OnError(bizCode(err), bizMessage(err), sink.wroteDelta)
+		return
+	}
+	_ = sink.done(res)
 }
 
 // UpdateSession 改标题 / 换模型。
@@ -154,4 +201,23 @@ func parseIDParam(c *gin.Context, name string) (uint, bool) {
 		return 0, false
 	}
 	return uint(n), true
+}
+
+// bizCode / bizMessage 从 service 返回的错误里取出对外的业务码与文案。
+// 非 BizError 一律按 500 + 通用文案处理，绝不把内部错误原文透给前端
+// （里面可能有 SQL 片段、上游地址之类）。
+func bizCode(err error) int {
+	var be *errors.BizError
+	if stderrors.As(err, &be) {
+		return be.Code
+	}
+	return errors.CodeInternalError
+}
+
+func bizMessage(err error) string {
+	var be *errors.BizError
+	if stderrors.As(err, &be) {
+		return be.Message
+	}
+	return errors.GetMessage(errors.CodeInternalError)
 }

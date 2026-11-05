@@ -40,3 +40,21 @@ type ChatArticleCandidateQuery struct {
 	ExcludeID uint `form:"exclude_id"`
 	Limit     int  `form:"limit"`
 }
+
+// SendChatMessageRequest 发消息。
+type SendChatMessageRequest struct {
+	// Content 用户提问原文。pill 已在前端序列化成 /文章标题，后端按普通文本处理。
+	Content string `json:"content" binding:"required"`
+	// ArticleIDs 本轮用 `/` 额外引用的文章（不含当前文章）。
+	// ⚠️ 与 tool 参数是两回事：这里是「用户点名了什么」，服务端要逐条校验；
+	// tool 那侧永远不接受模型传范围。
+	ArticleIDs []uint `json:"article_ids"`
+	// Stream 默认 true。用指针区分「没传」和「显式传 false」——
+	// 用 bool 的话零值 false 会让「没传」变成「非流式」，前端得每次都显式传。
+	Stream *bool `json:"stream"`
+}
+
+// WantsStream 默认走流式；只有显式传 false 才走一次性 JSON。
+func (r *SendChatMessageRequest) WantsStream() bool {
+	return r.Stream == nil || *r.Stream
+}
