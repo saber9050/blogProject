@@ -7,6 +7,7 @@ import (
 
 	"blog/internal/model/entity"
 
+	"github.com/pgvector/pgvector-go"
 	"gorm.io/gorm"
 )
 
@@ -330,4 +331,129 @@ func parseUint(s string) (uint, bool) {
 		n = n*10 + uint(c-'0')
 	}
 	return n, true
+}
+
+// ===== 检索 =====
+
+// chunkSelectColumns 两路检索共用的列，保证返回结构一致。
+const chunkSelectColumns = `
+	c.id, c.article_id, a.title AS article_title,
+	c.section_index, COALESCE(c.heading_path, '') AS heading_path,
+	c.chunk_index, c.char_count, c.content`
+
+func (r *chatRepository) SemanticSearch(vec pgvector.Vector, idsLiteral string,
+	perArticle int, minScore float64) ([]*RetrievedChunk, error) {
+
+	if perArticle <= 0 {
+		perArticle = 3
+	}
+	// 两路各最多 8 篇 × perArticle 条，取满也用不上更多
+	limit := perArticle * 8
+
+	// 分组限额在库里做：8 篇各 top-3 会让单篇（通常是当前文章）把名额占满，
+	// 其它引用文章一条都进不来。row_number() 在同一趟扫描里顺手算，不额外开销。
+	//
+	// 为什么 join articles 带 status=1：模块 02 允许草稿向量化，不加这条草稿内容会漏给前台。
+	sql := `
+	WITH sem AS (
+		SELECT ` + chunkSelectColumns + `,
+		       c.embedding <=> ? AS dist,
+		       row_number() OVER (PARTITION BY c.article_id ORDER BY c.embedding <=> ?) AS rn
+		FROM article_chunks c
+		JOIN articles a ON a.id = c.article_id AND a.status = 1 AND a.deleted_at IS NULL
+		WHERE c.article_id = ANY(?::bigint[])
+		  AND c.embedding IS NOT NULL
+	)
+	SELECT id, article_id, article_title, section_index, heading_path,
+	       chunk_index, char_count, content, 1 - dist AS score
+	FROM sem
+	WHERE rn <= ? AND 1 - dist >= ?
+	ORDER BY score DESC
+	LIMIT ?`
+
+	var rows []*RetrievedChunk
+	err := r.db.Raw(sql, vec, vec, idsLiteral, perArticle, minScore, limit).Scan(&rows).Error
+	return rows, err
+}
+
+func (r *chatRepository) KeywordSearch(query, idsLiteral string,
+	perArticle int, minScore float64) ([]*RetrievedChunk, error) {
+
+	if perArticle <= 0 {
+		perArticle = 3
+	}
+	limit := perArticle * 8
+
+	// ⚠️ 必须用 word_similarity 而不是 similarity：
+	//   similarity 是「整段像不像整段」，分母包含整块长度。我们是「几十字查询 vs 几百到
+	//   两千字的块」，分母被撑大后分值恒在 0.00x，任何阈值都会把命中全滤掉——
+	//   表现是「代码不报错、关键词路永远返回 0 条」，这是最难查的一类静默失效。
+	//   word_similarity 只拿块里最像的一小段做比较，才是这个场景该用的。
+	//
+	// 也刻意不用 `q <% t` 操作符：它依赖会话级的 pg_trgm.word_similarity_threshold，
+	// 而我们的连接来自连接池，SET 会残留到下一个使用者。阈值写成显式比较最可控；
+	// 代价是将来建 GIN 索引时用不上（那时再改，现在几百行全表扫无所谓）。
+	sql := `
+	WITH kw AS (
+		SELECT ` + chunkSelectColumns + `,
+		       word_similarity(?, c.content) AS score,
+		       row_number() OVER (
+		           PARTITION BY c.article_id
+		           ORDER BY word_similarity(?, c.content) DESC
+		       ) AS rn
+		FROM article_chunks c
+		JOIN articles a ON a.id = c.article_id AND a.status = 1 AND a.deleted_at IS NULL
+		WHERE c.article_id = ANY(?::bigint[])
+	)
+	SELECT id, article_id, article_title, section_index, heading_path,
+	       chunk_index, char_count, content, score
+	FROM kw
+	WHERE rn <= ? AND score >= ?
+	ORDER BY score DESC
+	LIMIT ?`
+
+	var rows []*RetrievedChunk
+	err := r.db.Raw(sql, query, query, idsLiteral, perArticle, minScore, limit).Scan(&rows).Error
+	return rows, err
+}
+
+func (r *chatRepository) ListSectionChunks(keys []SectionKey) ([]*RetrievedChunk, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	// 用 (a = ? AND b = ?) OR (...) 而不是行值 IN ((?,?),(?,?))：
+	// 行值 IN 里的占位符在 pgx 下**类型推断不可靠**，会报
+	// "could not determine data type of parameter"，而且这个错只在特定组合下出现。
+	// 最多 8 组 OR，表达式长一点但类型完全明确。
+	conds := make([]string, 0, len(keys))
+	args := make([]any, 0, len(keys)*2)
+	for _, k := range keys {
+		conds = append(conds, "(c.article_id = ? AND c.section_index = ?)")
+		args = append(args, k.ArticleID, k.SectionIndex)
+	}
+
+	sql := `
+	SELECT ` + chunkSelectColumns + `, 0 AS score
+	FROM article_chunks c
+	JOIN articles a ON a.id = c.article_id AND a.status = 1 AND a.deleted_at IS NULL
+	WHERE ` + strings.Join(conds, " OR ") + `
+	ORDER BY c.article_id, c.section_index, c.chunk_index`
+
+	var rows []*RetrievedChunk
+	err := r.db.Raw(sql, args...).Scan(&rows).Error
+	return rows, err
+}
+
+func (r *chatRepository) ArticleText(id uint) (string, error) {
+	var rows []struct {
+		Content string
+	}
+	err := r.db.Raw(`SELECT content FROM articles WHERE id = ? AND deleted_at IS NULL`, id).Scan(&rows).Error
+	if err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		return "", nil
+	}
+	return rows[0].Content, nil
 }

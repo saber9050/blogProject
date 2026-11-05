@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"blog/internal/model/entity"
+
+	"github.com/pgvector/pgvector-go"
 )
 
 // SessionRow 后台会话列表的一行：会话 + 所属文章标题 + 所属用户 + 首条提问摘要。
@@ -35,6 +37,31 @@ type ArticleBrief struct {
 	Title        string
 	Status       int8 // 1 已发布 / 0 草稿
 	VectorStatus int8 // 0 未处理 … 3 已完成，决定能否走语义检索
+}
+
+// RetrievedChunk 一次检索命中的切分块（含所属文章标题，供标注出处）。
+type RetrievedChunk struct {
+	ID           uint
+	ArticleID    uint
+	ArticleTitle string
+	SectionIndex int
+	HeadingPath  string
+	ChunkIndex   int
+	CharCount    int
+	Content      string
+	// Score 语义路是 1-余弦距离（0~1，越大越相关）；关键词路是 word_similarity。
+	// 两路的量纲不同，所以**不能跨路比较**，只能在各自路内排序（RRF 也只用排名）。
+	Score float64
+}
+
+// SectionKey 定位一「节」：文章 + 该文章内的小节序号。
+//
+// ⚠️ section_index 是**文章内**的序号，必须和 article_id 一起才能唯一确定一节。
+// 只用 section_index 会把 A 文的第 3 节和 B 文的第 3 节当成同一节拼到一起，
+// 这类错误肉眼极难发现。
+type SectionKey struct {
+	ArticleID    uint
+	SectionIndex int
 }
 
 // AdminQuery 后台会话列表的筛选条件。
@@ -91,6 +118,22 @@ type Repository interface {
 	SearchPublishedArticles(keyword string, excludeID uint, limit int) ([]*ArticleBrief, error)
 	// VectorTableReady article_chunks 表是否存在（没配向量模型时不会建）。
 	VectorTableReady() (bool, error)
+	// ArticleText 取文章正文（全文降级用）。文章不存在或已软删返回空串。
+	ArticleText(id uint) (string, error)
+
+	// ===== 检索（混合检索的两路，各自独立可测）=====
+
+	// SemanticSearch 语义路：pgvector 余弦距离，按文章分组限额。
+	//   idsLiteral 形如 "{12,8}"（PG 数组字面量）——用字符串而不是 []uint，
+	//   是因为 GORM+pgx 对 Go 切片的数组绑定在不同版本上行为不一致，字面量最稳。
+	//   perArticle 单篇最多取几条；minScore 相似度下限（1-距离）。
+	SemanticSearch(vec pgvector.Vector, idsLiteral string, perArticle int, minScore float64) ([]*RetrievedChunk, error)
+	// KeywordSearch 关键词路：pg_trgm 的 word_similarity（**不是 similarity**，
+	// 后者在「短查询 vs 长块」时分母被整块撑大、分值趋 0，等于静默失效）。
+	KeywordSearch(query, idsLiteral string, perArticle int, minScore float64) ([]*RetrievedChunk, error)
+	// ListSectionChunks 批量取若干节的**全部**块，按 (article_id, section_index, chunk_index) 升序。
+	// 父块扩展靠它把命中块拼回整节。
+	ListSectionChunks(keys []SectionKey) ([]*RetrievedChunk, error)
 
 	// ===== 后台 =====
 

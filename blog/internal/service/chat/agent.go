@@ -49,11 +49,11 @@ type llmconfigResolver interface {
 	Resolve(id uint) (llmclient.Config, error)
 }
 
-func newAgentBuilder(llmCfg llmconfigResolver) *agentBuilder {
+func newAgentBuilder(llmCfg llmconfigResolver, searcher contextSearcher) *agentBuilder {
 	return &agentBuilder{
 		entries: make(map[uint]*agentEntry, 4),
 		llmCfg:  llmCfg,
-		tool:    newSearchTool(),
+		tool:    newSearchTool(searcher),
 	}
 }
 

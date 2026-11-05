@@ -2,7 +2,6 @@ package chat
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -23,16 +22,22 @@ type searchToolArgs struct {
 	Query string `json:"query" jsonschema:"required" jsonschema_description:"检索关键词，用关键名词短语，不要整句照抄用户原话"`
 }
 
-// newSearchTool 构造检索工具。
+// contextSearcher 检索工具唯一依赖的能力。
 //
-// P2 阶段返回**假数据**：先把「ADK 能不能跑通、事件能不能正确映射成 SSE、
-// 无关问题会不会真的不调工具」这三件事验完，再接真检索（P3）。
-// 混在一起做的话，结果不对时你分不清是 agent 配置问题还是 SQL 问题。
-func newSearchTool() tool.InvokableTool {
+// 不直接依赖 chatService：工具只需要「按范围 + 关键词检索」，
+// 用最小接口的好处是它可以在单测里换成假实现，不必造一整个 service。
+type contextSearcher interface {
+	Search(ctx context.Context, sc *Scope, query string) (string, error)
+}
+
+// newSearchTool 构造检索工具（P3 起接真实混合检索）。
+func newSearchTool(searcher contextSearcher) tool.InvokableTool {
 	t, err := utils.InferTool(
 		searchToolName,
 		"在用户当前阅读的文章及其显式引用的文章中检索相关段落，返回带出处的小节内容。",
-		runSearch,
+		func(ctx context.Context, args *searchToolArgs) (string, error) {
+			return runSearch(ctx, searcher, args)
+		},
 	)
 	if err != nil {
 		// 工具定义是编译期常量，这里出错只可能是代码写错了（struct tag 非法之类）。
@@ -51,7 +56,7 @@ func newSearchTool() tool.InvokableTool {
 // 框架对「tool 返回 error」的处理没有稳定契约（可能中断整个 agent，也可能把错误
 // 回填给模型继续循环）。把正确性押在未确认的行为上不可接受，所以所有异常都转成
 // 「信息 + 下一步建议」的短句，让模型按建议行动。
-func runSearch(ctx context.Context, args *searchToolArgs) (string, error) {
+func runSearch(ctx context.Context, searcher contextSearcher, args *searchToolArgs) (string, error) {
 	// ctx 被取消（用户点停止 / 整体超时）时必须让循环尽快停下来，
 	// 继续「假装成功」只会让模型在已取消的 ctx 上继续烧 token。
 	if err := ctx.Err(); err != nil {
@@ -71,10 +76,5 @@ func runSearch(ctx context.Context, args *searchToolArgs) (string, error) {
 	sc.ToolCalls++
 	sc.Rounds++
 
-	// ===== P2：假数据（P3 换成真实的混合检索）=====
-	// 保留 query 在文案里，方便本地一眼看出「模型到底拿什么词去查」——
-	// 调 Instruction 时这个信息比什么都重要。
-	return fmt.Sprintf(`[1] 《%s》· 示例小节
-（P2 阶段为假数据，真实检索将在后续接入）模型本次使用的检索词是「%s」。
-这段内容用于验证 agent 与 SSE 事件链路是否打通。`, sc.CurrentArticleTitle, query), nil
+	return searcher.Search(ctx, sc, query)
 }

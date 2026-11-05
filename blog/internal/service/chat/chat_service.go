@@ -3,6 +3,7 @@ package chat
 import (
 	stderrors "errors"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"blog/internal/model/dto/request"
@@ -11,6 +12,7 @@ import (
 	repo "blog/internal/repository/chat"
 	llmconfigSvc "blog/internal/service/llmconfig"
 	"blog/pkg/errors"
+	"blog/pkg/llmclient"
 	"blog/pkg/logger"
 
 	"go.uber.org/zap"
@@ -29,6 +31,12 @@ type chatService struct {
 	llmCfg llmconfigSvc.Service
 	// agents 按模型配置 id 缓存 agent（构建一次，跨请求复用）。
 	agents *agentBuilder
+
+	// embedClient 复用的向量化客户端。每次检索都新建 http.Client 会让连接无法复用，
+	// 高频问答时容易耗掉本地端口。
+	embedMu     sync.Mutex
+	embedClient *llmclient.Client
+	embedKey    string
 }
 
 // NewChatService 创建助手服务。
@@ -38,11 +46,11 @@ type chatService struct {
 // AI 侧读文章若走它，用户每问一句文章浏览量就涨一次，统计直接失真。
 // 文章校验用仓储里的只读查询（FindArticle），一次 select 两列。
 func NewChatService(r repo.Repository, llmCfg llmconfigSvc.Service) Service {
-	return &chatService{
-		repo:   r,
-		llmCfg: llmCfg,
-		agents: newAgentBuilder(llmCfg),
-	}
+	svc := &chatService{repo: r, llmCfg: llmCfg}
+	// agent 的检索工具在调用时才用到 service，所以把自己传进去：
+	// 工具本身只依赖「按 scope + query 检索」这一个能力（见 contextSearcher）。
+	svc.agents = newAgentBuilder(llmCfg, svc)
+	return svc
 }
 
 // ===== Context =====
