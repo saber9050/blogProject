@@ -60,7 +60,9 @@ type consumeResult struct {
 	promptTokens     int
 	completionTokens int
 	interrupted      bool
-	err              error
+	// refused 本次回答被判为跑题（内容已被替换成 OffTopicReply）
+	refused bool
+	err     error
 }
 
 // consumeAgentStream 把 ADK 的事件流翻译成 SSE 事件。
@@ -78,8 +80,16 @@ func consumeAgentStream(ctx context.Context, iter *adk.AsyncIterator[*adk.AgentE
 	sink StreamSink, sc *Scope) (res consumeResult) {
 
 	var buf strings.Builder
+	filter := &deltaFilter{}
 	defer func() {
+		// 必须把缓冲区吐干净：短回答（不足 40 字）全在缓冲里，
+		// 不 flush 的话前端一个字都收不到——而「回答很短」是最常见的情况之一。
+		for _, out := range filter.flush() {
+			buf.WriteString(out)
+			_ = sink.OnDelta(out)
+		}
 		res.content = buf.String()
+		res.refused = filter.Refused()
 		// ctx 被取消 ⇒ 用户点了停止或整体超时。这不是错误，已生成内容照常保留。
 		if ctx.Err() != nil && res.err == nil {
 			res.interrupted = true
@@ -135,8 +145,10 @@ func consumeAgentStream(ctx context.Context, iter *adk.AsyncIterator[*adk.AgentE
 					continue
 				}
 				if chunk.Content != "" {
-					buf.WriteString(chunk.Content)
-					_ = sink.OnDelta(chunk.Content)
+					for _, out := range filter.feed(chunk.Content) {
+						buf.WriteString(out)
+						_ = sink.OnDelta(out)
+					}
 				}
 				if len(chunk.ToolCalls) > 0 {
 					toolCalls = append(toolCalls, chunk.ToolCalls...)
@@ -151,8 +163,10 @@ func consumeAgentStream(ctx context.Context, iter *adk.AsyncIterator[*adk.AgentE
 		if mo.Message != nil {
 			msg := mo.Message
 			if msg.Content != "" {
-				buf.WriteString(msg.Content)
-				_ = sink.OnDelta(msg.Content)
+				for _, out := range filter.feed(msg.Content) {
+					buf.WriteString(out)
+					_ = sink.OnDelta(out)
+				}
 			}
 			emitToolStart(sink, sc, msg.ToolCalls)
 			collectUsage(msg, &res)

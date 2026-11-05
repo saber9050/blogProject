@@ -142,6 +142,7 @@ func (s *chatService) SendMessage(ctx context.Context, userID, sessionID uint,
 		"prompt_tokens":     res.promptTokens,
 		"completion_tokens": res.completionTokens,
 		"interrupted":       res.interrupted,
+		"refused":           res.refused,
 	}
 	if len(sc.Refs) > 0 {
 		fields["refs"] = jsonbExpr(sc.Refs)
@@ -170,6 +171,7 @@ func (s *chatService) SendMessage(ctx context.Context, userID, sessionID uint,
 		SearchedArticles:   sc.ArticleIDs(),
 		PromptTokens:       res.promptTokens,
 		CompletionTokens:   res.completionTokens,
+		Refused:            res.refused,
 		Interrupted:        res.interrupted,
 		Rounds:             sc.Rounds,
 		ToolCalls:          sc.ToolCalls,

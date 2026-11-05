@@ -96,7 +96,9 @@ func TestConsumeAgentStreamToolThenAnswer(t *testing.T) {
 
 	res := consumeAgentStream(context.Background(), iter, sink, sc)
 
-	want := []string{"tool_start:search_article_context:Stream 消费组", "tool_end", "delta", "delta"}
+	// 注意：只有 1 个 delta。拒答守卫会缓冲前 40 字（此回答才 8 字），
+	// 到 flush 时一次性吐出——这是刻意的代价，换来的是「不会先闪半截标记再被替换」。
+	want := []string{"tool_start:search_article_context:Stream 消费组", "tool_end", "delta"}
 	if len(sink.events) != len(want) {
 		t.Fatalf("事件序列不符:\n got %v\nwant %v", sink.events, want)
 	}
