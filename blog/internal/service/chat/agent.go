@@ -2,14 +2,18 @@ package chat
 
 import (
 	"context"
+	stderrors "errors"
+	"fmt"
 	"sync"
 
-	"blog/pkg/llmclient"
+	llmconfigSvc "blog/internal/service/llmconfig"
 	"blog/pkg/logger"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
 )
 
@@ -38,18 +42,11 @@ type agentEntry struct {
 type agentBuilder struct {
 	mu      sync.Mutex
 	entries map[uint]*agentEntry
-	llmCfg  llmconfigResolver
+	llmCfg  llmconfigSvc.Service
 	tool    tool.BaseTool
 }
 
-// llmconfigResolver 只取 agentBuilder 真正用到的那一个方法。
-// 用最小接口而不是整个 llmconfig.Service：这里不需要增删改查配置的能力，
-// 依赖面越小，这个文件改动的理由就越少。
-type llmconfigResolver interface {
-	Resolve(id uint) (llmclient.Config, error)
-}
-
-func newAgentBuilder(llmCfg llmconfigResolver, searcher contextSearcher) *agentBuilder {
+func newAgentBuilder(llmCfg llmconfigSvc.Service, searcher contextSearcher) *agentBuilder {
 	return &agentBuilder{
 		entries: make(map[uint]*agentEntry, 4),
 		llmCfg:  llmCfg,
@@ -92,6 +89,45 @@ func (b *agentBuilder) get(ctx context.Context, configID uint) (*agentEntry, err
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools: []tool.BaseTool{b.tool},
+				// 次数闸 + 单次超时 + 「最后一次」提示，全部在工具层（见 toolguard.go）
+				ToolCallMiddlewares: []compose.ToolMiddleware{{Invokable: toolGuard}},
+			},
+		},
+		// 第 1 层兜底：单次模型调用失败自动重试 2 次。
+		ModelRetryConfig: &adk.TypedModelRetryConfig[*schema.Message]{
+			MaxRetries: 2,
+			ShouldRetry: func(callCtx context.Context, rc *adk.TypedRetryContext[*schema.Message]) *adk.TypedRetryDecision[*schema.Message] {
+				// 没有错误 = 调用成功，不该重试（重试会白花一次调用）
+				if rc.Err == nil {
+					return nil
+				}
+				// ctx 已取消（用户点停止 / 整体超时）时重试毫无意义，只会拖慢退出
+				if callCtx.Err() != nil {
+					return nil
+				}
+				return &adk.TypedRetryDecision[*schema.Message]{Retry: true}
+			},
+		},
+		// 第 2 层兜底：重试耗尽后换一个启用的对话模型再试一次。
+		ModelFailoverConfig: &adk.ModelFailoverConfig[*schema.Message]{
+			MaxRetries: 1,
+			ShouldFailover: func(callCtx context.Context, _ *schema.Message, err error) bool {
+				if err == nil || callCtx.Err() != nil {
+					return false
+				}
+				// 用户主动中断不算「故障」，换模型重来只会让他再等一次
+				return !stderrors.Is(err, context.Canceled)
+			},
+			GetFailoverModel: func(callCtx context.Context, _ *adk.FailoverContext[*schema.Message]) (
+				model.BaseModel[*schema.Message], []*schema.Message, error) {
+				m, err := b.fallbackModel(callCtx, configID)
+				if err != nil {
+					// 返回错误 = 停止故障转移，原始错误照常抛出，不会把真实原因盖掉
+					return nil, nil, err
+				}
+				logger.Warn("主模型调用失败，已切换到备用模型",
+					zap.Uint("primary_config_id", configID))
+				return m, nil, nil
 			},
 		},
 	})
@@ -111,6 +147,35 @@ func (b *agentBuilder) get(ctx context.Context, configID uint) (*agentEntry, err
 	logger.Info("已构建并缓存 agent", zap.Uint("model_config_id", configID),
 		zap.String("model", cfg.Model))
 	return e, nil
+}
+
+// fallbackModel 取一个「配置文件里启用、且不是当前这个」的对话模型。
+//
+// 局限（已知并接受）：failover 成功后，落库的 chat_messages.model 仍是主模型的
+// 名字——框架不会告诉我们最终用了哪个。要精确记录就得在 failover 时写回 scope，
+// 但那个回调拿不到请求级 ctx 的可靠保证，收益也不大（用户关心的是「有没有答」，
+// 不是「哪个模型兜的底」）。日志里记录了切换动作，排查够用。
+func (b *agentBuilder) fallbackModel(ctx context.Context, excludeID uint) (model.BaseModel[*schema.Message], error) {
+	list, err := b.llmCfg.ListByType(1)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range list {
+		if item.ID == excludeID || item.Status != 1 {
+			continue
+		}
+		cfg, err := b.llmCfg.Resolve(item.ID)
+		if err != nil {
+			// 单条解析失败（密钥坏了之类）不该让整个转移过程失败，继续看下一个
+			continue
+		}
+		m, err := newChatModel(ctx, cfg)
+		if err != nil {
+			continue
+		}
+		return m, nil
+	}
+	return nil, fmt.Errorf("没有可用的备用对话模型")
 }
 
 // invalidate 让某个模型的 agent 失效。后台改了配置（换密钥、换模型名、禁用）时调用。
