@@ -13,6 +13,7 @@ import (
 	"blog/internal/api/v1/article"
 	"blog/internal/api/v1/auth"
 	"blog/internal/api/v1/category"
+	"blog/internal/api/v1/chat"
 	"blog/internal/api/v1/comment"
 	"blog/internal/api/v1/tag"
 	"blog/internal/api/v1/user"
@@ -21,6 +22,7 @@ import (
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
+	chatSvc "blog/internal/service/chat"
 	chunkSvc "blog/internal/service/chunk"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
@@ -50,6 +52,7 @@ type Router struct {
 	categoryCtrl      *category.CategoryController
 	tagCtrl           *tag.TagController
 	aboutCtrl         *about.AboutController
+	chatCtrl          *chat.Controller
 	articleService    articleSvc.ArticleService
 }
 
@@ -67,6 +70,7 @@ func NewRouter(
 	vectorService vectorSvc.Service,
 	vectorizeService vectorizeSvc.Service,
 	chunkService chunkSvc.Service,
+	chatService chatSvc.Service,
 ) *Router {
 	return &Router{
 		authCtrl:          auth.NewController(authSvc),
@@ -84,6 +88,7 @@ func NewRouter(
 		categoryCtrl:      category.NewCategoryController(categoryService),
 		tagCtrl:           tag.NewTagController(tagService),
 		aboutCtrl:         about.NewAboutController(aboutService),
+		chatCtrl:          chat.NewController(chatService),
 		articleService:    articleService,
 	}
 }
@@ -133,6 +138,10 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 评论路由组（挂载在 /articles 路径下）
 		r.commentCtrl.RegisterRouter(v1.Group("/articles"))
+
+		// AI 助手（模块 05）：前台接口全部需要登录，游客不可用。
+		// 内部同时挂 /articles/:id/chat/context 与 /chat/sessions...
+		r.chatCtrl.RegisterRoutes(v1)
 
 		// 后台管理路由组（需管理员认证，role_id = 1）
 		adminGroup := v1.Group("/admin")

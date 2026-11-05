@@ -154,6 +154,62 @@ func (r *chatRepository) ListAllMessages(sessionID uint) ([]*entity.ChatMessage,
 	return list, err
 }
 
+// ===== 文章 =====
+
+func (r *chatRepository) FindArticle(id uint) (*ArticleBrief, error) {
+	var rows []*ArticleBrief
+	// 用 Raw + 显式列，不用 db.Where(&entity.Article{})：实体的 gorm.DeletedAt 会自动加
+	// deleted_at IS NULL，看着更省事，但那样也把「软删」语义带进来了；这里就要一条
+	// 一眼能看懂、不依赖任何隐式行为的 SQL。
+	err := r.db.Raw(`
+		SELECT id, title, status, vector_status
+		FROM articles
+		WHERE id = ? AND deleted_at IS NULL`, id).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return rows[0], nil
+}
+
+func (r *chatRepository) SearchPublishedArticles(keyword string, excludeID uint, limit int) ([]*ArticleBrief, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	kw := strings.TrimSpace(keyword)
+	var rows []*ArticleBrief
+	// status = 1 是硬条件：草稿标题绝不能出现在前台的候选列表里。
+	// 这也是为什么不复用 /articles?keyword= ——那个接口返回完整列表项、不能排除当前文章，
+	// 而且它的字段一改，聊天这边就跟着变重。
+	sql := `SELECT id, title, status, vector_status FROM articles
+		WHERE status = 1 AND deleted_at IS NULL`
+	args := []any{}
+	if excludeID > 0 {
+		sql += " AND id <> ?"
+		args = append(args, excludeID)
+	}
+	if kw != "" {
+		sql += " AND title ILIKE ?"
+		args = append(args, "%"+kw+"%")
+	}
+	sql += " ORDER BY id DESC LIMIT ?"
+	args = append(args, limit)
+	if err := r.db.Raw(sql, args...).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func (r *chatRepository) VectorTableReady() (bool, error) {
+	var exists bool
+	// to_regclass 不存在时返回 NULL，不报错；直接查 information_schema 也行，
+	// 但 regclass 更短且与模块 02 里的写法保持一致。
+	err := r.db.Raw("SELECT to_regclass('article_chunks') IS NOT NULL").Scan(&exists).Error
+	return exists, err
+}
+
 // ===== 后台 =====
 
 // adminSelectSession 后台列表与详情共用的列。

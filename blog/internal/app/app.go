@@ -10,6 +10,7 @@ import (
 	articleChunkRepo "blog/internal/repository/articlechunk"
 	"blog/internal/repository/auth"
 	"blog/internal/repository/category"
+	chatRepoPkg "blog/internal/repository/chat"
 	commentRepo "blog/internal/repository/comment"
 	llmconfigRepo "blog/internal/repository/llmconfig"
 	"blog/internal/repository/tag"
@@ -18,6 +19,7 @@ import (
 	articleSvc "blog/internal/service/article"
 	auth2 "blog/internal/service/auth"
 	categorySvc "blog/internal/service/category"
+	chatSvcPkg "blog/internal/service/chat"
 	chunkSvc "blog/internal/service/chunk"
 	commentSvc "blog/internal/service/comment"
 	llmSvc "blog/internal/service/llm"
@@ -239,6 +241,7 @@ func (a *App) initDependencies() {
 	aboutRepo := about.NewAboutRepository(a.pgDB)
 	llmCfgRepo := llmconfigRepo.NewLLMConfigRepository(a.pgDB)
 	acRepo := articleChunkRepo.NewArticleChunkRepository(a.pgDB)
+	chatRepo := chatRepoPkg.NewChatRepository(a.pgDB)
 
 	// 创建 Service
 	authSvc := auth2.NewAuthService(authRepo, authCache)
@@ -257,6 +260,9 @@ func (a *App) initDependencies() {
 	lSvc := llmSvc.NewLLMService(llmCfgSvc)
 	vecSvc := vectorizeSvc.NewVectorizeService(a.pgDB, aRepo, acRepo, llmCfgSvc, a.vectorSchemaSvc)
 	ckSvc := chunkSvc.NewChunkService(a.pgDB, acRepo)
+	// 助手服务只依赖「会话仓储 + 模型配置」，不注入 articleService：
+	// 后者的 GetDetail 会自增浏览量，AI 侧读文章不能污染统计（见 service/chat 的注释）。
+	chatSvc := chatSvcPkg.NewChatService(chatRepo, llmCfgSvc)
 
 	// 先把进程重启前遗留的「排队中/处理中」重置为失败，再启动 worker。
 	// 顺序不能反：worker 起来后如果有旧任务还挂在 1/2，抢锁会一直拒绝新提交。
@@ -267,7 +273,7 @@ func (a *App) initDependencies() {
 
 	// 创建 Router
 	a.router = api.NewRouter(authSvc, uSvc, aSvc, cSvc, catSvc, tSvc, aboutSvc, lSvc, llmCfgSvc,
-		a.vectorSchemaSvc, vecSvc, ckSvc)
+		a.vectorSchemaSvc, vecSvc, ckSvc, chatSvc)
 }
 
 // initRouter 初始化路由

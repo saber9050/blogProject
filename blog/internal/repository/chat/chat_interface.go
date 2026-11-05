@@ -25,6 +25,18 @@ type SessionRow struct {
 	FirstUserContent string // 首条 user 消息原文，后台列表截断展示
 }
 
+// ArticleBrief 会话/候选场景需要的最小文章信息。
+//
+// 不复用 article.ArticleDetailResponse：那个结构要 join 作者、分类、标签、点赞数，
+// 还会触发浏览量自增（IncrementViews）。AI 侧读文章绝不能污染浏览量统计，
+// 所以这里只取自己需要的几列。
+type ArticleBrief struct {
+	ID           uint
+	Title        string
+	Status       int8 // 1 已发布 / 0 草稿
+	VectorStatus int8 // 0 未处理 … 3 已完成，决定能否走语义检索
+}
+
 // AdminQuery 后台会话列表的筛选条件。
 type AdminQuery struct {
 	// User 一个输入框两种匹配：纯数字时先按 user_id 精确匹配（同时仍参与用户名模糊匹配），
@@ -65,6 +77,17 @@ type Repository interface {
 	// ListAllMessages 取会话全部消息，正序。仅后台详情与历史组装用（会话有 400 条上限，
 	// 一次性取完可控；真要流式再看是否需要游标）。
 	ListAllMessages(sessionID uint) ([]*entity.ChatMessage, error)
+
+	// ===== 文章（AI 侧只读，绝不触发浏览量自增）=====
+
+	// FindArticle 按 id 取文章，不过滤 status（调用方要区分「不存在」和「是草稿」），
+	// 但过滤软删。不存在返回 (nil, nil)。
+	FindArticle(id uint) (*ArticleBrief, error)
+	// SearchPublishedArticles 按标题模糊搜已发布文章，供 `/` 选择器用。
+	// keyword 为空时返回最近的 limit 篇；excludeID > 0 时排除该篇（当前文章不出现）。
+	SearchPublishedArticles(keyword string, excludeID uint, limit int) ([]*ArticleBrief, error)
+	// VectorTableReady article_chunks 表是否存在（没配向量模型时不会建）。
+	VectorTableReady() (bool, error)
 
 	// ===== 后台 =====
 
