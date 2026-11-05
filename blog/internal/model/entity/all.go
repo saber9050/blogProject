@@ -30,6 +30,12 @@ func AllModels() []interface{} {
 
 		// 大模型配置
 		&AIModelConfig{},
+
+		// 文章页 AI 助手（模块 05）。放在最后：chat_messages.session_id 逻辑上指向
+		// chat_sessions，但表上不建物理外键（与 article_chunks、comments 的风格一致），
+		// 所以顺序不是硬要求，保持「新模块追加在末尾」更便于对照 git 历史。
+		&ChatSession{},
+		&ChatMessage{},
 	}
 }
 

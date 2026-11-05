@@ -151,6 +151,10 @@ func (a *App) initDatabase() error {
 		logger.Info("表结构同步完成（不含数据）")
 	}
 
+	// pg_trgm 自检：模块 05 的关键词检索路用 word_similarity()，它来自 contrib 扩展。
+	// 失败只降级（退化成 ILIKE）不阻断启动——关键词路效果差一档，但站点照常可用。
+	database.EnsureTrgm(a.pgDB)
+
 	// 向量相关初始化必须等 AutoMigrate 之后：部分唯一索引依赖 ai_model_configs 表已存在，
 	// 而向量表维度依赖 ai_model_configs 里的 dimension 值。
 	//
