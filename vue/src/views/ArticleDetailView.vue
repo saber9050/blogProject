@@ -171,6 +171,12 @@
         </aside>
       </div>
     </main>
+
+    <!-- AI 答疑助手（模块 05）。position:fixed 脱离 grid 流，
+         不影响上面 1fr 340px 的详情+评论布局。
+         不传 article-title：标题由服务端从库里取并拼进消息前缀，
+         前端再传一份就会出现两个来源，迟早不一致。 -->
+    <ArticleChat v-if="article.id" :article-id="Number(article.id)" />
   </div>
 </template>
 
@@ -179,6 +185,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
+import ArticleChat from '../components/ArticleChat.vue'
 import { showToast } from '../utils/toast'
 // 正文是 Markdown，交给 md-editor-v3 的预览组件渲染
 import { MdPreview } from 'md-editor-v3'
