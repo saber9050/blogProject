@@ -92,7 +92,14 @@
                 :model-value="m.content || (m.streaming ? '' : '')"
                 class="ai-chat__markdown"
               />
-              <p v-else class="ai-chat__plain">{{ m.content }}</p>
+              <p v-else class="ai-chat__plain">
+                <span
+                  v-for="(t, i) in tokensOf(m)"
+                  :key="i"
+                  :class="{ 'ai-chat__pill': t.type === 'pill' }"
+                  >{{ t.text }}</span
+                >
+              </p>
 
               <span v-if="m.streaming" class="ai-chat__caret" aria-hidden="true"></span>
 
@@ -107,28 +114,15 @@
           </div>
         </div>
 
-        <footer class="ai-chat__composer">
-          <textarea
-            v-model="draft"
-            class="ai-chat__input"
-            :disabled="!context?.enabled"
-            placeholder="就这篇文章提问…（Enter 发送，Shift+Enter 换行）"
-            rows="1"
-            @keydown.enter.exact.prevent="onEnter"
-          ></textarea>
-          <button
-            v-if="!streaming"
-            class="ai-chat__send"
-            type="button"
-            :disabled="!draft.trim()"
-            @click="send"
-          >
-            发送
-          </button>
-          <button v-else class="ai-chat__send ai-chat__send--stop" type="button" @click="stop">
-            停止
-          </button>
-        </footer>
+        <ChatComposer
+          ref="composerRef"
+          :disabled="!context?.enabled"
+          :streaming="streaming"
+          :max-refs="maxRefs"
+          :current-article-id="articleId"
+          @send="onComposerSend"
+          @stop="stop"
+        />
       </template>
     </section>
   </div>
@@ -139,14 +133,17 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
+import ChatComposer from './ChatComposer.vue'
 import {
   createChatSession,
   fetchChatContext,
   fetchChatMessages,
   sendChatMessageStream,
+  type ArticleRef,
   type ChatContext,
   type RefChunk
 } from '../api/chat'
+import { tokenizeMessage, type ComposerPayload, type MessageToken } from '../utils/editor-serialize'
 
 const props = defineProps<{ articleId: number }>()
 
@@ -165,20 +162,21 @@ interface LocalMessage {
   streaming?: boolean
   toolHint?: string
   refs?: RefChunk[]
+  articleRefs?: ArticleRef[]
 }
 
 const open = ref(false)
 const context = ref<ChatContext | null>(null)
 const messages = ref<LocalMessage[]>([])
-const draft = ref('')
 const streaming = ref(false)
 const loadingHistory = ref(false)
 const listEl = ref<HTMLElement | null>(null)
+const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null)
 
 const sessionId = ref(0)
 let abortController: AbortController | null = null
-// 流式节流：把高频 delta 合并成每 60ms 一次渲染。
-// 不节流的话每个 token 都触发一次 Markdown 重渲染，长回答会明显卡顿。
+// delta 节流：把高频增量合并成每 60ms 一次渲染。
+// 不节流的话每个 token 都触发一次 Markdown 重渲染，长回答明显卡顿。
 let flushTimer: number | null = null
 let pendingText = ''
 
@@ -187,11 +185,20 @@ const currentModel = computed(() => {
   const m = messages.value.find((x) => x.role === 'assistant' && x.model)
   return m?.model || ''
 })
+// 后端说「最多 8 篇（含当前文章）」，前端算 pill 上限时减 1。
+// 不写死 7：将来后端调这个数，前端自动跟上。
+const maxRefs = computed(() => Math.max((context.value?.max_ref_articles || 8) - 1, 0))
 const sampleQuestions = computed(() => [
   '这篇文章主要讲了什么？',
   '文中的关键结论是怎么得出来的？',
   '有没有容易踩坑的地方？'
 ])
+
+// 历史消息里的 `/标题` 还原成 pill（按 article_refs 匹配，匹配不上退化成纯文本）
+function tokensOf(m: LocalMessage): MessageToken[] {
+  if (m.role !== 'user') return [{ type: 'text', text: m.content }]
+  return tokenizeMessage(m.content, m.articleRefs || null)
+}
 
 const lastSessionKey = () => {
   // key 带 userId：同一台设备换账号时不会拿上一个账号的会话 id 去请求
@@ -216,6 +223,7 @@ async function openPanel() {
   open.value = true
   if (!loggedIn.value) return
   if (!context.value) await loadContext()
+  nextTick(() => composerRef.value?.focus())
 }
 
 function closePanel() {
@@ -232,7 +240,6 @@ async function loadContext() {
     context.value = await fetchChatContext(props.articleId)
   } catch (e: any) {
     context.value = null
-    // 401 说明 token 失效，提示重新登录即可；其它错误不打断页面使用
     if (e?.response?.status === 401) {
       localStorage.removeItem('token')
     }
@@ -240,8 +247,7 @@ async function loadContext() {
   }
   if (!context.value.enabled) return
 
-  // 恢复上次会话：优先 localStorage（记录的是「这台设备上次真正打开的那个」），
-  // 没有再退回服务端给的最近活跃会话
+  // 优先 localStorage（记录「这台设备上次真正打开的那个」），服务端只作兜底
   const saved = Number(localStorage.getItem(lastSessionKey()) || 0)
   const target = saved || context.value.last_session_id
   if (target) {
@@ -263,11 +269,12 @@ async function loadHistory(id: number) {
       refused: m.refused,
       interrupted: m.interrupted,
       error: m.error,
-      refs: m.refs || undefined
+      refs: m.refs || undefined,
+      articleRefs: m.article_refs || undefined
     }))
     scrollToBottom()
   } catch {
-    // 会话可能已在别处被删除：清掉本地记录并回到空态，不弹错误（不是用户操作失误）
+    // 会话可能已在别处被删除：清掉本地记录回到空态，不弹错误（不是用户操作失误）
     localStorage.removeItem(lastSessionKey())
     sessionId.value = 0
     messages.value = []
@@ -281,30 +288,28 @@ function startNewSession() {
   sessionId.value = 0
   messages.value = []
   localStorage.removeItem(lastSessionKey())
-  draft.value = ''
+  composerRef.value?.clear()
 }
 
 function useSample(text: string) {
-  draft.value = text
-  nextTick(() => send())
+  void onComposerSend({ text, articleIds: [], refs: [] })
 }
 
-function onEnter() {
-  // 中文输入法：拼音还没上屏时按 Enter，compositionend 还没触发，不能当发送
-  const composing = (window.event as any)?.isComposing
-  if (composing) return
-  send()
-}
-
-async function send() {
-  const text = draft.value.trim()
+async function onComposerSend(payload: ComposerPayload) {
+  const text = payload.text.trim()
   if (!text || streaming.value) return
 
-  draft.value = ''
   streaming.value = true
 
   const userKey = `local-u-${Date.now()}`
-  messages.value.push({ key: userKey, id: 0, role: 'user', content: text })
+  messages.value.push({
+    key: userKey,
+    id: 0,
+    role: 'user',
+    content: text,
+    // 回显时用序列化时收集的 refs（含完整标题），刚发出去的消息也能显示 pill
+    articleRefs: payload.refs
+  })
 
   const asstKey = `local-a-${Date.now()}`
   const assistant: LocalMessage = {
@@ -318,7 +323,6 @@ async function send() {
   scrollToBottom()
 
   try {
-    // 没有会话就先建一个
     if (!sessionId.value) {
       const session = await createChatSession(props.articleId, context.value?.default_model_id || 0)
       sessionId.value = session.id
@@ -328,19 +332,23 @@ async function send() {
     abortController = new AbortController()
     await sendChatMessageStream(
       sessionId.value,
-      { content: text },
+      { content: text, articleIds: payload.articleIds },
       {
         onMeta: (meta) => {
           assistant.id = meta.assistant_message_id
           assistant.model = meta.model
+          // 服务端会把校验通过的引用回传：以它为准（被下架的文章会被剔除）
+          if (meta.article_refs?.length) {
+            const last = messages.value.find((x) => x.key === userKey)
+            if (last) last.articleRefs = meta.article_refs
+          }
         },
         onTool: (tool) => {
-          // 检索进度：3~5 秒空白没有任何反馈时，用户一定以为卡死了
-          if (tool.phase === 'start') {
-            assistant.toolHint = `正在检索资料…（第 ${tool.round} 轮）`
-          } else {
-            assistant.toolHint = `已检索 ${tool.hits ?? 0} 段`
-          }
+          // 3~5 秒空白没有任何反馈，用户一定以为卡死了
+          assistant.toolHint =
+            tool.phase === 'start'
+              ? `正在检索资料…（第 ${tool.round} 轮）`
+              : `已检索 ${tool.hits ?? 0} 段`
           scrollToBottom()
         },
         onRefs: (chunks) => {
@@ -371,7 +379,7 @@ async function send() {
           scrollToBottom()
         },
         onError: (_code, message) => {
-          // partial 时也走这里：已生成的内容必须保留，只在气泡里补一行错误说明
+          // partial 时也走这里：已生成的内容必须保留，只补一行错误说明
           if (pendingText) {
             assistant.content += pendingText
             pendingText = ''
@@ -419,7 +427,7 @@ watch(
     messages.value = []
     sessionId.value = 0
     context.value = null
-    draft.value = ''
+    composerRef.value?.clear()
     if (open.value && loggedIn.value) await loadContext()
   }
 )
@@ -669,52 +677,17 @@ onBeforeUnmount(() => {
   color: var(--text-faint);
 }
 
-.ai-chat__composer {
-  display: flex;
-  gap: 8px;
-  padding: 10px 12px 12px;
-  border-top: 1px solid var(--border);
-  background: var(--surface-strong);
-}
-
-.ai-chat__input {
-  flex: 1;
-  min-height: 40px;
-  max-height: 120px;
-  padding: 9px 11px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  font-size: 0.85rem;
-  font-family: inherit;
-  color: var(--text-strong);
-  resize: none;
-  outline: none;
-}
-
-.ai-chat__input:focus {
-  border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px var(--primary-soft);
-}
-
-.ai-chat__send {
-  align-self: flex-end;
-  height: 40px;
-  padding: 0 16px;
-  border: none;
-  border-radius: 10px;
-  background: var(--primary-500);
-  color: #fff;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.ai-chat__send:disabled {
-  background: var(--border-strong);
-  cursor: not-allowed;
-}
-
-.ai-chat__send--stop {
-  background: var(--text-muted);
+/* 历史消息里的引用 pill（只读展示，样式与输入框里的保持一致） */
+.ai-chat__pill {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-500);
+  font-weight: 600;
+  font-size: 0.95em;
+  white-space: nowrap;
 }
 
 .ai-chat__notice {
