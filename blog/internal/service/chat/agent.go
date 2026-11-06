@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"time"
+
 	llmconfigSvc "blog/internal/service/llmconfig"
 	"blog/pkg/logger"
 
@@ -30,7 +32,20 @@ type agentEntry struct {
 	runner *adk.Runner
 	// modelName 模型名，落库时写进 chat_messages.model
 	modelName string
+	// builtAt 构建时间，用于 TTL 过期
+	builtAt time.Time
 }
+
+// agentCacheTTL 缓存的存活时间。
+//
+// 为什么需要 TTL：agent 在构建时把「密钥、模型名、温度」都编进了内部结构。
+// 管理员改了配置（换了 key、换了模型名）后，缓存不失效就会一直用旧值，
+// 而 id 没变——从外部完全看不出问题，只会表现为「配置改了但没生效」。
+//
+// 为什么不用「配置变更时主动失效」：那需要 llmconfig 服务反向依赖 chat，
+// 或者引入一套事件总线。为了一个几十秒的延迟引入这种耦合不值得。
+// 60 秒的代价是「改完配置等一分钟」，换来的是零耦合。
+const agentCacheTTL = 60 * time.Second
 
 // agentBuilder 按模型配置构建并缓存 agent。
 //
@@ -62,7 +77,7 @@ func (b *agentBuilder) get(ctx context.Context, configID uint) (*agentEntry, err
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if e, ok := b.entries[configID]; ok {
+	if e, ok := b.entries[configID]; ok && time.Since(e.builtAt) < agentCacheTTL {
 		return e, nil
 	}
 
@@ -142,7 +157,7 @@ func (b *agentBuilder) get(ctx context.Context, configID uint) (*agentEntry, err
 		EnableStreaming: true,
 	})
 
-	e := &agentEntry{agent: agent, runner: runner, modelName: cfg.Model}
+	e := &agentEntry{agent: agent, runner: runner, modelName: cfg.Model, builtAt: time.Now()}
 	b.entries[configID] = e
 	logger.Info("已构建并缓存 agent", zap.Uint("model_config_id", configID),
 		zap.String("model", cfg.Model))

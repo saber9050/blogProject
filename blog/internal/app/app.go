@@ -262,7 +262,7 @@ func (a *App) initDependencies() {
 	ckSvc := chunkSvc.NewChunkService(a.pgDB, acRepo)
 	// 助手服务只依赖「会话仓储 + 模型配置」，不注入 articleService：
 	// 后者的 GetDetail 会自增浏览量，AI 侧读文章不能污染统计（见 service/chat 的注释）。
-	chatSvc := chatSvcPkg.NewChatService(chatRepo, llmCfgSvc)
+	chatSvc := chatSvcPkg.NewChatService(chatRepo, llmCfgSvc, a.redis)
 
 	// 先把进程重启前遗留的「排队中/处理中」重置为失败，再启动 worker。
 	// 顺序不能反：worker 起来后如果有旧任务还挂在 1/2，抢锁会一直拒绝新提交。

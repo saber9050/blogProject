@@ -19,6 +19,10 @@ import (
 )
 
 const (
+	// maxSessionMessages 单会话消息总条数上限（user + assistant）。
+	// 约等于 200 轮问答。⚠️ 不是「200 轮」——message_count 数的是**消息行**，
+	// 一次问答产生 2 行，写成 200 会让实际只允许 100 轮。
+	maxSessionMessages = 400
 	// maxContentRunes 单条提问上限。与前端输入框的限制保持一致。
 	maxContentRunes = 2000
 	// maxRefArticleIDs 单次提问可额外引用的文章数（连同当前文章共 MaxRefArticles 篇）。
@@ -55,6 +59,18 @@ func (s *chatService) SendMessage(ctx context.Context, userID, sessionID uint,
 	}
 	if utf8.RuneCountInString(content) > maxContentRunes {
 		return nil, errors.New(errors.CodeBadRequest, "提问过长，请控制在 2000 字以内")
+	}
+
+	// 会话总量上限。放在内容校验之后、落库之前：空消息不该消耗配额，
+	// 而超限检查必须在写入之前，否则会留下一条「问了但注定失败」的消息。
+	if sess.MessageCount >= maxSessionMessages {
+		return nil, errors.New(errors.CodeConflict,
+			"本会话已达上限（约 200 轮），请新建会话继续")
+	}
+
+	// 限流放在所有廉价校验之后：避免刷接口的人用空消息把配额刷掉
+	if err := s.allow(ctx, userID); err != nil {
+		return nil, err
 	}
 
 	// 引用文章校验必须在**落库之前**做完：不合法直接 400，

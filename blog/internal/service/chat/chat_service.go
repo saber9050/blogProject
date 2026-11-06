@@ -6,6 +6,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	"github.com/redis/go-redis/v9"
+
 	"blog/internal/model/dto/request"
 	"blog/internal/model/dto/response"
 	"blog/internal/model/entity"
@@ -37,6 +39,10 @@ type chatService struct {
 	embedMu     sync.Mutex
 	embedClient *llmclient.Client
 	embedKey    string
+
+	// redis 用于限流。可能为 nil（Redis 初始化失败），那时限流直接放行——
+	// 缓存挂了不能让聊天不可用。
+	redis *redis.Client
 }
 
 // NewChatService 创建助手服务。
@@ -45,8 +51,8 @@ type chatService struct {
 // ⚠️ 刻意**不注入 articleService**：article 服务的 GetDetail 每次都会 IncrementViews，
 // AI 侧读文章若走它，用户每问一句文章浏览量就涨一次，统计直接失真。
 // 文章校验用仓储里的只读查询（FindArticle），一次 select 两列。
-func NewChatService(r repo.Repository, llmCfg llmconfigSvc.Service) Service {
-	svc := &chatService{repo: r, llmCfg: llmCfg}
+func NewChatService(r repo.Repository, llmCfg llmconfigSvc.Service, redisClient *redis.Client) Service {
+	svc := &chatService{repo: r, llmCfg: llmCfg, redis: redisClient}
 	// agent 的检索工具在调用时才用到 service，所以把自己传进去：
 	// 工具本身只依赖「按 scope + query 检索」这一个能力（见 contextSearcher）。
 	svc.agents = newAgentBuilder(llmCfg, svc)
