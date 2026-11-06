@@ -405,6 +405,11 @@
         <section v-if="activeTab === 'chunks'" class="admin-panel">
           <ChunkViewerPanel />
         </section>
+
+        <!-- ========== 助手会话（AI 助手的对话记录，按用户 / 文章筛选） ========== -->
+        <section v-if="activeTab === 'chat-sessions'" class="admin-panel">
+          <AdminChatSessionsPanel />
+        </section>
       </main>
     </div>
 
@@ -537,6 +542,7 @@ import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import AIModelPanel from '../components/AIModelPanel.vue'
 import ChunkViewerPanel from '../components/ChunkViewerPanel.vue'
+import AdminChatSessionsPanel from '../components/AdminChatSessionsPanel.vue'
 import { showToast } from '../utils/toast'
 import { calcPages, getPageRange } from '../utils/pagination'
 
@@ -596,7 +602,8 @@ const tabs = [
   { key: 'categories', label: '分类管理', icon: '📁' },
   { key: 'tags', label: '标签管理', icon: '🏷️' },
   { key: 'ai', label: 'AI 模型', icon: '🤖' },
-  { key: 'chunks', label: '切分管理', icon: '🧩' }
+  { key: 'chunks', label: '切分管理', icon: '🧩' },
+  { key: 'chat-sessions', label: '助手会话', icon: '🗨️' }
 ]
 
 const users = ref<UserItem[]>([])

@@ -43,6 +43,15 @@ type Service interface {
 	// ListArticleCandidates `/` 选择器的候选源，只返回已发布文章。
 	ListArticleCandidates(keyword string, excludeID uint, limit int) ([]*response.ChatArticleCandidateItem, error)
 
+	// ===== 后台（管理员视角，不受归属限制）=====
+
+	// AdminList 全站会话分页，带用户 / 文章名筛选。
+	AdminList(q *request.AdminChatSessionQuery) (*response.AdminSessionListResponse, error)
+	// AdminDetail 会话详情 + 全部消息。
+	AdminDetail(id uint) (*response.AdminSessionDetailResponse, error)
+	// AdminDelete 硬删会话（不可恢复）。
+	AdminDelete(id uint) error
+
 	// SendMessage 发消息并跑 agent。
 	//
 	// sink 非 nil 时边跑边推事件（流式）；为 nil 时只返回最终结果（非流式）。

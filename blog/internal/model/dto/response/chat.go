@@ -103,3 +103,64 @@ type SendChatMessageResponse struct {
 	ToolCalls        int    `json:"tool_calls"`
 	Degraded         bool   `json:"degraded"`
 }
+
+// ===== 后台「助手会话」 =====
+
+// AdminSessionItem 后台会话列表的一行。
+//
+// 与 ChatSessionItem 的区别：这是「管理员视角」，要多给用户名、文章名、首问摘要，
+// 而且**不过滤文章 status**（草稿文章也可能有历史会话，管理员需要能查到）。
+type AdminSessionItem struct {
+	ID           uint   `json:"id"`
+	ArticleID    uint   `json:"article_id"`
+	ArticleTitle string `json:"article_title"`
+	// ArticleDeleted 文章已被硬删，标题取不到。列表要显示「文章已删除」而不是空标题，
+	// 否则管理员会以为是自己筛选条件写错了。
+	ArticleDeleted bool `json:"article_deleted"`
+	UserID         uint `json:"user_id"`
+	UserName       string `json:"user_name"`
+	Title          string `json:"title"`
+	// Summary 首条用户提问的前若干字。管理员在列表上最想知道「这个人问了什么」，
+	// title 可能被改过，首问原文不会。
+	Summary       string  `json:"summary"`
+	MessageCount  int     `json:"message_count"`
+	LastMessageAt *string `json:"last_message_at"`
+	CreatedAt     string  `json:"created_at"`
+}
+
+// AdminSessionListResponse 后台会话分页结果。
+type AdminSessionListResponse struct {
+	List     []*AdminSessionItem `json:"list"`
+	Total    int64               `json:"total"`
+	Page     int                 `json:"page"`
+	PageSize int                 `json:"page_size"`
+}
+
+// AdminMessageItem 后台看到的一条消息。
+//
+// 比前台多给 error / refused 的原因：后台是「查问题现场」，要知道哪句被拒了、
+// 哪句失败了。user 消息直接显示 `/标题` 原文，**不渲染 pill**——
+// 那样会把「用户到底打了什么」藏起来，反而不利于排查。
+type AdminMessageItem struct {
+	ID          uint                    `json:"id"`
+	Role        string                  `json:"role"`
+	Content     string                  `json:"content"`
+	Model       string                  `json:"model"`
+	Refs        []entity.ChatRefChunk   `json:"refs"`
+	ArticleRefs []entity.ChatArticleRef `json:"article_refs"`
+	PromptTokens     int                `json:"prompt_tokens"`
+	CompletionTokens int                `json:"completion_tokens"`
+	Interrupted bool                    `json:"interrupted"`
+	Refused     bool                    `json:"refused"`
+	Error       string                  `json:"error"`
+	CreatedAt   string                  `json:"created_at"`
+}
+
+// AdminSessionDetailResponse 会话详情 + 消息。
+//
+// 消息不分页：单个会话有 400 条上限（见 §9 的会话总量限制），一次返回可控。
+// 真出现「一个会话几百条消息」的情况，那本身就是需要人工介入的异常。
+type AdminSessionDetailResponse struct {
+	Session  *AdminSessionItem    `json:"session"`
+	Messages []*AdminMessageItem  `json:"messages"`
+}

@@ -255,3 +255,65 @@ export async function sendChatMessageStream(
     reader.releaseLock()
   }
 }
+
+// ===== 后台「助手会话」 =====
+
+export interface AdminSessionItem {
+  id: number
+  article_id: number
+  article_title: string
+  article_deleted: boolean
+  user_id: number
+  user_name: string
+  title: string
+  summary: string
+  message_count: number
+  last_message_at: string | null
+  created_at: string
+}
+
+export interface AdminMessageItem {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  model: string
+  refs: RefChunk[] | null
+  article_refs: ArticleRef[] | null
+  prompt_tokens: number
+  completion_tokens: number
+  interrupted: boolean
+  refused: boolean
+  error: string
+  created_at: string
+}
+
+export interface AdminSessionListParams {
+  user?: string
+  article?: string
+  page?: number
+  page_size?: number
+}
+
+/** 后台会话列表（需要管理员 token） */
+export async function adminListChatSessions(params: AdminSessionListParams): Promise<{
+  list: AdminSessionItem[]
+  total: number
+  page: number
+  page_size: number
+}> {
+  const res = await api.get('/admin/chat-sessions', { params })
+  return res.data.data
+}
+
+/** 后台会话详情 + 全部消息 */
+export async function adminGetChatSession(
+  id: number
+): Promise<{ session: AdminSessionItem; messages: AdminMessageItem[] }> {
+  const res = await api.get(`/admin/chat-sessions/${id}`)
+  return res.data.data
+}
+
+/** 后台硬删会话（不可恢复） */
+export async function adminDeleteChatSession(id: number): Promise<void> {
+  await api.delete(`/admin/chat-sessions/${id}`)
+}

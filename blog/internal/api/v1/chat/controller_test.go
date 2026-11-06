@@ -34,6 +34,14 @@ func (f *fakeService) DeleteSession(userID, sessionID uint) error { return nil }
 func (f *fakeService) ListArticleCandidates(keyword string, excludeID uint, limit int) ([]*response.ChatArticleCandidateItem, error) {
 	return nil, nil
 }
+func (f *fakeService) AdminList(q *request.AdminChatSessionQuery) (*response.AdminSessionListResponse, error) {
+	return &response.AdminSessionListResponse{}, nil
+}
+func (f *fakeService) AdminDetail(id uint) (*response.AdminSessionDetailResponse, error) {
+	return &response.AdminSessionDetailResponse{}, nil
+}
+func (f *fakeService) AdminDelete(id uint) error { return nil }
+
 func (f *fakeService) SendMessage(ctx context.Context, userID, sessionID uint,
 	req *request.SendChatMessageRequest, sink chatSvc.StreamSink) (*response.SendChatMessageResponse, error) {
 	return &response.SendChatMessageResponse{}, nil

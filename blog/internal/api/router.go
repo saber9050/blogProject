@@ -4,6 +4,7 @@ import (
 	"blog/internal/api/v1/about"
 	adminArticle "blog/internal/api/v1/admin/article"
 	adminCategory "blog/internal/api/v1/admin/category"
+	adminChat "blog/internal/api/v1/admin/chat"
 	adminChunk "blog/internal/api/v1/admin/chunk"
 	adminComment "blog/internal/api/v1/admin/comment"
 	adminLLMConfig "blog/internal/api/v1/admin/llmconfig"
@@ -48,6 +49,7 @@ type Router struct {
 	adminLLMCtrl      *adminLLMConfig.Controller
 	adminVectorCtrl   *adminVector.Controller
 	adminChunkCtrl    *adminChunk.Controller
+	adminChatCtrl     *adminChat.Controller
 	commentCtrl       *comment.Controller
 	categoryCtrl      *category.CategoryController
 	tagCtrl           *tag.TagController
@@ -84,6 +86,7 @@ func NewRouter(
 		adminLLMCtrl:      adminLLMConfig.NewController(llmConfigService),
 		adminVectorCtrl:   adminVector.NewController(vectorService),
 		adminChunkCtrl:    adminChunk.NewController(chunkService),
+		adminChatCtrl:     adminChat.NewController(chatService),
 		commentCtrl:       comment.NewController(commentSvc),
 		categoryCtrl:      category.NewCategoryController(categoryService),
 		tagCtrl:           tag.NewTagController(tagService),
@@ -155,6 +158,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 			r.adminLLMCtrl.RegisterRoutes(adminGroup)
 			r.adminVectorCtrl.RegisterRoutes(adminGroup)
 			r.adminChunkCtrl.RegisterRoutes(adminGroup)
+			r.adminChatCtrl.RegisterRoutes(adminGroup)
 		}
 	}
 }

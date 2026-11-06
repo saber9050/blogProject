@@ -58,3 +58,14 @@ type SendChatMessageRequest struct {
 func (r *SendChatMessageRequest) WantsStream() bool {
 	return r.Stream == nil || *r.Stream
 }
+
+// AdminChatSessionQuery 后台会话列表筛选。
+type AdminChatSessionQuery struct {
+	// User 一个输入框两种匹配：纯数字先按 user_id 精确匹配（同时也参与用户名模糊），
+	// 非数字只按用户名模糊。合成一个字段，管理员不用先想「我输入的是 id 还是名字」。
+	User string `form:"user"`
+	// Article 文章标题模糊匹配。
+	Article  string `form:"article"`
+	Page     int    `form:"page"`
+	PageSize int    `form:"page_size"`
+}
