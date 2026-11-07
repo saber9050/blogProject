@@ -58,10 +58,13 @@ type ChatMessageItem struct {
 	Refs []entity.ChatRefChunk `json:"refs"`
 	// ArticleRefs 仅 user 有值：本轮显式引用的其他文章。
 	ArticleRefs []entity.ChatArticleRef `json:"article_refs"`
-	Interrupted bool                    `json:"interrupted"`
-	Refused     bool                    `json:"refused"`
-	Error       string                  `json:"error"`
-	CreatedAt   string                  `json:"created_at"`
+	// Steps 仅 assistant 有值：本次回答的检索过程（查了几次、用什么词、命中几段、耗时多久）。
+	// nil 表示这次没有发生过检索（模型直接回答），前端要能区分「没查」和「查了没命中」。
+	Steps       []entity.ChatStep `json:"steps"`
+	Interrupted bool              `json:"interrupted"`
+	Refused     bool              `json:"refused"`
+	Error       string            `json:"error"`
+	CreatedAt   string            `json:"created_at"`
 }
 
 // ChatMessageListResponse 历史消息分页结果。
@@ -102,6 +105,9 @@ type SendChatMessageResponse struct {
 	Rounds           int    `json:"rounds"`
 	ToolCalls        int    `json:"tool_calls"`
 	Degraded         bool   `json:"degraded"`
+	// Steps 本次回答的检索过程。非流式模式下与流式 tool 事件的内容一致，
+	// nil 表示一次都没检索（模型直接回答）。
+	Steps []entity.ChatStep `json:"steps"`
 }
 
 // ===== 后台「助手会话」 =====
@@ -116,8 +122,8 @@ type AdminSessionItem struct {
 	ArticleTitle string `json:"article_title"`
 	// ArticleDeleted 文章已被硬删，标题取不到。列表要显示「文章已删除」而不是空标题，
 	// 否则管理员会以为是自己筛选条件写错了。
-	ArticleDeleted bool `json:"article_deleted"`
-	UserID         uint `json:"user_id"`
+	ArticleDeleted bool   `json:"article_deleted"`
+	UserID         uint   `json:"user_id"`
 	UserName       string `json:"user_name"`
 	Title          string `json:"title"`
 	// Summary 首条用户提问的前若干字。管理员在列表上最想知道「这个人问了什么」，
@@ -148,12 +154,15 @@ type AdminMessageItem struct {
 	Model       string                  `json:"model"`
 	Refs        []entity.ChatRefChunk   `json:"refs"`
 	ArticleRefs []entity.ChatArticleRef `json:"article_refs"`
-	PromptTokens     int                `json:"prompt_tokens"`
-	CompletionTokens int                `json:"completion_tokens"`
-	Interrupted bool                    `json:"interrupted"`
-	Refused     bool                    `json:"refused"`
-	Error       string                  `json:"error"`
-	CreatedAt   string                  `json:"created_at"`
+	// Steps 检索过程。后台靠它判断「这次为什么答得不好」——
+	// 是根本没查、查了没命中、还是查到了但降级了。
+	Steps            []entity.ChatStep `json:"steps"`
+	PromptTokens     int               `json:"prompt_tokens"`
+	CompletionTokens int               `json:"completion_tokens"`
+	Interrupted      bool              `json:"interrupted"`
+	Refused          bool              `json:"refused"`
+	Error            string            `json:"error"`
+	CreatedAt        string            `json:"created_at"`
 }
 
 // AdminSessionDetailResponse 会话详情 + 消息。
@@ -161,6 +170,6 @@ type AdminMessageItem struct {
 // 消息不分页：单个会话有 400 条上限（见 §9 的会话总量限制），一次返回可控。
 // 真出现「一个会话几百条消息」的情况，那本身就是需要人工介入的异常。
 type AdminSessionDetailResponse struct {
-	Session  *AdminSessionItem    `json:"session"`
-	Messages []*AdminMessageItem  `json:"messages"`
+	Session  *AdminSessionItem   `json:"session"`
+	Messages []*AdminMessageItem `json:"messages"`
 }

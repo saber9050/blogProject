@@ -49,6 +49,18 @@ const (
 	fullTextRefChars     = 1500
 )
 
+// SearchResult 一次检索的产物。
+//
+// 除了给模型的文本，还要把「命中几段、查了哪几篇、有没有降级」带回去——
+// tool 要拿它填 Scope.Steps，让用户能在界面上看到完整的检索过程。
+type SearchResult struct {
+	Text     string
+	Hits     int
+	Articles []string
+	Degraded bool
+	Note     string
+}
+
 // fusedChunk 融合后的候选，带 RRF 分。
 type fusedChunk struct {
 	chunk *repo.RetrievedChunk
@@ -60,17 +72,23 @@ type fusedChunk struct {
 // 这个方法是 agent 的 tool 唯一调用的东西，与 agent 完全解耦：
 // 可以单独 curl / 单测，不需要起模型。调检索参数时这一点非常重要——
 // 不然每次改阈值都要跑一遍 LLM，既慢又不可复现。
-func (s *chatService) Search(ctx context.Context, sc *Scope, rawQuery string) (string, error) {
+func (s *chatService) Search(ctx context.Context, sc *Scope, rawQuery string) (SearchResult, error) {
 	ids := sc.ArticleIDs()
 	if len(ids) == 0 {
-		return "检索范围无效。请直接根据已有信息回答；如果没有任何信息，请如实告知无法回答。", nil
+		return SearchResult{
+			Text: "检索范围无效。请直接根据已有信息回答；如果没有任何信息，请如实告知无法回答。",
+			Note: "检索范围为空（会话没有绑定文章）",
+		}, nil
 	}
 
 	remaining := totalMaxChars - sc.UsedChars
 	if remaining <= 0 {
 		// 多轮累计已用完预算。返回一句「够了」而不是报错——
 		// 报错会让模型以为检索坏了，可能改去编答案。
-		return "本次对话的资料已积累足够，请基于已有内容作答。", nil
+		return SearchResult{
+			Text: "本次对话的资料已积累足够，请基于已有内容作答。",
+			Note: "资料预算已用完",
+		}, nil
 	}
 
 	clean := cleanQuery(rawQuery)
@@ -116,7 +134,11 @@ func (s *chatService) Search(ctx context.Context, sc *Scope, rawQuery string) (s
 	if len(fused) == 0 {
 		// 两路都没命中：可能是文章没向量化、也可能是问题确实无关。
 		// 退回全文，让模型至少能看到文章主体。
-		return s.fullTextFallback(ctx, sc, remaining)
+		text, err := s.fullTextFallback(ctx, sc, remaining)
+		if err != nil {
+			return SearchResult{}, err
+		}
+		return SearchResult{Text: text, Hits: 0, Degraded: true, Note: "未命中切片，已退回全文"}, nil
 	}
 
 	sections, err := s.expandSections(ctx, sc, fused)
@@ -133,10 +155,39 @@ func (s *chatService) Search(ctx context.Context, sc *Scope, rawQuery string) (s
 		sc.Seen[r.ChunkID] = struct{}{}
 	}
 	if text == "" {
-		return s.fullTextFallback(ctx, sc, remaining)
+		text, err := s.fullTextFallback(ctx, sc, remaining)
+		if err != nil {
+			return SearchResult{}, err
+		}
+		return SearchResult{Text: text, Hits: 0, Degraded: true, Note: "装配后为空，已退回全文"}, nil
 	}
 	sc.UsedChars += len([]rune(text))
-	return text, nil
+
+	// 实际命中的文章（按资料里出现的顺序去重），用于前端展示「查了哪几篇」
+	articles := make([]string, 0, len(refs))
+	seenTitle := make(map[string]struct{}, len(refs))
+	for _, r := range refs {
+		for _, sec := range sections {
+			if sec.hitChunk != nil && sec.hitChunk.ID == r.ChunkID && sec.articleTitle != "" {
+				if _, ok := seenTitle[sec.articleTitle]; !ok {
+					seenTitle[sec.articleTitle] = struct{}{}
+					articles = append(articles, sec.articleTitle)
+				}
+			}
+		}
+	}
+
+	note := ""
+	if sc.Degraded {
+		note = "部分检索路降级"
+	}
+	return SearchResult{
+		Text:     text,
+		Hits:     len(refs),
+		Articles: articles,
+		Degraded: sc.Degraded,
+		Note:     note,
+	}, nil
 }
 
 // ===== ① 两路召回 =====

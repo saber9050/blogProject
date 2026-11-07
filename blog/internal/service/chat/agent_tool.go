@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
@@ -27,7 +28,7 @@ type searchToolArgs struct {
 // 不直接依赖 chatService：工具只需要「按范围 + 关键词检索」，
 // 用最小接口的好处是它可以在单测里换成假实现，不必造一整个 service。
 type contextSearcher interface {
-	Search(ctx context.Context, sc *Scope, query string) (string, error)
+	Search(ctx context.Context, sc *Scope, query string) (SearchResult, error)
 }
 
 // newSearchTool 构造检索工具（P3 起接真实混合检索）。
@@ -76,5 +77,16 @@ func runSearch(ctx context.Context, searcher contextSearcher, args *searchToolAr
 	sc.ToolCalls++
 	sc.Rounds++
 
-	return searcher.Search(ctx, sc, query)
+	// 先占位再回填：万一检索中途进程被杀，这条记录至少留下了「它当时在查什么」
+	stepIdx := sc.BeginStep(searchToolName, query)
+	start := time.Now()
+	res, err := searcher.Search(ctx, sc, query)
+	elapsed := time.Since(start).Milliseconds()
+
+	if err != nil {
+		sc.EndStep(stepIdx, 0, 0, elapsed, nil, true, "检索失败")
+		return "", err
+	}
+	sc.EndStep(stepIdx, res.Hits, len([]rune(res.Text)), elapsed, res.Articles, res.Degraded, res.Note)
+	return res.Text, nil
 }

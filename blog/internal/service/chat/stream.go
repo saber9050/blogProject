@@ -118,7 +118,18 @@ func consumeAgentStream(ctx context.Context, iter *adk.AsyncIterator[*adk.AgentE
 			}
 			// round 取「已发生的检索次数」：tool 执行时已自增过 sc.Rounds，
 			// 与 start 时预估的序号刚好对上。
-			_ = sink.OnToolEnd(maxInt(sc.Rounds, 1), countSegments(content), len([]rune(content)), sc.ArticleTitlesInScope())
+			//
+			// hits / articles 一律取 tool 自己记的那条 step，不要在这里重新数：
+			// 用 countSegments(content) 数的是「资料文本里有几段」，而 tool 记的是
+			// 「实际命中几个块」，两者在退回全文降级时会对不上。
+			last := sc.LastStep()
+			hits, chars, articles := last.Hits, last.Chars, last.Articles
+			if hits == 0 && chars == 0 {
+				// 兜底：tool 因为某些原因没记上步骤时，至少把内容长度报出去
+				chars = len([]rune(content))
+				hits = countSegments(content)
+			}
+			_ = sink.OnToolEnd(maxInt(sc.Rounds, 1), hits, chars, articles)
 			continue
 		}
 
@@ -226,6 +237,14 @@ func collectUsage(msg *schema.Message, res *consumeResult) {
 	u := msg.ResponseMeta.Usage
 	res.promptTokens += u.PromptTokens
 	res.completionTokens += u.CompletionTokens
+}
+
+// LastStep 最后一条检索记录。没有检索时返回零值，调用方不必判空。
+func (s *Scope) LastStep() entity.ChatStep {
+	if len(s.Steps) == 0 {
+		return entity.ChatStep{}
+	}
+	return s.Steps[len(s.Steps)-1]
 }
 
 // countSegments 数工具结果里有几段（以 `[数字]` 开头的行）。

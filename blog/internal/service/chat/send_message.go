@@ -163,10 +163,31 @@ func (s *chatService) SendMessage(ctx context.Context, userID, sessionID uint,
 	if len(sc.Refs) > 0 {
 		fields["refs"] = jsonbExpr(sc.Refs)
 	}
+	// 过程记录也要落库：只走 SSE 的话，用户刷新页面就再也看不到「它到底查了什么」，
+	// 而事后追问「它为什么这么答」恰恰最需要看这个
+	if len(sc.Steps) > 0 {
+		fields["steps"] = jsonbExpr(sc.Steps)
+	}
 	if res.err != nil {
 		fields["error"] = truncateRunes(res.err.Error(), 240)
 		logger.Warn("助手回答中断", zap.Uint("session_id", sessionID),
 			zap.Int("generated_runes", utf8.RuneCountInString(res.content)), zap.Error(res.err))
+	}
+
+	// 「模型一次都没检索就作答」单独告警。
+	//
+	// 这几乎总是配置问题而不是代码问题，但它的表现是「回答很快、看起来也正常」，
+	// 不告警就永远不会有人发现——直到用户发现答案和文章对不上。
+	// 常见原因按概率排：
+	//   1. 模型不支持 function calling（deepseek-reasoner、部分本地模型）
+	//   2. base_url 是第三方网关，请求里的 tools 字段被丢掉
+	//   3. Instruction 被模型忽略（少见，但换模型后比例会变）
+	if sc.ToolCalls == 0 && !res.refused && strings.TrimSpace(res.content) != "" {
+		logger.Warn("本次回答未发生任何检索（模型未调用检索工具）",
+			zap.Uint("session_id", sessionID),
+			zap.String("model", entry.modelName),
+			zap.Int("answer_runes", utf8.RuneCountInString(res.content)),
+			zap.String("hint", "检查模型是否支持 function calling / 网关是否透传 tools"))
 	}
 	if err := s.repo.UpdateMessage(asstMsg.ID, fields); err != nil {
 		// 这里失败只记日志，不覆盖上面的错误：对用户来说回答已经收到了，
@@ -183,6 +204,7 @@ func (s *chatService) SendMessage(ctx context.Context, userID, sessionID uint,
 		Model:              entry.modelName,
 		ModelFallback:      modelFallback,
 		Refs:               sc.Refs,
+		Steps:              sc.Steps,
 		ArticleRefs:        articleRefs,
 		SearchedArticles:   sc.ArticleIDs(),
 		PromptTokens:       res.promptTokens,

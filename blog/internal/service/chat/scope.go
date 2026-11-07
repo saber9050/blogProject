@@ -31,6 +31,9 @@ type Scope struct {
 	Seen map[uint]struct{}
 	// Refs 全部轮次命中的块，流结束后落库。
 	Refs []entity.ChatRefChunk
+	// Steps 每次工具调用的过程记录，流结束后落库。
+	// 这是「这次到底检索了没、查了什么」的唯一凭证，刷新页面后还能看。
+	Steps []entity.ChatStep
 
 	// ToolCalls 实际执行的检索次数（含并行）。只有一个 tool 时通常等于 Rounds。
 	ToolCalls int
@@ -90,6 +93,33 @@ func (s *Scope) ArticleTitlesInScope() []string {
 		}
 	}
 	return out
+}
+
+// BeginStep 追加一条「开始检索」的记录，返回它的下标供结束时回填。
+//
+// 先占位再回填（而不是等检索完再 append）：检索过程中如果进程被杀 / 用户中断，
+// 这条记录至少留下了「它当时在查什么」，比什么都没有强。
+func (s *Scope) BeginStep(tool, query string) int {
+	s.Steps = append(s.Steps, entity.ChatStep{
+		Round: len(s.Steps) + 1,
+		Tool:  tool,
+		Query: query,
+	})
+	return len(s.Steps) - 1
+}
+
+// EndStep 回填一次检索的结果。
+func (s *Scope) EndStep(idx int, hits, chars int, ms int64, articles []string, degraded bool, note string) {
+	if idx < 0 || idx >= len(s.Steps) {
+		return
+	}
+	st := &s.Steps[idx]
+	st.Hits = hits
+	st.Chars = chars
+	st.Ms = ms
+	st.Articles = articles
+	st.Degraded = degraded
+	st.Note = note
 }
 
 // EnsureSeen 初始化 Seen，避免 tool 里反复判空。

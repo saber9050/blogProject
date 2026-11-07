@@ -133,6 +133,7 @@
         "model": "",
         "refs": null,
         "article_refs": [{ "article_id": 8, "title": "Redis 发布订阅和 Stream" }],
+        "steps": null,
         "interrupted": false,
         "refused": false,
         "error": "",
@@ -150,6 +151,35 @@
 | `refs` | 仅 assistant 有值：本次回答用到的切分块（`chunk_id` / `article_id` / `section_index` / `heading_path` / `rrf_score`）。`null` 表示没检索或走了全文降级 |
 | `article_refs` | 仅 user 有值：本轮显式引用的其他文章。`content` 里对应位置是 `/标题` 纯文本，前端按它还原 pill |
 | `refused` | 被判为跑题，`content` 是后端固定文案而非模型输出 |
+| `steps` | **仅 assistant**：本次回答的检索过程，见下节。`null` 表示一次都没检索 |
+
+**`steps` 结构**（前端渲染成可展开的过程面板）：
+
+```json
+[
+  {
+    "round": 1,
+    "tool": "search_article_context",
+    "query": "Stream 消费组",
+    "hits": 4,
+    "chars": 1820,
+    "ms": 380,
+    "articles": ["Redis 发布订阅和 Stream"],
+    "degraded": false,
+    "note": ""
+  }
+]
+```
+
+| 字段 | 说明 |
+|---|---|
+| `query` | 模型实际用的检索词。**这是调提示词时最有价值的信息**——能看出它有没有把用户原句照抄进去 |
+| `hits` | 命中的资料段数，`0` 表示没查到 |
+| `ms` | 单次检索耗时。用户能据此确认「检索确实发生了，只是很快」 |
+| `degraded` / `note` | 本次检索是否降级（向量不可用 / 关键词路失败 / 退回全文） |
+
+> 为什么要落库而不是只走 SSE：刷新页面后这些步骤是「这次到底查没查、查了什么」的唯一凭证。
+> 而事后追问「它为什么这么答」恰恰最需要看这个。
 
 ---
 
@@ -232,6 +262,7 @@ data: {"assistant_message_id":91,"prompt_tokens":2100,"completion_tokens":286,"r
     "model": "deepseek-chat",
     "model_fallback": false,
     "refs": [],
+    "steps": [],
     "article_refs": [],
     "searched_articles": [12, 8],
     "prompt_tokens": 2100,
@@ -285,6 +316,74 @@ data: {"assistant_message_id":91,"prompt_tokens":2100,"completion_tokens":286,"r
 | `keyword` | 空 | 为空时返回最近的 20 篇 |
 | `exclude_id` | 0 | 当前文章 id |
 | `limit` | 20 | 上限 50 |
+
+---
+
+## 8. 排查：助手从不检索资料
+
+现象：回答很快、内容看着也通顺，但 `steps` 始终为空（前端显示「未检索资料（直接作答）」）。
+
+**先确认接线没问题。** 有一条不需要真实模型的测试专门验证这件事：
+
+```bash
+go test ./internal/service/chat/ -run 'TestAgentActuallyCallsTool|TestSearchToolInfo' -v
+```
+
+它会用一个「必定先调工具再作答」的假模型跑完整条 ADK 链路，断言
+`tool_start` / `tool_end` 事件与 `steps` 落库都正常。**通过 ⇒ 代码接线没问题，
+问题在模型或网关侧。**
+
+### 8.1 三个按概率排序的原因
+
+| # | 原因 | 怎么确认 |
+|---|---|---|
+| 1 | **模型不支持 function calling** | 用下面的 curl 直接打 provider。返回里没有 `tool_calls` 字段 ⇒ 不支持 |
+| 2 | **`base_url` 是第三方网关，`tools` 字段被丢弃** | 同上。小模型（如 7B 以下）和部分中转站是重灾区 |
+| 3 | **Instruction 被忽略** | 换一个更强的模型对比；或看日志里有没有「未发生任何检索」的 warn |
+
+`deepseek-reasoner`（R1 系列）、`o1` 这类推理模型**不支持 tools**，配了它们必然不检索。
+
+### 8.2 一行 curl 判定模型能力
+
+```bash
+curl -s https://<base_url>/chat/completions \
+  -H "Authorization: Bearer <api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "<model>",
+    "messages": [{"role":"user","content":"帮我查一下 Redis Stream 的消费组"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "search_article_context",
+        "description": "在文章中检索相关段落",
+        "parameters": {
+          "type": "object",
+          "properties": {"query": {"type":"string","description":"检索关键词"}},
+          "required": ["query"]
+        }
+      }
+    }],
+    "tool_choice": "auto"
+  }' | jq '.choices[0].message | {content, tool_calls}'
+```
+
+| 返回 | 结论 |
+|---|---|
+| `tool_calls` 非空 | 模型支持，问题在别处（看 §8.3 的日志） |
+| `tool_calls` 为 null、`content` 是正常回答 | **模型忽略了 tools** ⇒ 这就是根因，换模型 |
+| 400 / 报错提到 tools | **网关不支持** ⇒ 换 base_url 或换模型 |
+
+### 8.3 日志里看什么
+
+| 日志 | 含义 |
+|---|---|
+| `已构建并缓存 agent` 带 `tools=1` | 工具确实交给 agent 了 |
+| `本次回答未发生任何检索（模型未调用检索工具）` | 模型没调工具，同时打出模型名与 base_url，直接对照 §8.1 |
+| 完全没有上面两条 | 请求没走到 `SendMessage`（检查限流、模型配置是否启用） |
+
+> 这条 warn 是刻意加的：不检索的表现是「回答很快、看起来正常」，
+> 不打日志就永远不会有人发现——直到用户发现答案和文章对不上。
 
 ---
 

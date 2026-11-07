@@ -136,6 +136,14 @@ func (s *sseSink) done(res *response.SendChatMessageResponse) error {
 	if searched == nil {
 		searched = []uint{}
 	}
+	// steps 放进 done：前端流式期间的过程面板是**靠 tool 事件拼**的，
+	// 一旦某帧事件在传输/解析中丢了，用户就会永久看不到这次检索——
+	// 而这恰恰是他判断「答得靠不靠谱」的唯一依据。done 里带一份服务端记录，
+	// 前端以它为准覆盖本地拼的，过程就不会因为丢帧而消失。
+	steps := res.Steps
+	if steps == nil {
+		steps = []entity.ChatStep{}
+	}
 	return s.write("done", gin.H{
 		"assistant_message_id": res.AssistantMessageID,
 		"prompt_tokens":        res.PromptTokens,
@@ -146,5 +154,6 @@ func (s *sseSink) done(res *response.SendChatMessageResponse) error {
 		"tool_calls":           res.ToolCalls,
 		"searched_articles":    searched,
 		"degraded":             res.Degraded,
+		"steps":                steps,
 	})
 }

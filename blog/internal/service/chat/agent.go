@@ -159,8 +159,15 @@ func (b *agentBuilder) get(ctx context.Context, configID uint) (*agentEntry, err
 
 	e := &agentEntry{agent: agent, runner: runner, modelName: cfg.Model, builtAt: time.Now()}
 	b.entries[configID] = e
-	logger.Info("已构建并缓存 agent", zap.Uint("model_config_id", configID),
-		zap.String("model", cfg.Model))
+	// 把工具数量记进日志。排查「为什么从不检索」时，这是第一个要确认的事实：
+	// 工具到底有没有交给 agent。没有这一行，只能在「模型不调工具」和
+	// 「工具压根没注册」之间靠猜。
+	logger.Info("已构建并缓存 agent",
+		zap.Uint("model_config_id", configID),
+		zap.String("model", cfg.Model),
+		zap.String("base_url", cfg.BaseURL),
+		zap.Int("tools", 1),
+		zap.String("tool_name", searchToolName))
 	return e, nil
 }
 
