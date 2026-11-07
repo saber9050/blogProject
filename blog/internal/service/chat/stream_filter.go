@@ -14,6 +14,15 @@ type deltaFilter struct {
 	buf     strings.Builder
 	decided bool
 	refused bool
+	// noRetrieval 本次回答发生前一次检索都没成功，内容已被替换成 NoRetrievalReply
+	noRetrieval bool
+	// hasRetrieval 判断到目前为止有没有发生过检索。
+	//
+	// 为什么要在「定性」这一刻判断而不是等流结束：模型输出正文和发起 tool_call
+	// **不会出现在同一轮**——先调工具的那一轮 content 是空的。所以第一个非空
+	// delta 到来时，ToolCalls 是否为 0 就已经能确定「它是不是在凭记忆作答」。
+	// 等流结束再判断的话，编造的内容早就推到用户屏幕上了。
+	hasRetrieval func() bool
 }
 
 // offTopicProbeRunes 判定前需要缓冲的字符数。
@@ -54,6 +63,11 @@ func (f *deltaFilter) Refused() bool {
 	return f.refused
 }
 
+// NoRetrieval 本次回答是「一次检索都没发生」时被替换掉的。
+func (f *deltaFilter) NoRetrieval() bool {
+	return f.noRetrieval
+}
+
 func (f *deltaFilter) shouldDecide() bool {
 	raw := f.buf.String()
 	if len([]rune(raw)) >= offTopicProbeRunes {
@@ -73,6 +87,18 @@ func (f *deltaFilter) decide() []string {
 		f.buf.Reset()
 		f.buf.WriteString(OffTopicReply)
 		return []string{OffTopicReply}
+	}
+
+	// 拒答判定必须在前：跑题时本来就不会调工具，ToolCalls 也是 0，
+	// 顺序反了会把「跑题」错判成「没读到文章」。
+	//
+	// 零检索 = 模型手里只有标题，没有正文。此时它输出的任何"文章内容"都是编的，
+	// 而它还会仿照消息前缀说"出自《xxx》"，用户根本无法分辨。宁可不答。
+	if f.hasRetrieval != nil && !f.hasRetrieval() {
+		f.noRetrieval = true
+		f.buf.Reset()
+		f.buf.WriteString(NoRetrievalReply)
+		return []string{NoRetrievalReply}
 	}
 	return []string{raw}
 }

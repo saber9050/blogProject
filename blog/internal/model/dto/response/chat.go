@@ -63,8 +63,10 @@ type ChatMessageItem struct {
 	Steps       []entity.ChatStep `json:"steps"`
 	Interrupted bool              `json:"interrupted"`
 	Refused     bool              `json:"refused"`
-	Error       string            `json:"error"`
-	CreatedAt   string            `json:"created_at"`
+	// NoRetrieval 零检索，Content 是后端固定提示
+	NoRetrieval bool   `json:"no_retrieval"`
+	Error       string `json:"error"`
+	CreatedAt   string `json:"created_at"`
 }
 
 // ChatMessageListResponse 历史消息分页结果。
@@ -101,10 +103,12 @@ type SendChatMessageResponse struct {
 	PromptTokens     int    `json:"prompt_tokens"`
 	CompletionTokens int    `json:"completion_tokens"`
 	Refused          bool   `json:"refused"`
-	Interrupted      bool   `json:"interrupted"`
-	Rounds           int    `json:"rounds"`
-	ToolCalls        int    `json:"tool_calls"`
-	Degraded         bool   `json:"degraded"`
+	// NoRetrieval 一次检索都没成功，内容已被替换成固定文案（不是模型说的）
+	NoRetrieval bool `json:"no_retrieval"`
+	Interrupted bool `json:"interrupted"`
+	Rounds      int  `json:"rounds"`
+	ToolCalls   int  `json:"tool_calls"`
+	Degraded    bool `json:"degraded"`
 	// Steps 本次回答的检索过程。非流式模式下与流式 tool 事件的内容一致，
 	// nil 表示一次都没检索（模型直接回答）。
 	Steps []entity.ChatStep `json:"steps"`
@@ -161,8 +165,10 @@ type AdminMessageItem struct {
 	CompletionTokens int               `json:"completion_tokens"`
 	Interrupted      bool              `json:"interrupted"`
 	Refused          bool              `json:"refused"`
-	Error            string            `json:"error"`
-	CreatedAt        string            `json:"created_at"`
+	// NoRetrieval 零检索，Content 是后端固定提示
+	NoRetrieval bool   `json:"no_retrieval"`
+	Error       string `json:"error"`
+	CreatedAt   string `json:"created_at"`
 }
 
 // AdminSessionDetailResponse 会话详情 + 消息。

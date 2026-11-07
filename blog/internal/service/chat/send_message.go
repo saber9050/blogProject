@@ -159,6 +159,7 @@ func (s *chatService) SendMessage(ctx context.Context, userID, sessionID uint,
 		"completion_tokens": res.completionTokens,
 		"interrupted":       res.interrupted,
 		"refused":           res.refused,
+		"no_retrieval":      res.noRetrieval,
 	}
 	if len(sc.Refs) > 0 {
 		fields["refs"] = jsonbExpr(sc.Refs)
@@ -182,12 +183,16 @@ func (s *chatService) SendMessage(ctx context.Context, userID, sessionID uint,
 	//   1. 模型不支持 function calling（deepseek-reasoner、部分本地模型）
 	//   2. base_url 是第三方网关，请求里的 tools 字段被丢掉
 	//   3. Instruction 被模型忽略（少见，但换模型后比例会变）
-	if sc.ToolCalls == 0 && !res.refused && strings.TrimSpace(res.content) != "" {
+	if sc.ToolCalls == 0 && !res.refused {
+		// 两种子情况要分开记，排查方向完全不同：
+		//   noRetrieval=true  → 模型输出了正文但没调工具，内容已被替换
+		//   noRetrieval=false → 模型一个字都没说（比如直接报错），无需替换
 		logger.Warn("本次回答未发生任何检索（模型未调用检索工具）",
 			zap.Uint("session_id", sessionID),
 			zap.String("model", entry.modelName),
+			zap.Bool("answer_replaced", res.noRetrieval),
 			zap.Int("answer_runes", utf8.RuneCountInString(res.content)),
-			zap.String("hint", "检查模型是否支持 function calling / 网关是否透传 tools"))
+			zap.String("hint", "检查模型是否支持 function calling / 网关是否透传 tools / 工具名是否为空"))
 	}
 	if err := s.repo.UpdateMessage(asstMsg.ID, fields); err != nil {
 		// 这里失败只记日志，不覆盖上面的错误：对用户来说回答已经收到了，
@@ -210,6 +215,7 @@ func (s *chatService) SendMessage(ctx context.Context, userID, sessionID uint,
 		PromptTokens:       res.promptTokens,
 		CompletionTokens:   res.completionTokens,
 		Refused:            res.refused,
+		NoRetrieval:        res.noRetrieval,
 		Interrupted:        res.interrupted,
 		Rounds:             sc.Rounds,
 		ToolCalls:          sc.ToolCalls,

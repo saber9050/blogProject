@@ -135,3 +135,94 @@ func TestAgentActuallyCallsTool(t *testing.T) {
 	t.Logf("事件序列: %v", sink.events)
 	t.Logf("检索步骤: %+v", sc.Steps[0])
 }
+
+// emptyNameModel 模拟 Qwen2.5-7B 这类小模型：给出了 tool_call，
+// 但 function.name 是空字符串。
+//
+// 真实后果（线上截图）：框架拿空名字查 ToolNode 索引查不到，抛
+// `[NodeRunError] tool not found in toolsNode indexes`，整轮回答中断，
+// 用户看到红框、并且**永远不会有一次检索**。
+type emptyNameModel struct{ rounds int }
+
+func (f *emptyNameModel) Generate(ctx context.Context, in []*schema.Message, opts ...model.Option) (*schema.Message, error) {
+	return f.next()
+}
+
+func (f *emptyNameModel) Stream(ctx context.Context, in []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {
+	m, _ := f.next()
+	return schema.StreamReaderFromArray([]*schema.Message{m}), nil
+}
+
+func (f *emptyNameModel) next() (*schema.Message, error) {
+	f.rounds++
+	if f.rounds == 1 {
+		return &schema.Message{
+			Role: schema.Assistant,
+			ToolCalls: []schema.ToolCall{{
+				ID:   "call_empty",
+				Type: "function",
+				// 名字为空——就是线上报错的那一帧
+				Function: schema.FunctionCall{Name: "", Arguments: `{"query":"Stream 消费组"}`},
+			}},
+		}, nil
+	}
+	return &schema.Message{Role: schema.Assistant, Content: "消费组是独立消费视角。"}, nil
+}
+
+// TestAgentUnknownToolFallsBackToSearch 工具名为空时仍能完成检索。
+//
+// 这条测试守的是「小模型也能用」：Qwen2.5-7B 会把 function.name 丢掉。
+// 没有 UnknownToolsHandler 时，框架直接抛错、整轮回答中断；
+// 有了它，单工具场景下"调用了不存在的工具"等价于"想检索"，照常执行。
+func TestAgentUnknownToolFallsBackToSearch(t *testing.T) {
+	ctx := context.Background()
+	searcher := &fakeSearcher{}
+	mdl := &emptyNameModel{}
+
+	b := &agentBuilder{
+		entries:  map[uint]*agentEntry{},
+		tool:     newSearchTool(searcher),
+		searcher: searcher,
+	}
+
+	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		Name:        agentName,
+		Instruction: tutorInstruction,
+		Model:       mdl,
+		ToolsConfig: adk.ToolsConfig{
+			ToolsNodeConfig: compose.ToolsNodeConfig{
+				Tools:               []tool.BaseTool{b.tool},
+				ToolCallMiddlewares: []compose.ToolMiddleware{{Invokable: toolGuard}},
+				UnknownToolsHandler: b.handleUnknownTool,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("构建 agent 失败: %v", err)
+	}
+	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent, EnableStreaming: true})
+
+	sc := &Scope{CurrentArticleID: 1, CurrentArticleTitle: "测试文章"}
+	sc.EnsureSeen()
+	runCtx := withScope(ctx, sc)
+
+	iter := runner.Run(runCtx, []*schema.Message{{Role: schema.User, Content: "消费组是什么？"}})
+	sink := &recordSink{}
+	res := consumeAgentStream(runCtx, iter, sink, sc)
+
+	if res.err != nil {
+		t.Fatalf("工具名为空不该让整轮失败，实际报错: %v", res.err)
+	}
+	if searcher.calls != 1 {
+		t.Fatalf("兜底应执行 1 次检索，实际 %d 次", searcher.calls)
+	}
+	if len(sc.Steps) != 1 {
+		t.Fatalf("兜底路径也必须记步骤（否则过程面板是空的），实际 %d 条", len(sc.Steps))
+	}
+	if res.noRetrieval {
+		t.Fatal("已经检索过了，不该被判成零检索")
+	}
+	if res.content == "" || res.content == NoRetrievalReply {
+		t.Fatalf("应输出正常回答，实际: %q", res.content)
+	}
+}

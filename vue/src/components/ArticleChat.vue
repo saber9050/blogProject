@@ -135,13 +135,13 @@
             <div
               class="ai-chat__bubble"
               :class="{
-                'ai-chat__bubble--refused': m.refused,
+                'ai-chat__bubble--refused': m.refused || m.noRetrieval,
                 'ai-chat__bubble--error': m.error
               }"
             >
               <!-- 助手消息渲染 Markdown；用户消息保留换行 -->
               <MdPreview
-                v-if="m.role === 'assistant' && !m.refused"
+                v-if="m.role === 'assistant' && !m.refused && !m.noRetrieval"
                 :model-value="m.content || (m.streaming ? '' : '')"
                 class="ai-chat__markdown"
               />
@@ -218,6 +218,8 @@ interface LocalMessage {
   content: string
   model?: string
   refused?: boolean
+  /** 一次检索都没成功，content 是后端固定文案 */
+  noRetrieval?: boolean
   interrupted?: boolean
   error?: string
   streaming?: boolean
@@ -307,7 +309,10 @@ function stepsTitle(m: LocalMessage): string {
   }
   if (m.streaming) return '正在思考…'
   if (m.refused) return '未检索（判定与文章无关）'
-  return '未检索资料（直接作答）'
+  // 零检索 = 模型手里只有标题没有正文，回答已被后端替换成固定提示。
+  // 不能再写「直接作答」——那正是它编内容时给人的错觉。
+  if (m.noRetrieval) return '未能检索到资料（未作答）'
+  return '未检索资料'
 }
 
 function toggleSteps(m: LocalMessage) {
@@ -420,6 +425,7 @@ async function loadHistory(id: number) {
       content: m.content,
       model: m.model,
       refused: m.refused,
+      noRetrieval: m.no_retrieval,
       interrupted: m.interrupted,
       error: m.error,
       refs: m.refs || undefined,
@@ -566,6 +572,7 @@ async function onComposerSend(payload: ComposerPayload) {
             if (rest) m.content += rest
             m.id = done.assistant_message_id
             m.refused = done.refused
+            m.noRetrieval = done.no_retrieval
             m.interrupted = done.interrupted
             m.streaming = false
             m.rounds = done.rounds

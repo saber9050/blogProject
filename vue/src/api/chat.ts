@@ -76,6 +76,8 @@ export interface ChatMessage {
   steps: ChatStep[] | null
   interrupted: boolean
   refused: boolean
+  /** 一次检索都没成功，content 是后端固定文案（不是模型说的） */
+  no_retrieval: boolean
   error: string
   created_at: string
 }
@@ -172,6 +174,7 @@ export interface StreamDone {
   prompt_tokens: number
   completion_tokens: number
   refused: boolean
+  no_retrieval: boolean
   interrupted: boolean
   rounds: number
   tool_calls: number
@@ -321,6 +324,8 @@ export interface AdminMessageItem {
   completion_tokens: number
   interrupted: boolean
   refused: boolean
+  /** 一次检索都没成功，content 是后端固定文案（不是模型说的） */
+  no_retrieval: boolean
   error: string
   created_at: string
 }

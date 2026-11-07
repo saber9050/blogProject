@@ -407,6 +407,7 @@ func toMessageItem(m *entity.ChatMessage) *response.ChatMessageItem {
 		ArticleRefs: m.ArticleRefs,
 		Interrupted: m.Interrupted,
 		Refused:     m.Refused,
+		NoRetrieval: m.NoRetrieval,
 		Error:       m.Error,
 		CreatedAt:   m.CreatedAt.Format(timeLayout),
 	}

@@ -138,6 +138,7 @@ func toAdminMessageItem(m *entity.ChatMessage) *response.AdminMessageItem {
 		CompletionTokens: m.CompletionTokens,
 		Interrupted:      m.Interrupted,
 		Refused:          m.Refused,
+		NoRetrieval:      m.NoRetrieval,
 		Error:            m.Error,
 		CreatedAt:        m.CreatedAt.Format(timeLayout),
 	}

@@ -151,6 +151,7 @@
 | `refs` | 仅 assistant 有值：本次回答用到的切分块（`chunk_id` / `article_id` / `section_index` / `heading_path` / `rrf_score`）。`null` 表示没检索或走了全文降级 |
 | `article_refs` | 仅 user 有值：本轮显式引用的其他文章。`content` 里对应位置是 `/标题` 纯文本，前端按它还原 pill |
 | `refused` | 被判为跑题，`content` 是后端固定文案而非模型输出 |
+| `no_retrieval` | **一次检索都没成功**，`content` 已被替换成固定提示（不是模型输出）。见 §8.3 |
 | `steps` | **仅 assistant**：本次回答的检索过程，见下节。`null` 表示一次都没检索 |
 
 **`steps` 结构**（前端渲染成可展开的过程面板）：
@@ -230,7 +231,7 @@ event: delta
 data: {"content":"Stream 的"}
 
 event: done
-data: {"assistant_message_id":91,"prompt_tokens":2100,"completion_tokens":286,"refused":false,"interrupted":false,"rounds":1,"tool_calls":1,"searched_articles":[12,8],"degraded":false}
+data: {"assistant_message_id":91,"prompt_tokens":2100,"completion_tokens":286,"refused":false,"no_retrieval":false,"interrupted":false,"rounds":1,"tool_calls":1,"searched_articles":[12,8],"degraded":false,"steps":[]}
 ```
 
 | 事件 | 说明 |
@@ -239,7 +240,7 @@ data: {"assistant_message_id":91,"prompt_tokens":2100,"completion_tokens":286,"r
 | `tool` | 检索进度，`phase` 为 `start` / `end`，`round` 从 1 递增，最多 5。前端据此显示「正在检索资料…（第 N 轮）」——agentic 首字要 3~5 秒，没有反馈用户会以为卡死 |
 | `refs` | 所有轮次跑完、`done` 之前**只发一次**（合并去重后的结果）。`rrf_score` 只表示相对名次，**不是相似度**，不要当百分比展示 |
 | `delta` | 增量文本 |
-| `done` | **必发且最后**。`rounds` = 实际检索轮数（0 = 一次都没检索）；`searched_articles` = 真正查过的文章 id；`degraded` = 出现过降级但最终答出来了 |
+| `done` | **必发且最后**。`rounds` = 实际检索轮数（0 = 一次都没检索）；`searched_articles` = 真正查过的文章 id；`degraded` = 出现过降级但最终答出来了；`no_retrieval` = 零检索（回答已被替换，见 §8.3） |
 | `error` | `{"code":503,"message":"…","partial":true}`。`partial=true` 表示此前已推过内容，**前端必须保留、只在末尾加一行提示，不要清空气泡** |
 
 > 拒答（`refused=true`）是 **200 + 正常 `done`**，不是错误码。前端用低调灰条展示，
@@ -333,7 +334,25 @@ go test ./internal/service/chat/ -run 'TestAgentActuallyCallsTool|TestSearchTool
 `tool_start` / `tool_end` 事件与 `steps` 落库都正常。**通过 ⇒ 代码接线没问题，
 问题在模型或网关侧。**
 
-### 8.1 三个按概率排序的原因
+### 8.1 已确认的第一个根因：`tool not found in toolsNode indexes`
+
+**现象**：气泡里出现 `[NodeRunError] tool not found in toolsNode indexes`。
+
+**原因**：模型给了 `tool_call`，但 **`function.name` 是空字符串**。
+框架拿空名字去 ToolNode 的索引里查，查不到就抛错（`compose/tool_node.go`），
+整轮回答中断 —— 所以「永远不会有检索」。
+
+Qwen2.5-7B 这类小模型在流式返回时丢 `function.name` 是已知问题。
+
+**已修**：`ToolsNodeConfig.UnknownToolsHandler` 接管这类调用。
+我们只有一个工具，「调用了不存在的工具」在语义上就等于「想检索」，
+于是从参数里取出 `query` 照常执行。日志会打一条：
+
+```
+模型调用了未注册的工具名，已按检索兜底执行  tool_name= query=...
+```
+
+### 8.2 另外三个可能
 
 | # | 原因 | 怎么确认 |
 |---|---|---|
@@ -343,7 +362,23 @@ go test ./internal/service/chat/ -run 'TestAgentActuallyCallsTool|TestSearchTool
 
 `deepseek-reasoner`（R1 系列）、`o1` 这类推理模型**不支持 tools**，配了它们必然不检索。
 
-### 8.2 一行 curl 判定模型能力
+### 8.3 兜底：零检索时不许编造内容
+
+只要一次检索都没成功，**模型的上下文里就只有文章标题，没有正文**。
+此时它输出的任何"文章内容"都是顺着标题编的，还会仿照消息前缀说
+「出自《xxx》」——用户完全分辨不出来。
+
+所以后端在**第一段正文到达时**就判断：`tool_calls == 0` ⇒ 整段替换成固定提示，
+`no_retrieval = true`。判定发生在推流之前，编造的内容不会出现在屏幕上。
+
+> 为什么不等流结束：那时候编造的内容早就推给用户了。
+> 模型输出正文和发起 tool_call 不会出现在同一轮，所以第一个非空 delta
+> 到来时 `tool_calls` 是否为 0 就足以定性。
+>
+> 拒答（`refused`）优先于本条：跑题时本来就不调工具，顺序反了会把「问天气」
+> 错判成「没读到文章」。
+
+### 8.4 一行 curl 判定模型能力
 
 ```bash
 curl -s https://<base_url>/chat/completions \
@@ -374,11 +409,12 @@ curl -s https://<base_url>/chat/completions \
 | `tool_calls` 为 null、`content` 是正常回答 | **模型忽略了 tools** ⇒ 这就是根因，换模型 |
 | 400 / 报错提到 tools | **网关不支持** ⇒ 换 base_url 或换模型 |
 
-### 8.3 日志里看什么
+### 8.5 日志里看什么
 
 | 日志 | 含义 |
 |---|---|
 | `已构建并缓存 agent` 带 `tools=1` | 工具确实交给 agent 了 |
+| `模型调用了未注册的工具名，已按检索兜底执行` | 模型丢了 `function.name`，兜底已生效（能正常检索） |
 | `本次回答未发生任何检索（模型未调用检索工具）` | 模型没调工具，同时打出模型名与 base_url，直接对照 §8.1 |
 | 完全没有上面两条 | 请求没走到 `SendMessage`（检查限流、模型配置是否启用） |
 

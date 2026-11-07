@@ -149,6 +149,7 @@ func (s *sseSink) done(res *response.SendChatMessageResponse) error {
 		"prompt_tokens":        res.PromptTokens,
 		"completion_tokens":    res.CompletionTokens,
 		"refused":              res.Refused,
+		"no_retrieval":         res.NoRetrieval,
 		"interrupted":          res.Interrupted,
 		"rounds":               res.Rounds,
 		"tool_calls":           res.ToolCalls,

@@ -62,7 +62,9 @@ type consumeResult struct {
 	interrupted      bool
 	// refused 本次回答被判为跑题（内容已被替换成 OffTopicReply）
 	refused bool
-	err     error
+	// noRetrieval 一次检索都没成功（内容已被替换成 NoRetrievalReply）
+	noRetrieval bool
+	err         error
 }
 
 // consumeAgentStream 把 ADK 的事件流翻译成 SSE 事件。
@@ -80,7 +82,8 @@ func consumeAgentStream(ctx context.Context, iter *adk.AsyncIterator[*adk.AgentE
 	sink StreamSink, sc *Scope) (res consumeResult) {
 
 	var buf strings.Builder
-	filter := &deltaFilter{}
+	// 零检索守卫：见到第一段正文时若 ToolCalls 还是 0，就判定它在凭标题编造
+	filter := &deltaFilter{hasRetrieval: func() bool { return sc.ToolCalls > 0 }}
 	defer func() {
 		// 必须把缓冲区吐干净：短回答（不足 40 字）全在缓冲里，
 		// 不 flush 的话前端一个字都收不到——而「回答很短」是最常见的情况之一。
@@ -90,6 +93,7 @@ func consumeAgentStream(ctx context.Context, iter *adk.AsyncIterator[*adk.AgentE
 		}
 		res.content = buf.String()
 		res.refused = filter.Refused()
+		res.noRetrieval = filter.NoRetrieval()
 		// ctx 被取消 ⇒ 用户点了停止或整体超时。这不是错误，已生成内容照常保留。
 		if ctx.Err() != nil && res.err == nil {
 			res.interrupted = true

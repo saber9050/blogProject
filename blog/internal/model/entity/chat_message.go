@@ -95,8 +95,14 @@ type ChatMessage struct {
 	Interrupted bool `gorm:"not null;default:false;comment:用户中途停止/断开" json:"interrupted"`
 	// Refused 助手判定为跑题。此时 Content 是后端固定文案而非模型输出，
 	// 前端据此换低调样式；它也是后续统计「用户都在问什么不相关的东西」的依据。
-	Refused   bool      `gorm:"not null;default:false;comment:判定为跑题,content为固定文案" json:"refused"`
-	CreatedAt time.Time `gorm:"not null;autoCreateTime" json:"created_at"`
+	Refused bool `gorm:"not null;default:false;comment:判定为跑题,content为固定文案" json:"refused"`
+	// NoRetrieval 一次检索都没成功。此时 Content 也是后端固定文案而非模型输出。
+	//
+	// 与 Refused 分开记而不是复用一个字段：两者的成因和处理方向完全不同——
+	// 跑题是模型判定问题相关性的正常结果，零检索是「模型根本没拿到资料」的故障，
+	// 混在一起就分不清「答得对不对」和「它有没有读过文章」。
+	NoRetrieval bool      `gorm:"not null;default:false;comment:零检索,content为固定提示" json:"no_retrieval"`
+	CreatedAt   time.Time `gorm:"not null;autoCreateTime" json:"created_at"`
 }
 
 func (ChatMessage) TableName() string {

@@ -128,6 +128,14 @@
                   {{ m.steps?.length ? `检索 ${m.steps.length} 次` : '未检索' }}
                 </span>
                 <span v-if="m.refused" class="acs-badge acs-badge--refused">拒答</span>
+                <!-- 零检索：模型没拿到任何资料就作答，内容已被后端替换。
+                     后台必须能一眼看出来，否则会把它当成正常回答分析 -->
+                <span
+                  v-if="m.no_retrieval"
+                  class="acs-badge acs-badge--refused"
+                  title="一次检索都没成功，回答已替换为固定提示"
+                  >未检索</span
+                >
                 <span v-if="m.error" class="acs-badge acs-badge--error" :title="m.error">失败</span>
                 <span v-if="m.interrupted" class="acs-badge acs-badge--warn">中断</span>
               </div>

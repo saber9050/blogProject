@@ -59,13 +59,17 @@ type agentBuilder struct {
 	entries map[uint]*agentEntry
 	llmCfg  llmconfigSvc.Service
 	tool    tool.BaseTool
+	// searcher 同一份检索实现，给 handleUnknownTool 用。
+	// 必须和 tool 内用的是同一个：否则兜底路径的计次/步骤记录会落到另一个 scope 上。
+	searcher contextSearcher
 }
 
 func newAgentBuilder(llmCfg llmconfigSvc.Service, searcher contextSearcher) *agentBuilder {
 	return &agentBuilder{
-		entries: make(map[uint]*agentEntry, 4),
-		llmCfg:  llmCfg,
-		tool:    newSearchTool(searcher),
+		entries:  make(map[uint]*agentEntry, 4),
+		llmCfg:   llmCfg,
+		tool:     newSearchTool(searcher),
+		searcher: searcher,
 	}
 }
 
@@ -106,6 +110,10 @@ func (b *agentBuilder) get(ctx context.Context, configID uint) (*agentEntry, err
 				Tools: []tool.BaseTool{b.tool},
 				// 次数闸 + 单次超时 + 「最后一次」提示，全部在工具层（见 toolguard.go）
 				ToolCallMiddlewares: []compose.ToolMiddleware{{Invokable: toolGuard}},
+				// 模型给的工具名对不上时（实测 Qwen2.5-7B 会丢 function.name），
+				// 不要抛 NodeRunError 掐断整轮，而是按检索兜底执行。
+				// 没有它，小模型上就是「每次都红框、永远不检索」。
+				UnknownToolsHandler: b.handleUnknownTool,
 			},
 		},
 		// 第 1 层兜底：单次模型调用失败自动重试 2 次。
