@@ -51,6 +51,20 @@ export interface ArticleRef {
   title: string
 }
 
+/** 一次工具调用的过程记录（后端 chat_messages.steps） */
+export interface ChatStep {
+  round: number
+  tool: string
+  query: string
+  hits: number
+  chars: number
+  /** 耗时毫秒 */
+  ms: number
+  articles?: string[]
+  degraded?: boolean
+  note?: string
+}
+
 export interface ChatMessage {
   id: number
   role: 'user' | 'assistant'
@@ -58,6 +72,8 @@ export interface ChatMessage {
   model: string
   refs: RefChunk[] | null
   article_refs: ArticleRef[] | null
+  /** 仅 assistant：检索过程。nil/空表示这次没检索 */
+  steps: ChatStep[] | null
   interrupted: boolean
   refused: boolean
   error: string
@@ -97,6 +113,20 @@ export async function fetchChatMessages(
     params: { before_id: beforeId, limit }
   })
   return res.data.data
+}
+
+/**
+ * 改会话（标题 / 模型）。
+ *
+ * 换模型只影响**后续消息**：历史消息保留各自生成时的 model 名，不会重算。
+ * 这是「会话级绑定」而不是「全局绑定」的意义——A 会话用便宜模型、
+ * B 会话用强模型，互相不受影响。
+ */
+export async function updateChatSession(
+  sessionId: number,
+  patch: { title?: string; model_config_id?: number }
+): Promise<void> {
+  await api.patch(`/chat/sessions/${sessionId}`, patch)
 }
 
 /** 删除会话（硬删，不可恢复） */
@@ -147,6 +177,13 @@ export interface StreamDone {
   tool_calls: number
   searched_articles: number[]
   degraded: boolean
+  /**
+   * 服务端记录的完整检索过程。
+   *
+   * 流式期间前端是靠 tool 事件现拼的；一旦某帧丢了，过程就永久缺一块。
+   * done 里带一份权威数据，前端以它为准覆盖本地 —— 这是「过程一定会显示出来」的保证。
+   */
+  steps: ChatStep[]
 }
 
 export interface StreamHandlers {
@@ -279,6 +316,7 @@ export interface AdminMessageItem {
   model: string
   refs: RefChunk[] | null
   article_refs: ArticleRef[] | null
+  steps: ChatStep[] | null
   prompt_tokens: number
   completion_tokens: number
   interrupted: boolean

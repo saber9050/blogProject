@@ -119,6 +119,14 @@
                 <span class="acs-msg__time">{{ fmt(m.created_at) }}</span>
                 <span v-if="m.model" class="acs-msg__model">{{ m.model }}</span>
                 <!-- 这三个徽章是后台特有的：要能一眼看出哪句被拒、哪句失败、哪句被打断 -->
+                <!-- 检索次数：后台判断「答得不好」的第一现场信息——是没查，还是查了没命中 -->
+                <span
+                  v-if="m.role === 'assistant'"
+                  class="acs-badge"
+                  :class="m.steps?.length ? 'acs-badge--info' : 'acs-badge--muted'"
+                >
+                  {{ m.steps?.length ? `检索 ${m.steps.length} 次` : '未检索' }}
+                </span>
                 <span v-if="m.refused" class="acs-badge acs-badge--refused">拒答</span>
                 <span v-if="m.error" class="acs-badge acs-badge--error" :title="m.error">失败</span>
                 <span v-if="m.interrupted" class="acs-badge acs-badge--warn">中断</span>
@@ -129,6 +137,22 @@
               <p v-if="m.article_refs?.length" class="acs-msg__refs">
                 引用文章：{{ m.article_refs.map((r) => `#${r.article_id} ${r.title}`).join('、') }}
               </p>
+              <!-- 检索过程：后台默认展开，排查时不用再点一次 -->
+              <ol v-if="m.steps?.length" class="acs-steps">
+                <li v-for="st in m.steps" :key="st.round" class="acs-steps__item">
+                  <span class="acs-steps__round">#{{ st.round }}</span>
+                  检索「{{ st.query || '（无检索词）' }}」
+                  <span v-if="st.hits > 0">→ 命中 {{ st.hits }} 段</span>
+                  <span v-else class="acs-steps__none">→ 未命中</span>
+                  <span class="acs-steps__meta">{{ st.chars }} 字 · {{ st.ms }}ms</span>
+                  <span v-if="st.degraded" class="acs-steps__warn">
+                    · {{ st.note || '降级' }}
+                  </span>
+                  <div v-if="st.articles?.length" class="acs-steps__from">
+                    来自：{{ st.articles.join('、') }}
+                  </div>
+                </li>
+              </ol>
               <p v-if="m.refs?.length" class="acs-msg__refs">
                 命中片段：{{ m.refs.map((r) => `#${r.chunk_id} ${r.heading_path}`).join('、') }}
               </p>
@@ -501,6 +525,57 @@ onMounted(() => load(1))
   color: var(--danger);
 }
 
+/* ===== 检索过程（后台默认展开） ===== */
+
+.acs-steps {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  list-style: none;
+  border-left: 2px solid var(--accent-soft);
+  background: rgba(59, 130, 246, 0.04);
+  border-radius: 0 8px 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.acs-steps__item {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.acs-steps__round {
+  display: inline-block;
+  min-width: 16px;
+  margin-right: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-500);
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+.acs-steps__none {
+  color: var(--warning);
+}
+
+.acs-steps__meta {
+  margin-left: 6px;
+  color: var(--text-faint);
+}
+
+.acs-steps__warn {
+  color: var(--warning);
+}
+
+.acs-steps__from {
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-size: 0.72rem;
+}
+
 .acs-msg__refs {
   margin: 6px 0 0;
   font-size: 0.72rem;
@@ -523,6 +598,17 @@ onMounted(() => load(1))
 .acs-badge--error {
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+.acs-badge--info {
+  background: var(--accent-soft);
+  color: var(--accent-500);
+}
+
+.acs-badge--muted {
+  background: var(--surface-strong);
+  color: var(--text-faint);
+  border: 1px solid var(--border);
 }
 
 .acs-badge--warn {
