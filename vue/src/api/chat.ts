@@ -1,5 +1,6 @@
 import api from './index'
 import { createSSEParser } from '../utils/sse'
+import { handleAuthFailure, refreshAccessToken } from '../utils/token'
 
 /**
  * 文章页 AI 助手的接口封装。
@@ -211,26 +212,72 @@ export interface SendOptions {
  * 抛异常只发生在「HTTP 层就没成功」或「网络层中断」。
  * 用户主动 abort 时抛 AbortError，调用方需要识别并静默处理。
  */
+/**
+ * 发一个流式 POST，遇到 401 自动刷新 token 并重试一次。
+ *
+ * 为什么重试是安全的：401 由 Auth 中间件在 handler **之前**返回，
+ * 后端一个字都没执行（没落库、没调模型、没花 token）。
+ * 而流一旦开出来（200），token 的事就已经过去了，不会再出现 401——
+ * 所以不存在「重试导致重复提问」。
+ *
+ * ⚠️ 只能重试一次。刷新成功但仍 401 说明不是过期问题，
+ * 再刷只会打成死循环（后端 refresh 是 rotation，越刷越乱）。
+ */
+async function postStream(
+  url: string,
+  payload: unknown,
+  signal?: AbortSignal
+): Promise<Response> {
+  const send = (token: string | null) =>
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload),
+      signal
+    })
+
+  let res = await send(localStorage.getItem('token'))
+  if (res.status !== 401) return res
+
+  // 用户已经点了停止 / 关了面板：没必要再刷新，直接按中断处理
+  if (signal?.aborted) return res
+
+  let token: string
+  try {
+    // 单飞刷新：和 axios 那侧共用同一个 promise，
+    // 避免两个请求同时刷导致 refresh token 互相顶掉（后端会轮换）
+    token = await refreshAccessToken()
+  } catch {
+    handleAuthFailure()
+    throw new Error('登录信息已过期，请重新登录')
+  }
+
+  res = await send(token)
+  if (res.status === 401) {
+    handleAuthFailure()
+    throw new Error('登录信息已过期，请重新登录')
+  }
+  return res
+}
+
 export async function sendChatMessageStream(
   sessionId: number,
   options: SendOptions,
   handlers: StreamHandlers,
   signal?: AbortSignal
 ): Promise<void> {
-  const token = localStorage.getItem('token')
-  const res = await fetch(`/api/v1/chat/sessions/${sessionId}/messages`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify({
+  const res = await postStream(
+    `/api/v1/chat/sessions/${sessionId}/messages`,
+    {
       content: options.content,
       article_ids: options.articleIds || [],
       stream: true
-    }),
+    },
     signal
-  })
+  )
 
   // 非 200：服务端还没开始推流（meta 之前就失败了），返回的是普通 JSON 错误。
   // 后端刻意延迟写 SSE header，就是为了这种情况还能给出正确的状态码。
