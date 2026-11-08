@@ -16,6 +16,23 @@ export interface ChatModel {
   model: string
 }
 
+/** 一次工具调用的完整记录（含检索到的原文） */
+export interface ChatToolMessage {
+  id: number
+  round: number
+  tool_name: string
+  query: string
+  /** 工具返回给模型的资料原文（含 `[1] 《标题》· 小节` 段头） */
+  content: string
+  hits: number
+  chars: number
+  ms: number
+  articles: string[]
+  degraded: boolean
+  note: string
+  created_at: string
+}
+
 export interface ChatSession {
   id: number
   title: string
@@ -130,6 +147,20 @@ export async function updateChatSession(
   patch: { title?: string; model_config_id?: number }
 ): Promise<void> {
   await api.patch(`/chat/sessions/${sessionId}`, patch)
+}
+
+/**
+ * 取某条助手消息的工具调用记录（含原文）。
+ *
+ * 按需拉而不是跟着历史列表走：单条原文 6KB 起，一次拉 30 条历史
+ * 会把几百 KB 全塞进响应，而用户通常只看其中一轮。
+ */
+export async function fetchToolMessages(
+  sessionId: number,
+  messageId: number
+): Promise<ChatToolMessage[]> {
+  const res = await api.get(`/chat/sessions/${sessionId}/messages/${messageId}/tools`)
+  return res.data.data.list || []
 }
 
 /** 删除会话（硬删，不可恢复） */
@@ -367,6 +398,7 @@ export interface AdminMessageItem {
   refs: RefChunk[] | null
   article_refs: ArticleRef[] | null
   steps: ChatStep[] | null
+  tool_messages: ChatToolMessage[] | null
   prompt_tokens: number
   completion_tokens: number
   interrupted: boolean

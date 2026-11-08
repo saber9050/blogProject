@@ -127,6 +127,22 @@
                     <p v-if="st.articles?.length" class="ai-chat__step-articles">
                       来自：{{ st.articles.join('、') }}
                     </p>
+
+                    <!-- 检索原文：默认收起、按需拉取。
+                         这是「它当时到底读到了什么」的唯一凭证——只给 query 和
+                         命中数是不够的，判断答案有没有忠于文章必须看原文。 -->
+                    <template v-if="m.id && !st.running">
+                      <button class="ai-chat__step-toggle" type="button" @click="toggleToolContent(m, st)">
+                        {{ st.toolOpen ? '收起检索内容' : '查看检索内容' }}
+                      </button>
+                      <div v-if="st.toolOpen" class="ai-chat__tool-body">
+                        <p v-if="st.loadingTools" class="ai-chat__tool-hint">加载中…</p>
+                        <template v-else-if="st.toolContents && st.toolContents.length">
+                          <pre v-for="t in st.toolContents" :key="t.id" class="ai-chat__tool-pre">{{ t.content }}</pre>
+                        </template>
+                        <p v-else class="ai-chat__tool-hint">这一轮没有保存检索内容</p>
+                      </div>
+                    </template>
                   </div>
                 </li>
               </ol>
@@ -193,8 +209,10 @@ import {
   sendChatMessageStream,
   type ArticleRef,
   type ChatContext,
+  fetchToolMessages,
   updateChatSession,
   type ChatStep,
+  type ChatToolMessage,
   type RefChunk
 } from '../api/chat'
 import { tokenizeMessage, type ComposerPayload, type MessageToken } from '../utils/editor-serialize'
@@ -209,6 +227,12 @@ const router = useRouter()
 interface LocalStep extends ChatStep {
   running?: boolean
   startedAt?: number
+  /** 检索原文是否展开 */
+  toolOpen?: boolean
+  /** 原文是否加载中 */
+  loadingTools?: boolean
+  /** 懒加载回来的原文（null/undefined 表示还没拉过） */
+  toolContents?: ChatToolMessage[] | null
 }
 
 interface LocalMessage {
@@ -250,6 +274,9 @@ const sessionId = ref(0)
 //      等第一次发消息建会话时带进去——否则「选了模型但第一次提问还是默认模型」。
 const selectedModelID = ref(0)
 let abortController: AbortController | null = null
+// 工具原文按「助手消息 id」缓存一次请求。
+// 一条回答常有 3~5 轮检索，每轮都单独请求就是同一份列表拉 5 遍。
+const toolCache = new Map<number, ChatToolMessage[]>()
 // delta 节流：把高频增量合并成每 60ms 一次渲染。
 // 不节流的话每个 token 都触发一次 Markdown 重渲染，长回答明显卡顿。
 let flushTimer: number | null = null
@@ -317,6 +344,42 @@ function stepsTitle(m: LocalMessage): string {
 
 function toggleSteps(m: LocalMessage) {
   m.stepsOpen = !m.stepsOpen
+}
+
+/**
+ * 展开/收起某一轮的检索原文。
+ *
+ * 懒加载：第一次展开才拉。原文单条 6KB 起，一个会话里可能几十条，
+ * 全部预取等于把几百 KB 白白塞进内存和网络，而用户通常只看最近一轮。
+ *
+ * toolContents 的三态：undefined=没拉过 / null=拉失败（可重试）/ 数组=已拉到。
+ * 用 `!= null` 判断「已经有结果」，这样 [] 也会被当成已加载、不重复请求。
+ *
+ * ⚠️ 接口返回的是**整条助手消息**的全部工具记录（一条回答可能检索了 5 轮），
+ * 必须再按 round 过滤一次。不过滤的话每一轮展开看到的都是同一份完整列表，
+ * 看起来就像「五次检索结果一模一样」——而实际上每轮内容并不相同。
+ */
+async function toggleToolContent(m: LocalMessage, st: LocalStep) {
+  st.toolOpen = !st.toolOpen
+  if (!st.toolOpen || st.toolContents != null) return
+  if (!m.id || !sessionId.value) {
+    st.toolContents = []
+    return
+  }
+  st.loadingTools = true
+  try {
+    let all = toolCache.get(m.id)
+    if (!all) {
+      all = await fetchToolMessages(sessionId.value, m.id)
+      toolCache.set(m.id, all)
+    }
+    st.toolContents = all.filter((t) => t.round === st.round)
+  } catch {
+    st.toolContents = null
+    showToast('加载检索内容失败，请稍后重试', 'error')
+  } finally {
+    st.loadingTools = false
+  }
 }
 
 // ===== 会话 =====
@@ -597,7 +660,19 @@ async function onComposerSend(payload: ComposerPayload) {
             // 流式期间是靠 tool 事件一帧帧拼的，任何一帧丢了过程就残缺，
             // 而 done 里的 steps 是 tool 自己写的权威数据（含耗时、命中数、降级原因）。
             if (done.steps) {
-              m.steps = done.steps.map((st) => ({ ...st, running: false }))
+              // 按 round 把前端已有的展开状态带过去：用户可能在最后一轮刚结束时
+              // 就点开了原文，直接整体替换会让面板自己收起来。
+              const prev = new Map((m.steps || []).map((s) => [s.round, s]))
+              m.steps = done.steps.map((st) => {
+                const old = prev.get(st.round)
+                return {
+                  ...st,
+                  running: false,
+                  toolOpen: old?.toolOpen,
+                  loadingTools: old?.loadingTools,
+                  toolContents: old?.toolContents
+                }
+              })
             }
           })
           scrollToBottom()
@@ -1035,6 +1110,55 @@ onBeforeUnmount(() => {
 
 .ai-chat__step-degraded {
   color: var(--warning);
+}
+
+.ai-chat__step-toggle {
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-500);
+  font-size: 0.72rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.ai-chat__step-toggle:hover {
+  color: var(--accent-600, var(--accent-500));
+}
+
+/* 检索原文：等宽换行显示，限高内滚。
+   不做 Markdown 渲染——这里是给用户核对「模型读到了什么」的原始材料，
+   渲染成富文本反而会掩盖分段的边界（[1] 《标题》· 小节）。 */
+.ai-chat__tool-body {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ai-chat__tool-pre {
+  margin: 0 0 8px;
+  font-family: inherit;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-chat__tool-pre:last-child {
+  margin-bottom: 0;
+}
+
+.ai-chat__tool-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-faint);
 }
 
 .ai-chat__step-articles {

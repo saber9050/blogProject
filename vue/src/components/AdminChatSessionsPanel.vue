@@ -159,6 +159,19 @@
                   <div v-if="st.articles?.length" class="acs-steps__from">
                     来自：{{ st.articles.join('、') }}
                   </div>
+                  <!-- 检索原文：管理员判断「答案是否忠于资料」的唯一依据。
+                       用原生 details 折叠，不需要额外的展开状态 -->
+                  <details v-if="toolsOfRound(m, st.round).length" class="acs-tool">
+                    <summary class="acs-tool__summary">
+                      查看检索内容（{{ toolsOfRound(m, st.round).length }} 条）
+                    </summary>
+                    <pre
+                      v-for="t in toolsOfRound(m, st.round)"
+                      :key="t.id"
+                      class="acs-tool__pre"
+                      >{{ t.content }}</pre
+                    >
+                  </details>
                 </li>
               </ol>
               <p v-if="m.refs?.length" class="acs-msg__refs">
@@ -198,7 +211,8 @@ import {
   adminGetChatSession,
   adminListChatSessions,
   type AdminMessageItem,
-  type AdminSessionItem
+  type AdminSessionItem,
+  type ChatToolMessage
 } from '../api/chat'
 import { showToast } from '../utils/toast'
 import { calcPages, getPageRange } from '../utils/pagination'
@@ -250,6 +264,18 @@ async function load(p: number) {
 function resetFilter() {
   filter.value = { user: '', article: '' }
   load(1)
+}
+
+/**
+ * 取某条消息里某一轮的检索原文。
+ *
+ * tool_messages 是平铺数组，靠 round 与 steps 对应。
+ * 这里用过滤而不是预先分组：一个会话最多 400 条消息，详情里每条通常只有 1~3 轮，
+ * 过滤的成本远低于维护一份分组索引。
+ */
+function toolsOfRound(m: AdminMessageItem, round: number): ChatToolMessage[] {
+  if (!m.tool_messages?.length) return []
+  return m.tool_messages.filter((t) => t.round === round)
 }
 
 async function openDetail(id: number) {
@@ -582,6 +608,36 @@ onMounted(() => load(1))
   margin-top: 2px;
   color: var(--text-faint);
   font-size: 0.72rem;
+}
+
+/* ===== 检索原文（后台审计用） ===== */
+
+.acs-tool {
+  margin-top: 6px;
+  border-left: 2px solid var(--border-strong);
+  padding-left: 8px;
+}
+
+.acs-tool__summary {
+  font-size: 0.72rem;
+  color: var(--accent-500);
+  cursor: pointer;
+  user-select: none;
+}
+
+.acs-tool__pre {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 6px;
+  background: var(--surface-strong);
+  font-family: inherit;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .acs-msg__refs {
