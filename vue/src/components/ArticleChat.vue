@@ -521,27 +521,44 @@ async function onComposerSend(payload: ComposerPayload) {
         onTool: (tool) => {
           patchMsg(asstKey, (m) => {
             if (!m.steps) m.steps = []
+
             if (tool.phase === 'start') {
-              m.steps.push({
-                round: tool.round,
-                tool: tool.name || '',
-                query: tool.query || '',
-                hits: 0,
-                chars: 0,
-                ms: 0,
-                running: true,
-                startedAt: Date.now()
-              })
-            } else {
-              // 用 running 标记找，不靠 round 比对：一轮里可能有多个并行调用
-              const target = [...m.steps].reverse().find((x) => x.running)
-              if (target) {
-                target.hits = tool.hits ?? 0
-                target.chars = tool.chars ?? 0
-                target.articles = tool.articles || []
-                target.ms = target.startedAt ? Date.now() - target.startedAt : 0
-                target.running = false
+              // 按 round 幂等：同一轮已经建过就只刷新字段，不再追加。
+              // 流式 tool_call 是分片到达的，服务端没合并干净时会重发 start，
+              // 前端若直接 push 就会出现「检索 4 次列出 6 条」这种幽灵条目。
+              const exist = m.steps.find((x) => x.round === tool.round)
+              if (exist) {
+                exist.tool = tool.name || exist.tool
+                exist.query = tool.query || exist.query
+                exist.running = true
+                exist.startedAt = exist.startedAt || Date.now()
+              } else {
+                m.steps.push({
+                  round: tool.round,
+                  tool: tool.name || '',
+                  query: tool.query || '',
+                  hits: 0,
+                  chars: 0,
+                  ms: 0,
+                  running: true,
+                  startedAt: Date.now()
+                })
               }
+              return
+            }
+
+            // end：优先按 round 精确配对（并行调用时也能对上），
+            // 对不上再退化到「最早的一条未完成」——FIFO 而不是 LIFO：
+            // 检索按发起顺序执行，LIFO 会让后发的先被认领，前面那条永远转圈。
+            const target =
+              m.steps.find((x) => x.round === tool.round && x.running) ||
+              m.steps.find((x) => x.running)
+            if (target) {
+              target.hits = tool.hits ?? 0
+              target.chars = tool.chars ?? 0
+              target.articles = tool.articles || []
+              target.ms = target.startedAt ? Date.now() - target.startedAt : 0
+              target.running = false
             }
           })
           scrollToBottom()

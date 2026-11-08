@@ -237,7 +237,7 @@ data: {"assistant_message_id":91,"prompt_tokens":2100,"completion_tokens":286,"r
 | 事件 | 说明 |
 |---|---|
 | `meta` | **必发且首个**。`article_refs` 只是「校验通过的引用范围」，此时还不知道 agent 会检索几篇 |
-| `tool` | 检索进度，`phase` 为 `start` / `end`，`round` 从 1 递增，最多 5。前端据此显示「正在检索资料…（第 N 轮）」——agentic 首字要 3~5 秒，没有反馈用户会以为卡死 |
+| `tool` | 检索进度，`phase` 为 `start` / `end`，`round` 从 1 递增且**在单次回答内唯一**（前端靠它配对 start 与 end），最多 5。**一次工具调用只发一次 `start`**——上游模型的流式 `tool_calls` 是分片到达的（第一片带名字、后续只带参数片段），服务端会按 `index` 合并后再发，前端不需要再去重。但为了稳妥，前端仍应按 `round` 幂等处理 |
 | `refs` | 所有轮次跑完、`done` 之前**只发一次**（合并去重后的结果）。`rrf_score` 只表示相对名次，**不是相似度**，不要当百分比展示 |
 | `delta` | 增量文本 |
 | `done` | **必发且最后**。`rounds` = 实际检索轮数（0 = 一次都没检索）；`searched_articles` = 真正查过的文章 id；`degraded` = 出现过降级但最终答出来了；`no_retrieval` = 零检索（回答已被替换，见 §8.3） |

@@ -190,3 +190,63 @@ func TestConsumeAgentStreamError(t *testing.T) {
 		t.Fatal("应记录错误")
 	}
 }
+
+// intPtr 取地址的小工具（schema.ToolCall.Index 是 *int）
+func intPtr(v int) *int { return &v }
+
+// TestConsumeAgentStreamFragmentedToolCalls 流式 tool_call 是**分片**的。
+//
+// OpenAI 协议里 delta.tool_calls 是增量：第一个 chunk 带 id 和 function.name，
+// 后续 chunk 只带 arguments 片段（name 为空、id 也为空）。
+// eino-ext 把每个 chunk 原样转成一个 schema.ToolCall（chat_model.go 的
+// toMessageToolCalls），Index 字段专门用来标识「这是第几个调用的哪一片」。
+//
+// 原实现把每个分片都 append 进一个切片再逐个发 tool_start，
+// 于是**一次检索会被前端显示成 2~3 条**，编号也跟着乱。
+// 用户看到的就是「检索 4 次却列出了 6 条」。
+func TestConsumeAgentStreamFragmentedToolCalls(t *testing.T) {
+	iter, gen := adk.NewAsyncIteratorPair[*adk.AgentEvent]()
+
+	// 同一个 tool_call 被拆成 3 片
+	gen.Send(assistantEvent(
+		&schema.Message{Role: schema.Assistant, ToolCalls: []schema.ToolCall{{
+			Index:    intPtr(0),
+			ID:       "call_1",
+			Type:     "function",
+			Function: schema.FunctionCall{Name: searchToolName, Arguments: ""},
+		}}},
+		&schema.Message{Role: schema.Assistant, ToolCalls: []schema.ToolCall{{
+			Index:    intPtr(0),
+			Function: schema.FunctionCall{Arguments: `{"query":"表单`},
+		}}},
+		&schema.Message{Role: schema.Assistant, ToolCalls: []schema.ToolCall{{
+			Index:    intPtr(0),
+			Function: schema.FunctionCall{Arguments: `验证"}`},
+		}}},
+	))
+	gen.Close()
+
+	sink := &recordSink{}
+	sc := &Scope{CurrentArticleID: 1, CurrentArticleTitle: "本文"}
+	res := consumeAgentStream(context.Background(), iter, sink, sc)
+	_ = res
+
+	starts := 0
+	for _, e := range sink.events {
+		if strings.HasPrefix(e, "tool_start:") {
+			starts++
+		}
+	}
+	if starts != 1 {
+		t.Fatalf("一个 tool_call 被拆成 3 片，只应发 1 次 tool_start，实际 %d 次: %v", starts, sink.events)
+	}
+
+	// 合并后应该能拿到完整的 query，而不是只拿到第一片（空串）
+	for _, e := range sink.events {
+		if strings.HasPrefix(e, "tool_start:") {
+			if !strings.Contains(e, "表单验证") {
+				t.Fatalf("分片参数未合并，拿到的 query 不完整: %q", e)
+			}
+		}
+	}
+}

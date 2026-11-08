@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"io"
+	"strconv"
 	"strings"
 
 	"blog/internal/model/entity"
@@ -138,7 +139,7 @@ func consumeAgentStream(ctx context.Context, iter *adk.AsyncIterator[*adk.AgentE
 		}
 
 		if mo.IsStreaming && mo.MessageStream != nil {
-			var toolCalls []schema.ToolCall
+			acc := newToolCallAcc()
 			for {
 				chunk, err := mo.MessageStream.Recv()
 				if stderrors.Is(err, io.EOF) {
@@ -165,12 +166,10 @@ func consumeAgentStream(ctx context.Context, iter *adk.AsyncIterator[*adk.AgentE
 						_ = sink.OnDelta(out)
 					}
 				}
-				if len(chunk.ToolCalls) > 0 {
-					toolCalls = append(toolCalls, chunk.ToolCalls...)
-				}
+				acc.add(chunk.ToolCalls)
 				collectUsage(chunk, &res)
 			}
-			emitToolStart(sink, sc, toolCalls)
+			acc.emit(sink, sc)
 			continue
 		}
 
@@ -183,26 +182,98 @@ func consumeAgentStream(ctx context.Context, iter *adk.AsyncIterator[*adk.AgentE
 					_ = sink.OnDelta(out)
 				}
 			}
-			emitToolStart(sink, sc, msg.ToolCalls)
+			acc := newToolCallAcc()
+			acc.add(msg.ToolCalls)
+			acc.emit(sink, sc)
 			collectUsage(msg, &res)
 		}
 	}
 }
 
-// emitToolStart 这一轮如果带 ToolCalls，说明模型要调检索。
+// toolCallAcc 合并流式 tool_call 的**分片**后再发事件。
 //
-// round 用「下一次检索的序号」：此刻工具还没执行，sc.Rounds 还是上一次的值。
-func emitToolStart(sink StreamSink, sc *Scope, calls []schema.ToolCall) {
-	if len(calls) == 0 {
-		return
+// 为什么必须合并：OpenAI 协议里 delta.tool_calls 是增量——第一片带 id 和
+// function.name，后续片只带 arguments 片段（name/id 都为空），
+// `schema.ToolCall.Index` 的注释说得很明确：流式下它就是「第几个调用的哪一片」。
+// eino-ext 把每一片原样转成一个 schema.ToolCall（chat_model.go 的 toMessageToolCalls）。
+//
+// 不合并的后果（线上实测）：一次检索被拆成 3 片 → 发 3 次 tool_start →
+// 前端列出 2~3 个同一条检索，编号乱跳，而且 query 永远是空串
+// （单片解析不出完整 JSON）。用户看到的是「检索 4 次却列了 6 条」。
+type toolCallAcc struct {
+	order []string
+	calls map[string]*schema.ToolCall
+}
+
+func newToolCallAcc() *toolCallAcc {
+	return &toolCallAcc{calls: make(map[string]*schema.ToolCall, 2)}
+}
+
+func (a *toolCallAcc) add(list []schema.ToolCall) {
+	for _, tc := range list {
+		key := toolCallKey(tc)
+		if key == "" {
+			// 纯参数片段：归到最近一个已知调用上。
+			// 归不到（第一片就是裸参数）时按 0 处理——只有一个工具的常态适用。
+			if len(a.order) > 0 {
+				key = a.order[len(a.order)-1]
+			} else {
+				key = "0"
+			}
+		}
+
+		cur, ok := a.calls[key]
+		if !ok {
+			cp := tc
+			a.calls[key] = &cp
+			a.order = append(a.order, key)
+			continue
+		}
+		// 分片合并：非空字段才覆盖，参数一律拼接
+		if tc.ID != "" {
+			cur.ID = tc.ID
+		}
+		if tc.Type != "" {
+			cur.Type = tc.Type
+		}
+		if tc.Function.Name != "" {
+			cur.Function.Name = tc.Function.Name
+		}
+		cur.Function.Arguments += tc.Function.Arguments
 	}
-	for _, c := range calls {
+}
+
+// emit 合并完成后，每个调用只发一次 tool_start。
+func (a *toolCallAcc) emit(sink StreamSink, sc *Scope) {
+	for i, key := range a.order {
+		c := a.calls[key]
 		name := c.Function.Name
 		if name == "" {
+			// 名字丢了（Qwen2.5-7B 这类小模型常见）。前端只需要知道"在检索"，
+			// 真正执行时由 UnknownToolsHandler 按参数兜底，不影响功能。
 			name = searchToolName
 		}
-		_ = sink.OnToolStart(sc.Rounds+1, name, extractQuery(c.Function.Arguments))
+		// round = Rounds+1+i：并行调用时同一轮会返回多个 tool_call，
+		// 加 i 才能保证每个 start 的 round 唯一（前端按它配对 end）。
+		_ = sink.OnToolStart(sc.Rounds+1+i, name, extractQuery(c.Function.Arguments))
 	}
+}
+
+// toolCallKey 决定一个分片归属哪个调用。
+//
+// 优先用 Index（流式合并的正规标识）；没有 Index 的提供方退化为 ID / 名字；
+// 三者都没有就是纯参数片段，由调用方归并到最近一个。
+func toolCallKey(tc schema.ToolCall) string {
+	if tc.Index != nil {
+		return "i" + strconv.Itoa(*tc.Index)
+	}
+	if tc.ID != "" {
+		return "id:" + tc.ID
+	}
+	if tc.Function.Name != "" {
+		return "name:" + tc.Function.Name
+	}
+	return ""
 }
 
 // extractQuery 从 tool 参数 JSON 里取 query，只用于前端展示「正在检索 xxx」。
