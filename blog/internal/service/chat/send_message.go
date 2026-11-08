@@ -134,7 +134,9 @@ func (s *chatService) SendMessage(ctx context.Context, userID, sessionID uint,
 
 	// 请求级范围只放这里和消息前缀，绝不进 Instruction（agent 是跨请求复用的）
 	sc := &Scope{
-		SessionID:           sessionID,
+		SessionID: sessionID,
+		// 工具消息要挂到这条助手消息上，事后才能按 message_id 整组取出
+		AssistantMessageID:  asstMsg.ID,
 		CurrentArticleID:    article.ID,
 		CurrentArticleTitle: article.Title,
 		RefArticleIDs:       articleIDsOf(articleRefs),
@@ -342,7 +344,97 @@ func (s *chatService) loadHistory(sessionID, beforeID uint) ([]*schema.Message, 
 	for i := len(list) - 1; i >= 0; i-- {
 		orded = append(orded, list[i])
 	}
-	return historyToMessages(orded), nil
+
+	msgs := historyToMessages(orded)
+
+	// 回放最近一轮检索到的资料原文。
+	//
+	// 为什么需要：历史里只有上一轮的**结论**（assistant 的 content），没有原文。
+	// 用户追问「展开说说第 3 点」时，模型只能顺着自己的总结继续扩写——
+	// 表现完全正常，但已经在编了。把原文还给它，「延续上下文」才有依据。
+	//
+	// 为什么只用文本注入、不用原生 tool 消息：OpenAI 协议要求 tool 消息紧跟带
+	// tool_calls 的 assistant 消息、且靠 tool_call_id 配对，而我们的工具定义走
+	// utils.InferTool，拿不到模型原始给的 id（落库字段只能留空）。伪造 id 有被
+	// provider 拒绝（400）的风险，而 Qwen2.5-7B 这类小模型对原生 tool 协议的模板
+	// 支持本来就不稳。文本注入零协议风险，模型照样能读。
+	if replay := s.toolReplay(sessionID, beforeID); replay != "" {
+		msgs = append(msgs, &schema.Message{Role: schema.System, Content: replay})
+	}
+	return msgs, nil
+}
+
+// toolReplayMaxChars 回放资料的总字数上限。
+//
+// 完整一轮可能装到 6000 字，而历史本身还有 2000 字预算；只回放一轮再砍到 3000，
+// 才不至于把上下文顶爆。追问通常只需要「刚才那几段」，不需要完整档案。
+const toolReplayMaxChars = 3000
+
+// toolReplay 取最近一轮有检索记录的资料原文，拼成一段可注入的文本。
+//
+// 返回空串表示没有可回放的资料（新会话 / 上一轮没检索过），调用方直接跳过。
+func (s *chatService) toolReplay(sessionID, beforeID uint) string {
+	msgID, err := s.repo.LastMessageIDWithTools(sessionID, beforeID)
+	if err != nil {
+		logger.Warn("查询可回放的检索记录失败", zap.Uint("session_id", sessionID), zap.Error(err))
+		return ""
+	}
+	if msgID == 0 {
+		return ""
+	}
+	list, err := s.repo.ListToolMessagesByMessage(msgID)
+	if err != nil {
+		logger.Warn("读取工具消息失败", zap.Uint("message_id", msgID), zap.Error(err))
+		return ""
+	}
+
+	return buildReplayText(list, toolReplayMaxChars)
+}
+
+// buildReplayText 把工具消息拼成可注入的文本，总字数不超过 budget。
+//
+// 抽成纯函数是为了能直接单测：这段文本会直接进模型上下文，
+// 写错了（比如忘了加「可能过时」的说明）不会报错，只会让模型把旧资料当现状复述。
+func buildReplayText(list []*entity.ChatToolMessage, budget int) string {
+	var b strings.Builder
+	used := 0
+	for _, t := range list {
+		body := strings.TrimSpace(t.Content)
+		if body == "" {
+			continue // 检索失败的那一轮没有原文，跳过
+		}
+		// 段间分隔符也要算进预算：它同样是实际注入的字数，
+		// 只在正文上做预算会让总量悄悄超出（2 段就多 4 个字）。
+		remaining := budget - used
+		if remaining <= 0 {
+			break
+		}
+		if used > 0 {
+			if remaining <= 2 {
+				break
+			}
+			b.WriteString("\n\n")
+			used += 2
+			remaining -= 2
+		}
+		part := truncateRunes(body, remaining)
+		if part == "" {
+			break
+		}
+		b.WriteString(part)
+		used += len([]rune(part))
+	}
+	if used == 0 {
+		return ""
+	}
+
+	// 说明必须写清楚「这是快照、可能过时、要引用就重新查」：
+	// 不写的话，模型会把上一轮的资料当成「当前文章内容」直接复述，
+	// 而文章可能已经改过了。
+	return "【上一轮检索到的资料原文（快照）】\n" +
+		"以下内容是你上一轮回答时通过检索工具读到的，可能已经过时。" +
+		"它只用来延续上下文，涉及文章事实时应当重新检索确认，不要直接当作当前事实复述。\n\n" +
+		b.String()
 }
 
 // ===== 小工具 =====

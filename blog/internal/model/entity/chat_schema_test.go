@@ -137,3 +137,48 @@ func TestChatEntitiesInAllModels(t *testing.T) {
 		}
 	}
 }
+
+// TestChatToolMessageSchema 工具消息表的 schema 约定。
+//
+// 三条都不能错，且都不会编译报错：
+//   - session_id / message_id 必须有索引：前者是删会话的删除条件，
+//     后者是「按消息取原文」的查询条件，缺了就是全表扫
+//   - Articles 是 []string，必须被当成 jsonb 普通列。没有 serializer:json 时
+//     GORM 会把它当 has-many 关联，AutoMigrate 去建外键、Create 顺带写子表，
+//     报错会以「找不到关联表」的形式出现，很难定位
+//   - 不能有 DeletedAt（同 chat_sessions，删除是硬删）
+func TestChatToolMessageSchema(t *testing.T) {
+	s := parseEntity(t, &ChatToolMessage{})
+
+	if s.Table != "chat_tool_messages" {
+		t.Fatalf("表名 = %q", s.Table)
+	}
+	if _, ok := s.FieldsByName["DeletedAt"]; ok {
+		t.Fatal("不该有 DeletedAt：删除是硬删，加了会让 db.Delete 静默变成 UPDATE")
+	}
+
+	// 关联检查：Articles 必须是普通列
+	f := s.LookUpField("Articles")
+	if f == nil {
+		t.Fatal("缺少 Articles 字段")
+	}
+	if f.Serializer == nil {
+		t.Fatal("Articles 缺少 serializer:json：会被当成 has-many 关联处理")
+	}
+
+	// 索引
+	sessionIdx := lookupIndex(t, s, "idx_chat_tool_messages_session")
+	assertFields(t, indexFields(sessionIdx), []string{"session_id"})
+	msgIdx := lookupIndex(t, s, "idx_chat_tool_messages_msg")
+	assertFields(t, indexFields(msgIdx), []string{"message_id", "round"})
+}
+
+// TestChatToolMessageInAllModels 表要进 AutoMigrate 清单，否则线上根本没有这张表。
+func TestChatToolMessageInAllModels(t *testing.T) {
+	for _, t2 := range AllTables() {
+		if t2 == "chat_tool_messages" {
+			return
+		}
+	}
+	t.Fatal("chat_tool_messages 不在 AllModels() 里，AutoMigrate 不会建这张表")
+}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"blog/internal/model/entity"
+
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
@@ -56,9 +58,17 @@ func (f *fakeToolCallModel) next(ctx context.Context, in []*schema.Message) (*sc
 }
 
 // fakeSearcher 记录被调用次数的检索实现。
+//
+// records 收集落库的工具消息：工具消息是整个「回看/回放」能力的数据源，
+// 这里能断言它真的被写出来，而不是只有 SSE 事件。
 type fakeSearcher struct {
-	calls int
-	query string
+	calls   int
+	query   string
+	records []*entity.ChatToolMessage
+}
+
+func (f *fakeSearcher) RecordToolMessage(ctx context.Context, m *entity.ChatToolMessage) {
+	f.records = append(f.records, m)
 }
 
 func (f *fakeSearcher) Search(ctx context.Context, sc *Scope, query string) (SearchResult, error) {
@@ -104,7 +114,7 @@ func TestAgentActuallyCallsTool(t *testing.T) {
 	// scope 必须放进 ctx：tool 通过它拿检索范围。
 	// 这一步同时也是在验证「scope 真的能穿透到工具里」——穿透不了的话
 	// runSearch 会返回「检索范围无效」，测试会在 hits 断言上失败。
-	sc := &Scope{CurrentArticleID: 1, CurrentArticleTitle: "测试文章"}
+	sc := &Scope{SessionID: 7, AssistantMessageID: 99, CurrentArticleID: 1, CurrentArticleTitle: "测试文章"}
 	sc.EnsureSeen()
 	runCtx := withScope(ctx, sc)
 
@@ -130,6 +140,20 @@ func TestAgentActuallyCallsTool(t *testing.T) {
 	}
 	if res.content == "" {
 		t.Fatal("最终回答为空")
+	}
+	// 工具消息必须落库，且要带上返回给模型的原文——这是回看与回放的唯一数据源
+	if len(searcher.records) != 1 {
+		t.Fatalf("工具消息应落库 1 条，实际 %d 条", len(searcher.records))
+	}
+	rec := searcher.records[0]
+	if rec.Content == "" {
+		t.Fatal("工具消息的 Content 为空：等于只存了元信息，回放时模型仍然看不到资料")
+	}
+	if rec.MessageID == 0 {
+		t.Fatal("工具消息没挂到助手消息上（scope.AssistantMessageID 没填）")
+	}
+	if rec.Round != 1 {
+		t.Fatalf("工具消息的 round = %d，期望 1", rec.Round)
 	}
 
 	t.Logf("事件序列: %v", sink.events)
@@ -202,7 +226,7 @@ func TestAgentUnknownToolFallsBackToSearch(t *testing.T) {
 	}
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent, EnableStreaming: true})
 
-	sc := &Scope{CurrentArticleID: 1, CurrentArticleTitle: "测试文章"}
+	sc := &Scope{SessionID: 7, AssistantMessageID: 99, CurrentArticleID: 1, CurrentArticleTitle: "测试文章"}
 	sc.EnsureSeen()
 	runCtx := withScope(ctx, sc)
 

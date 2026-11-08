@@ -106,16 +106,21 @@ func (r *chatRepository) AdminDeleteSession(id uint) error {
 	return r.hardDelete(id)
 }
 
-// hardDelete 硬删会话：先删消息，再删会话，同一事务。
+// hardDelete 硬删会话：工具记录 → 消息 → 会话，同一事务。
 //
-// 顺序不能反：反了会留下孤儿消息（session_id 指向已不存在的会话），越积越多且
-// 永远查不出来。必须同事务：中途失败会留下「消息删了、会话还在」的空壳，用户点进去
-// 一片空白。
+// 顺序不能反：反了会留下孤儿行（指向已不存在的父），越积越多且永远查不出来。
+// 必须同事务：中途失败会留下「消息删了、会话还在」的空壳，用户点进去一片空白。
+//
+// ⚠️ chat_tool_messages 是**最深的一层**（消息的从属），必须最先删。
+// 它按 session_id 删而不是按 message_id：一条 DELETE 清完，不用先查 message_id 列表。
 //
 // 没有依赖物理外键的 ON DELETE CASCADE——表上不建外键（与 article_chunks、comments
 // 的风格一致，也避免批量删除时的锁等待）。所以这里的顺序就是唯一的保障。
 func (r *chatRepository) hardDelete(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("session_id = ?", id).Delete(&entity.ChatToolMessage{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("session_id = ?", id).Delete(&entity.ChatMessage{}).Error; err != nil {
 			return err
 		}
@@ -128,6 +133,65 @@ func (r *chatRepository) hardDelete(id uint) error {
 		}
 		return nil
 	})
+}
+
+// ===== 工具消息 =====
+
+func (r *chatRepository) CreateToolMessage(m *entity.ChatToolMessage) error {
+	return r.db.Create(m).Error
+}
+
+func (r *chatRepository) MessageExistsInSession(sessionID, messageID uint) (bool, error) {
+	if sessionID == 0 || messageID == 0 {
+		return false, nil
+	}
+	var n int64
+	err := r.db.Model(&entity.ChatMessage{}).
+		Where("id = ? AND session_id = ?", messageID, sessionID).
+		Count(&n).Error
+	return n > 0, err
+}
+
+func (r *chatRepository) ListToolMessagesByMessage(messageID uint) ([]*entity.ChatToolMessage, error) {
+	if messageID == 0 {
+		return nil, nil
+	}
+	var rows []*entity.ChatToolMessage
+	err := r.db.Where("message_id = ?", messageID).Order("round ASC, id ASC").Find(&rows).Error
+	return rows, err
+}
+
+func (r *chatRepository) ListToolMessagesBySession(sessionID uint) (map[uint][]*entity.ChatToolMessage, error) {
+	out := make(map[uint][]*entity.ChatToolMessage)
+	if sessionID == 0 {
+		return out, nil
+	}
+	var rows []*entity.ChatToolMessage
+	// 排序保证前端按 round 顺序展示，不用再排一次
+	err := r.db.Where("session_id = ?", sessionID).
+		Order("message_id ASC, round ASC, id ASC").Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range rows {
+		out[m.MessageID] = append(out[m.MessageID], m)
+	}
+	return out, nil
+}
+
+func (r *chatRepository) LastMessageIDWithTools(sessionID, beforeMessageID uint) (uint, error) {
+	var ids []uint
+	q := r.db.Model(&entity.ChatToolMessage{}).Where("session_id = ?", sessionID)
+	if beforeMessageID > 0 {
+		// 只看当前提问之前的消息：当前这条 assistant 是刚建的占位，还没有工具记录
+		q = q.Where("message_id < ?", beforeMessageID)
+	}
+	// Distinct 而不是 GROUP BY：同一个 message 有多轮检索，只关心"哪条消息有记录"
+	err := q.Distinct().Order("message_id DESC").Limit(1).Pluck("message_id", &ids).Error
+	if err != nil || len(ids) == 0 {
+		return 0, err
+	}
+	return ids[0], nil
 }
 
 // ===== 消息 =====

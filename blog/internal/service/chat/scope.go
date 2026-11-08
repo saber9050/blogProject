@@ -19,6 +19,11 @@ type scopeKey struct{}
 // 请求级数据只有两个合法去处：① 首条 user 消息的前缀（给模型看）② 这里的 ctx（给 tool 用）。
 type Scope struct {
 	SessionID uint
+	// AssistantMessageID 本次回答对应的助手消息 id（开流前就建好了占位消息）。
+	//
+	// tool 落库要用它做归属：一条助手消息可能对应多轮检索，
+	// 事后按 message_id 就能把「这一轮回答到底查了什么」整组取出来。
+	AssistantMessageID uint
 	// CurrentArticleID 会话所属文章，永远是检索主体。
 	CurrentArticleID    uint
 	CurrentArticleTitle string

@@ -41,6 +41,9 @@ func (f *fakeService) AdminDetail(id uint) (*response.AdminSessionDetailResponse
 	return &response.AdminSessionDetailResponse{}, nil
 }
 func (f *fakeService) AdminDelete(id uint) error { return nil }
+func (f *fakeService) ListToolMessages(userID, sessionID, messageID uint) ([]*response.ChatToolMessageItem, error) {
+	return nil, nil
+}
 
 func (f *fakeService) SendMessage(ctx context.Context, userID, sessionID uint,
 	req *request.SendChatMessageRequest, sink chatSvc.StreamSink) (*response.SendChatMessageResponse, error) {

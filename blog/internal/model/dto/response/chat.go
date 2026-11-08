@@ -160,11 +160,14 @@ type AdminMessageItem struct {
 	ArticleRefs []entity.ChatArticleRef `json:"article_refs"`
 	// Steps 检索过程。后台靠它判断「这次为什么答得不好」——
 	// 是根本没查、查了没命中、还是查到了但降级了。
-	Steps            []entity.ChatStep `json:"steps"`
-	PromptTokens     int               `json:"prompt_tokens"`
-	CompletionTokens int               `json:"completion_tokens"`
-	Interrupted      bool              `json:"interrupted"`
-	Refused          bool              `json:"refused"`
+	Steps []entity.ChatStep `json:"steps"`
+	// ToolMessages 该条回答里的工具调用记录（含原文）。
+	// 后台审计要判断「答案是否忠于资料」，所以详情一次性给全，不分页。
+	ToolMessages     []*ChatToolMessageItem `json:"tool_messages"`
+	PromptTokens     int                    `json:"prompt_tokens"`
+	CompletionTokens int                    `json:"completion_tokens"`
+	Interrupted      bool                   `json:"interrupted"`
+	Refused          bool                   `json:"refused"`
 	// NoRetrieval 零检索，Content 是后端固定提示
 	NoRetrieval bool   `json:"no_retrieval"`
 	Error       string `json:"error"`
@@ -178,4 +181,31 @@ type AdminMessageItem struct {
 type AdminSessionDetailResponse struct {
 	Session  *AdminSessionItem   `json:"session"`
 	Messages []*AdminMessageItem `json:"messages"`
+}
+
+// ChatToolMessageItem 一次工具调用的完整记录（含返回给模型的原文）。
+//
+// 为什么单独一个接口按需拉、而不是塞进历史消息列表：
+// Content 是检索回来的一整段资料（单条 6KB 起），
+// 一次拉 30 条历史就把几百 KB 原文全塞进响应了。
+// 只有用户点开某一轮时才需要原文。
+type ChatToolMessageItem struct {
+	ID uint `json:"id"`
+	// Round 第几轮检索，与 assistant 消息 steps 里的 round 对应。
+	Round     int      `json:"round"`
+	ToolName  string   `json:"tool_name"`
+	Query     string   `json:"query"`
+	Content   string   `json:"content"`
+	Hits      int      `json:"hits"`
+	Chars     int      `json:"chars"`
+	Ms        int64    `json:"ms"`
+	Articles  []string `json:"articles"`
+	Degraded  bool     `json:"degraded"`
+	Note      string   `json:"note"`
+	CreatedAt string   `json:"created_at"`
+}
+
+// ChatToolMessageListResponse 某一轮的工具消息列表。
+type ChatToolMessageListResponse struct {
+	List []*ChatToolMessageItem `json:"list"`
 }

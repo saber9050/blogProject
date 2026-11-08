@@ -2,9 +2,11 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
+	"blog/internal/model/entity"
 	"blog/pkg/logger"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -32,6 +34,12 @@ type searchToolArgs struct {
 // 用最小接口的好处是它可以在单测里换成假实现，不必造一整个 service。
 type contextSearcher interface {
 	Search(ctx context.Context, sc *Scope, query string) (SearchResult, error)
+	// RecordToolMessage 落一条工具调用记录（含返回给模型的原文）。
+	//
+	// 和 Search 放在同一个接口里，是因为「检索」与「记录这次检索」是一件事：
+	// 拆成两个依赖后，任何新增的检索入口都可能忘记记录，而漏记是**静默**的。
+	// 实现方只 warn 不返回错误——记录是辅助信息，不能因为它失败而废掉整轮回答。
+	RecordToolMessage(ctx context.Context, m *entity.ChatToolMessage)
 }
 
 // newSearchTool 构造检索工具（P3 起接真实混合检索）。
@@ -76,7 +84,10 @@ func runSearch(ctx context.Context, searcher contextSearcher, args *searchToolAr
 	if len([]rune(query)) < 2 {
 		return "query 不合法，请用 2 个字以上的关键词重新检索。", nil
 	}
-	return doSearch(ctx, searcher, query)
+	// 重建参数 JSON 落库。InferTool 的 handler 只给解析后的结构体，
+	// 拿不到模型的原始报文；重新序列化足够还原调用（只有一个 query 字段）。
+	argJSON, _ := json.Marshal(args)
+	return doSearch(ctx, searcher, query, string(argJSON), "")
 }
 
 // doSearch 一次检索的完整执行：计次 → 记步骤 → 调检索 → 回填结果。
@@ -84,7 +95,7 @@ func runSearch(ctx context.Context, searcher contextSearcher, args *searchToolAr
 // 抽出来是因为有**两个入口**：正常的 tool 调用（runSearch），
 // 和「模型给的工具名不在注册表里」的兜底入口（handleUnknownTool）。
 // 两条路必须走同一份计次与记录逻辑，否则步骤面板会缺记录、次数闸也会失效。
-func doSearch(ctx context.Context, searcher contextSearcher, query string) (string, error) {
+func doSearch(ctx context.Context, searcher contextSearcher, query, arguments, toolCallID string) (string, error) {
 	sc := scopeFromCtx(ctx)
 	sc.ToolCalls++
 	sc.Rounds++
@@ -97,10 +108,37 @@ func doSearch(ctx context.Context, searcher contextSearcher, query string) (stri
 
 	if err != nil {
 		sc.EndStep(stepIdx, 0, 0, elapsed, nil, true, "检索失败")
+		// 失败的检索也要留痕：事后看「这一轮为什么答得差」，
+		// 「当时检索报错了」比「查了但没命中」是更关键的信息。
+		searcher.RecordToolMessage(ctx, toolRecord(sc, sc.Steps[stepIdx], arguments, toolCallID, ""))
 		return "", err
 	}
 	sc.EndStep(stepIdx, res.Hits, len([]rune(res.Text)), elapsed, res.Articles, res.Degraded, res.Note)
+	searcher.RecordToolMessage(ctx, toolRecord(sc, sc.Steps[stepIdx], arguments, toolCallID, res.Text))
 	return res.Text, nil
+}
+
+// toolRecord 把一条已完成的步骤组装成可落库的工具消息。
+//
+// 直接复用 sc.Steps 里那条记录而不是逐字段重抄：两处各写一遍迟早漂移，
+// 而且 steps 是给前端看的、工具消息是给回放和审计用的，字段必须对得上。
+func toolRecord(sc *Scope, step entity.ChatStep, arguments, toolCallID, content string) *entity.ChatToolMessage {
+	return &entity.ChatToolMessage{
+		SessionID:  sc.SessionID,
+		MessageID:  sc.AssistantMessageID,
+		Round:      step.Round,
+		ToolName:   step.Tool,
+		ToolCallID: toolCallID,
+		Arguments:  arguments,
+		Query:      step.Query,
+		Content:    content,
+		Hits:       step.Hits,
+		Chars:      step.Chars,
+		Ms:         step.Ms,
+		Articles:   step.Articles,
+		Degraded:   step.Degraded,
+		Note:       step.Note,
+	}
 }
 
 // handleUnknownTool 兜底：模型给的工具名不在注册表里（含空字符串）。
@@ -138,7 +176,7 @@ func (b *agentBuilder) handleUnknownTool(ctx context.Context, name, input string
 		return "检索次数已用完，请基于现有资料作答。不要再调用检索工具。", nil
 	}
 
-	out, err := doSearch(ctx, b.searcher, query)
+	out, err := doSearch(ctx, b.searcher, query, input, "")
 	if err != nil {
 		// 父 ctx 取消必须原样抛出：用户已经不想等了，继续跑只是白烧 token
 		if ctx.Err() != nil {

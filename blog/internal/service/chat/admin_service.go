@@ -75,9 +75,21 @@ func (s *chatService) AdminDetail(id uint) (*response.AdminSessionDetailResponse
 		return nil, errors.NewWithErr(errors.CodeInternalError, "读取消息失败", err)
 	}
 
+	// 工具消息一次性全取（详情不分页），再按 message_id 分发。
+	// 逐条消息查一次会变成 N+1：一个会话最多 400 条消息，那就是 400 次往返。
+	toolsByMsg, err := s.repo.ListToolMessagesBySession(id)
+	if err != nil {
+		// 工具消息是辅助信息，取不到不该让整个详情打不开
+		logger.Warn("读取会话工具消息失败", zap.Uint("session_id", id), zap.Error(err))
+	}
+
 	items := make([]*response.AdminMessageItem, 0, len(msgs))
 	for _, m := range msgs {
-		items = append(items, toAdminMessageItem(m))
+		item := toAdminMessageItem(m)
+		for _, t := range toolsByMsg[m.ID] {
+			item.ToolMessages = append(item.ToolMessages, toToolMessageItem(t))
+		}
+		items = append(items, item)
 	}
 	return &response.AdminSessionDetailResponse{
 		Session:  toAdminSessionItem(row),
@@ -134,6 +146,7 @@ func toAdminMessageItem(m *entity.ChatMessage) *response.AdminMessageItem {
 		Model:            m.Model,
 		Refs:             m.Refs,
 		ArticleRefs:      m.ArticleRefs,
+		Steps:            m.Steps,
 		PromptTokens:     m.PromptTokens,
 		CompletionTokens: m.CompletionTokens,
 		Interrupted:      m.Interrupted,

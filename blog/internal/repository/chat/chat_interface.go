@@ -91,7 +91,7 @@ type Repository interface {
 	// TouchSession 发完一轮消息后更新计数与活跃时间。用 SQL 自增而不是读改写：
 	// 两个请求并发时读改写会互相覆盖，计数就会丢。
 	TouchSession(id uint, addMessages int, now time.Time) error
-	// DeleteSession 硬删会话及其全部消息（同一事务，先删子表）。
+	// DeleteSession 硬删会话及其全部消息、工具记录（同一事务，先删最深的子表）。
 	DeleteSession(id uint) error
 
 	// ===== 消息 =====
@@ -143,6 +143,28 @@ type Repository interface {
 	AdminListSessions(q AdminQuery) ([]*SessionRow, int64, error)
 	// AdminFindSession 后台取单个会话（不校验归属）。
 	AdminFindSession(id uint) (*SessionRow, error)
+	// ===== 工具消息（chat_tool_messages）=====
+
+	// CreateToolMessage 落一条工具调用记录（含返回给模型的原文）。
+	//
+	// 失败不该打断回答：这是辅助信息，丢一条的代价远小于把整轮回答废掉。
+	// 调用方只 warn。
+	CreateToolMessage(m *entity.ChatToolMessage) error
+	// MessageExistsInSession 校验消息是否属于该会话。
+	// 取工具消息前必须先过这一关，否则知道一个 message_id 就能读别人的检索原文。
+	MessageExistsInSession(sessionID, messageID uint) (bool, error)
+	// ListToolMessagesByMessage 取某条助手消息的全部工具记录，按 round 升序。
+	ListToolMessagesByMessage(messageID uint) ([]*entity.ChatToolMessage, error)
+	// ListToolMessagesBySession 取会话内全部工具记录，按 message_id 分组。
+	// 后台详情用：一次查完避免 N+1（一个会话最多 400 条消息）。
+	ListToolMessagesBySession(sessionID uint) (map[uint][]*entity.ChatToolMessage, error)
+	// LastMessageIDWithTools 该会话里最近一条「带工具记录」的助手消息 id。
+	// beforeMessageID > 0 时只看它之前（不含）的消息。没有返回 0。
+	//
+	// 用于「只回放最近一轮资料」：历史里塞太多轮会把上下文顶爆，
+	// 而最近一轮正是追问「展开说说」时最需要的。
+	LastMessageIDWithTools(sessionID, beforeMessageID uint) (uint, error)
+
 	// AdminDeleteSession 后台硬删，与 DeleteSession 同语义。
 	AdminDeleteSession(id uint) error
 }

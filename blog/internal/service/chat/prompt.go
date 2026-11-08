@@ -39,7 +39,10 @@ const tutorInstruction = `你是「博客文章答疑」助手，只解答与用
      （不要道歉、不要解释规则）。
    注意区分两种情况：「文章里没提到」是正常回答（说明没提到即可），
    「问题和文章无关」才输出标记。这两者混淆会让「问文章细节却被拒」这种最差的体验出现。
-4. 回答用简体中文、Markdown 格式；代码块标注语言；避免冗长的客套。`
+4. 回答用简体中文、Markdown 格式；代码块标注语言；避免冗长的客套。
+5. 历史对话里你之前说过的话**不是资料**，只是上下文。用户追问或需要引用文章事实时，
+   必须重新检索确认；不要因为「上一轮已经答过」就直接复述。
+   如果上下文里出现了「上一轮检索到的资料原文（快照）」，那可能已经过时，同样要重新检索。`
 
 // offTopicMarker 模型判定「问题与文章无关」时输出的内部标记。
 //
@@ -116,6 +119,14 @@ func historyToMessages(list []*entity.ChatMessage) []*schema.Message {
 	out := make([]*schema.Message, 0, len(list))
 	for _, m := range list {
 		if m.Content == "" {
+			continue
+		}
+		// 零检索的助手消息不进历史。
+		//
+		// 它的内容是「没能读取到文章内容」的固定提示（更早的版本里甚至是模型凭标题编的），
+		// 留在上下文里两个坏处：占预算，而且模型可能把上一轮的编造当成自己说过的事实
+		// 继续推演——幻觉会一轮轮累积，且表现完全正常。
+		if m.Role == entity.ChatRoleAssistant && m.NoRetrieval {
 			continue
 		}
 		var role schema.RoleType

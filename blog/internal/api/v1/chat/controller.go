@@ -45,6 +45,9 @@ func (ctrl *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	cg.POST("/sessions", ctrl.CreateSession)
 	cg.GET("/sessions/:sessionId/messages", ctrl.ListMessages)
 	cg.POST("/sessions/:sessionId/messages", ctrl.SendMessage)
+	// 工具消息按需拉：历史列表只给元信息（查了什么、命中几段），
+	// 用户点开某一轮才取原文。原文单条 6KB 起，跟着列表走会让响应膨胀几十倍。
+	cg.GET("/sessions/:sessionId/messages/:messageId/tools", ctrl.ListToolMessages)
 	cg.PATCH("/sessions/:sessionId", ctrl.UpdateSession)
 	cg.DELETE("/sessions/:sessionId", ctrl.DeleteSession)
 	cg.GET("/article-candidates", ctrl.ListArticleCandidates)
@@ -142,6 +145,26 @@ func (ctrl *Controller) SendMessage(c *gin.Context) {
 		return
 	}
 	_ = sink.done(res)
+}
+
+// ListToolMessages 取某条助手消息的工具调用记录（含检索到的原文）。
+func (ctrl *Controller) ListToolMessages(c *gin.Context) {
+	sessionID, ok := parseIDParam(c, "sessionId")
+	if !ok {
+		response.BadRequest(c, "无效的会话ID")
+		return
+	}
+	messageID, ok := parseIDParam(c, "messageId")
+	if !ok {
+		response.BadRequest(c, "无效的消息ID")
+		return
+	}
+	list, err := ctrl.svc.ListToolMessages(middleware.GetUserID(c), sessionID, messageID)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": list})
 }
 
 // UpdateSession 改标题 / 换模型。

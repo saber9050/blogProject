@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	stderrors "errors"
 	"strings"
 	"sync"
@@ -355,6 +356,33 @@ func (s *chatService) mustOwnSession(userID, sessionID uint) (*entity.ChatSessio
 // activeChatModels 启用的对话模型（type=1 且 status=1）。
 //
 // 只取 id + model，不返回 base_url / api_key——前台没有理由知道这些。
+// RecordToolMessage 落一条工具调用记录（含返回给模型的原文）。
+//
+// 只 warn 不返回错误：这是审计与回放用的辅助信息，丢一条的代价远小于
+// 因为它把整轮回答废掉。但必须留日志——静默失败等于「以为存了其实没存」，
+// 而这恰恰是这次要修的问题本身。
+func (s *chatService) RecordToolMessage(ctx context.Context, m *entity.ChatToolMessage) {
+	if m == nil {
+		return
+	}
+	if m.MessageID == 0 {
+		// scope 没填 AssistantMessageID 时会走到这里，属于接线 bug。
+		// 不 panic（回答还能继续），但必须喊一声。
+		logger.Warn("工具消息缺少归属消息 id，跳过落库",
+			zap.Uint("session_id", m.SessionID), zap.String("query", m.Query))
+		return
+	}
+	// ctx 已取消（用户点停止）也照常落库：这次检索确实发生过，
+	// 而且「停止前查了什么」正是复盘时想看的。
+	if err := s.repo.CreateToolMessage(m); err != nil {
+		logger.Warn("落库工具消息失败",
+			zap.Uint("session_id", m.SessionID),
+			zap.Uint("message_id", m.MessageID),
+			zap.Int("round", m.Round),
+			zap.Error(err))
+	}
+}
+
 func (s *chatService) activeChatModels() ([]*response.ChatModelItem, error) {
 	list, err := s.llmCfg.ListByType(1)
 	if err != nil {
@@ -405,6 +433,10 @@ func toMessageItem(m *entity.ChatMessage) *response.ChatMessageItem {
 		Model:       m.Model,
 		Refs:        m.Refs,
 		ArticleRefs: m.ArticleRefs,
+		// ⚠️ Steps 曾经漏在这里：数据落库了、接口不返回，
+		// 前端拿到空数组就显示「未检索资料」——看起来像检索没发生，
+		// 实际是「存了但没给出去」。见 mapping_test.go 的反射测试。
+		Steps:       m.Steps,
 		Interrupted: m.Interrupted,
 		Refused:     m.Refused,
 		NoRetrieval: m.NoRetrieval,
@@ -417,4 +449,64 @@ func toMessageItem(m *entity.ChatMessage) *response.ChatMessageItem {
 // gorm 在不同路径上可能把 ErrRecordNotFound 包一层，直接比较会在某条分支上失效。
 func isNotFound(err error) bool {
 	return stderrors.Is(err, repo.ErrNotFound)
+}
+
+// ListToolMessages 取某条助手消息的工具调用记录。
+//
+// 两层校验缺一不可：
+//   - mustOwnSession：会话必须属于当前用户
+//   - MessageExistsInSession：message_id 必须属于该会话
+//
+// 少了第二层，拿到别人的 message_id 就能读别人的检索原文——而检索原文里
+// 可能有未发布文章的内容。
+func (s *chatService) ListToolMessages(userID, sessionID, messageID uint) ([]*response.ChatToolMessageItem, error) {
+	if _, err := s.mustOwnSession(userID, sessionID); err != nil {
+		return nil, err
+	}
+	ok, err := s.repo.MessageExistsInSession(sessionID, messageID)
+	if err != nil {
+		logger.Error("校验消息归属失败", zap.Uint("session_id", sessionID),
+			zap.Uint("message_id", messageID), zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "读取检索记录失败", err)
+	}
+	if !ok {
+		// 与「会话不属于你」一致返回 404：403 等于承认这条消息存在。
+		return nil, errors.New(errors.CodeNotFound, "消息不存在")
+	}
+
+	list, err := s.repo.ListToolMessagesByMessage(messageID)
+	if err != nil {
+		logger.Error("读取工具消息失败", zap.Uint("message_id", messageID), zap.Error(err))
+		return nil, errors.NewWithErr(errors.CodeInternalError, "读取检索记录失败", err)
+	}
+	out := make([]*response.ChatToolMessageItem, 0, len(list))
+	for _, m := range list {
+		out = append(out, toToolMessageItem(m))
+	}
+	return out, nil
+}
+
+// toToolMessageItem 实体 → 对外结构。
+//
+// 不返回 session_id / message_id：调用方已经知道自己查的是哪一条，
+// 多给只会让前端以为可以拿它去查别的。
+func toToolMessageItem(m *entity.ChatToolMessage) *response.ChatToolMessageItem {
+	articles := m.Articles
+	if articles == nil {
+		articles = []string{}
+	}
+	return &response.ChatToolMessageItem{
+		ID:        m.ID,
+		Round:     m.Round,
+		ToolName:  m.ToolName,
+		Query:     m.Query,
+		Content:   m.Content,
+		Hits:      m.Hits,
+		Chars:     m.Chars,
+		Ms:        m.Ms,
+		Articles:  articles,
+		Degraded:  m.Degraded,
+		Note:      m.Note,
+		CreatedAt: m.CreatedAt.Format(timeLayout),
+	}
 }

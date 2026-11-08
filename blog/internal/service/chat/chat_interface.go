@@ -52,6 +52,11 @@ type Service interface {
 	// AdminDelete 硬删会话（不可恢复）。
 	AdminDelete(id uint) error
 
+	// ListToolMessages 取某条助手消息的全部工具调用记录（含检索到的原文）。
+	//
+	// 按需拉：历史消息列表只给元信息，用户点开某一轮才要原文。
+	ListToolMessages(userID, sessionID, messageID uint) ([]*response.ChatToolMessageItem, error)
+
 	// SendMessage 发消息并跑 agent。
 	//
 	// sink 非 nil 时边跑边推事件（流式）；为 nil 时只返回最终结果（非流式）。

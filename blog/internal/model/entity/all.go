@@ -36,6 +36,10 @@ func AllModels() []interface{} {
 		// 所以顺序不是硬要求，保持「新模块追加在末尾」更便于对照 git 历史。
 		&ChatSession{},
 		&ChatMessage{},
+		// chat_tool_messages 是「一次工具调用的完整记录」，含检索回来的原文。
+		// 顺序在 chat_messages 之后：它靠 message_id + session_id 逻辑关联，
+		// 同样不建物理外键，建表顺序不是硬要求。
+		&ChatToolMessage{},
 	}
 }
 
