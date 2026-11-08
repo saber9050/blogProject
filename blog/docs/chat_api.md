@@ -279,6 +279,66 @@ data: {"assistant_message_id":91,"prompt_tokens":2100,"completion_tokens":286,"r
 
 ---
 
+## 3.5 某条回答的检索原文
+
+```
+GET /api/v1/chat/sessions/:sessionId/messages/:messageId/tools
+```
+
+点开某一轮检索时按需拉取。**不跟历史消息列表一起返回**：单条原文 6KB 起，
+一次拉 30 条历史会把几百 KB 全塞进响应，而用户通常只看最近一轮。
+
+**响应 200**
+
+```json
+{
+  "code": 0,
+  "message": "成功",
+  "data": {
+    "list": [
+      {
+        "id": 812,
+        "round": 1,
+        "tool_name": "search_article_context",
+        "query": "核心内容 概述",
+        "content": "[1] 《goweb表单》· 1. HTML 表单基础\n重点属性：method...\n\n[2] ...",
+        "hits": 4,
+        "chars": 1987,
+        "ms": 286,
+        "articles": ["goweb表单"],
+        "degraded": false,
+        "note": "",
+        "created_at": "2026-11-08T17:20:03+08:00"
+      }
+    ]
+  }
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `round` | 第几轮检索，与 assistant 消息 `steps[].round` 一一对应 |
+| `content` | **工具返回给模型的资料原文**，含 `[1] 《标题》· 小节` 段头。这是「它当时到底读到了什么」的唯一凭证 |
+| `hits` / `chars` / `ms` | 与 `steps` 同名字段一致；检索失败时 `hits=0`、`content` 为空、`note` 写原因 |
+
+**错误**
+
+| code | 场景 |
+|---|---|
+| 404 | 会话不存在 / 不属于当前用户；消息不属于该会话 |
+
+> 第二个 404 很容易漏：只校验「会话归属」不够，还得校验「message_id 属于这个会话」，
+> 否则拿到别人的 message_id 就能读别人的检索原文（里面可能含未发布文章的内容）。
+
+**为什么单独存一张表**：`content` 是整段资料，塞进 `chat_messages` 的 jsonb 会让
+每次历史列表查询都拖着它走；独立表可以按需加载，删会话时按 `session_id` 一条 DELETE 清完。
+
+**这些原文还会被回放**：下一次提问时，服务端会把**最近一轮**的检索原文作为一段
+system 消息注入上下文（砍到 3000 字），并明确告知「这是快照、可能过时、引用前要重新检索」。
+更早的轮次不回放——10 轮就是 6 万字，必然顶爆上下文。
+
+---
+
 ## 5. 修改会话
 
 `PATCH /api/v1/chat/sessions/:sessionId`
