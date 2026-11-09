@@ -33,17 +33,56 @@
           <span v-else-if="currentModel" class="ai-chat__model">{{ currentModel }}</span>
         </div>
         <div class="ai-chat__actions">
+          <!-- 新建会话必须带文字。
+               原来这里是纯「＋」，和右边的「－」并排就像一对缩放按钮，
+               用户第一反应是「切换/展开会话」，而不是「开一段新对话」。
+               图标只做辅助，语义靠「新对话」三个字承担。 -->
           <button
-            class="ai-chat__icon-btn"
+            class="ai-chat__new-btn"
             type="button"
-            title="新建会话"
+            title="开始一段新对话（当前会话仍保留在历史里）"
+            aria-label="新建会话"
             :disabled="streaming"
             @click="startNewSession"
           >
-            &#65291;
+            <svg
+              class="ai-chat__new-icon"
+              viewBox="0 0 16 16"
+              width="12"
+              height="12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M13.5 8.6v3.9a1.5 1.5 0 0 1-1.5 1.5H3.6a1.5 1.5 0 0 1-1.5-1.5V4.6a1.5 1.5 0 0 1 1.5-1.5h3.9" />
+              <path d="M11.9 1.6l2.5 2.5-5.4 5.4-2.8.3.3-2.8 5.4-5.4z" />
+            </svg>
+            <span>新对话</span>
           </button>
-          <button class="ai-chat__icon-btn" type="button" title="收起" @click="closePanel">
-            &#8722;
+          <!-- 收起用 ×：会话不会丢，只是把面板收成右下角的悬浮球。
+               「－」会加重「一对按钮」的错觉，× 是关闭面板的通用符号。 -->
+          <button
+            class="ai-chat__icon-btn"
+            type="button"
+            title="收起面板（会话保留）"
+            aria-label="收起 AI 答疑面板"
+            @click="closePanel"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              width="12"
+              height="12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
           </button>
         </div>
       </header>
@@ -800,6 +839,9 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--text-strong);
   font-size: 0.9rem;
+  /* 面板固定 388px，右侧多了「新对话」之后标题区必须让位，
+     否则长模型名会把按钮挤到换行。 */
+  min-width: 0;
 }
 
 .ai-chat__logo {
@@ -822,6 +864,9 @@ onBeforeUnmount(() => {
    而原生 select 在移动端直接唤起系统选择器，键盘也能操作，成本最低。 */
 .ai-chat__model-select {
   max-width: 140px;
+  /* 允许被压缩：标题区是 flex 容器，select 有默认 min-width:auto，
+     长模型名在窄屏会把「新对话」按钮顶出面板。 */
+  min-width: 0;
   padding: 1px 2px 1px 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -846,18 +891,64 @@ onBeforeUnmount(() => {
 
 .ai-chat__actions {
   display: flex;
+  align-items: center;
   gap: 4px;
+  flex: 0 0 auto;
+}
+
+/* 新建会话：图标 + 文字，做成一个窄胶囊而不是正方形图标按钮。
+   它和「收起」在视觉上必须是两类东西——一个是「开新的」，一个是「关掉」。 */
+.ai-chat__new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-family: inherit;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ai-chat__new-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+  background: var(--surface-soft);
+}
+
+.ai-chat__new-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-chat__new-icon {
+  flex: 0 0 auto;
 }
 
 .ai-chat__icon-btn {
   width: 26px;
   height: 26px;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-strong);
   color: var(--text-secondary);
   cursor: pointer;
   line-height: 1;
+  /* 里面现在是 SVG，必须自己居中；纯文字时代靠 line-height 就够 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-chat__icon-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text-strong);
 }
 
 .ai-chat__icon-btn:disabled {
