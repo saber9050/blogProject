@@ -3,6 +3,30 @@
     <NavBar />
     <main class="page-shell">
       <div class="article-detail">
+        <!-- 目录（桌面三列布局时固定在左侧）。
+             只在 ≥1201px 显示：1200 容器塞不下「目录 + 正文 + 评论」三列，
+             硬塞会把正文压到 500px 以下。窄屏由正文顶部的折叠目录承担。 -->
+        <aside v-if="tocItems.length > 1" class="article-toc" aria-label="文章目录">
+          <p class="article-toc__title">目录</p>
+          <nav class="article-toc__list">
+            <button
+              v-for="t in tocItems"
+              :key="t.id"
+              class="article-toc__link"
+              :class="{
+                'article-toc__link--sub': t.depth > 0,
+                'article-toc__link--active': t.id === activeTocId
+              }"
+              :style="{ paddingLeft: `${8 + t.depth * 12}px` }"
+              type="button"
+              :title="t.text"
+              @click="jumpToHeading(t)"
+            >
+              {{ t.text }}
+            </button>
+          </nav>
+        </aside>
+
         <!-- 文章内容 -->
         <section class="article-content">
           <h1 class="article-content__title">{{ article.title }}</h1>
@@ -21,8 +45,38 @@
             </button>
             <span>&#128172; {{ article.comment_count || 0 }} 评论</span>
           </div>
+          <!-- 窄屏目录：同一份数据，用原生 details 折叠，
+               不占正文常态空间。桌面下由 CSS 隐藏。 -->
+          <details v-if="tocItems.length > 1" ref="inlineTocEl" class="article-toc-inline">
+            <summary class="article-toc-inline__summary">
+              目录 · {{ tocItems.length }} 节
+            </summary>
+            <nav class="article-toc__list article-toc__list--inline">
+              <button
+                v-for="t in tocItems"
+                :key="`inline-${t.id}`"
+                class="article-toc__link"
+                :class="{
+                  'article-toc__link--sub': t.depth > 0,
+                  'article-toc__link--active': t.id === activeTocId
+                }"
+                :style="{ paddingLeft: `${8 + t.depth * 12}px` }"
+                type="button"
+                @click="jumpToHeading(t)"
+              >
+                {{ t.text }}
+              </button>
+            </nav>
+          </details>
+
           <div class="article-content__body">
-            <MdPreview :model-value="displayContent" />
+            <!-- mdHeadingId 与目录共用同一个 id 规则（article-h-序号）：
+                 两边各算一套必然漂移，中文标题走默认 slug 更是容易对不上。 -->
+            <MdPreview
+              :model-value="displayContent"
+              :md-heading-id="headingIdOf"
+              @onGetCatalog="onCatalog"
+            />
           </div>
         </section>
 
@@ -181,12 +235,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../api'
 import NavBar from '../components/NavBar.vue'
 import ArticleChat from '../components/ArticleChat.vue'
 import { showToast } from '../utils/toast'
+import {
+  buildTocItems,
+  headingIdOf,
+  pickActiveId,
+  type CatalogHeading,
+  type TocItem
+} from '../utils/toc'
 // 正文是 Markdown，交给 md-editor-v3 的预览组件渲染
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
@@ -245,6 +306,56 @@ const article = ref<Article>({
 
 // 过滤空 HTML 内容（wangEditor 空内容返回 <p><br></p>）
 const displayContent = computed(() => (article.value.content || '').trim())
+
+// ===== 文章目录（TOC） =====
+//
+// 数据来源是 MdPreview 的 onGetCatalog：它把标题解析结果（文本 + 层级）吐出来，
+// 是唯一与渲染结果严格同源的列表。自己用正则扫 Markdown 会踩代码块里的 `#`、
+// 引用块里的 `#`，还得重写一套 slug 规则。
+//
+// id 规则、层级过滤、高亮判定都在 utils/toc.ts 里，与单测共用同一份实现。
+const tocItems = ref<TocItem[]>([])
+const activeTocId = ref('')
+const inlineTocEl = ref<HTMLDetailsElement | null>(null)
+// 吸顶导航 60px + 一条边框；跳转后标题落在导航下方留 16px 呼吸位
+const HEADING_OFFSET = 76
+
+function onCatalog(list: CatalogHeading[]) {
+  tocItems.value = buildTocItems(list)
+  nextTick(updateActiveHeading)
+}
+
+/** 滚动时高亮「当前读到的小节」 */
+function updateActiveHeading() {
+  if (tocItems.value.length === 0) return
+  const positions = tocItems.value.map((item) => {
+    const el = document.getElementById(item.id)
+    // 元素还没渲染出来的瞬间给 null，跳过而不是当成坐标 0（那会被误判成「已滚过」）
+    return el ? el.getBoundingClientRect().top : null
+  })
+  activeTocId.value = pickActiveId(tocItems.value, positions, HEADING_OFFSET)
+}
+
+let tocRaf = 0
+function onWindowScroll() {
+  if (tocRaf) return
+  tocRaf = requestAnimationFrame(() => {
+    tocRaf = 0
+    updateActiveHeading()
+  })
+}
+
+function jumpToHeading(item: TocItem) {
+  const el = document.getElementById(item.id)
+  if (!el) return
+  const top = el.getBoundingClientRect().top + window.scrollY - HEADING_OFFSET
+  window.scrollTo({ top, behavior: 'smooth' })
+  // 立刻高亮：等平滑滚动结束再变色会有明显延迟感
+  activeTocId.value = item.id
+  // 移动端折叠目录点完自动收起，否则它会一直挡着正文
+  if (inlineTocEl.value) inlineTocEl.value.open = false
+}
+
 const comments = ref<Comment[]>([])
 const newComment = ref('')
 const replyText = ref('')
@@ -538,9 +649,16 @@ const resetComments = () => {
 
 onMounted(async () => {
   loadCurrentUser()
+  // passive：滚动回调里不会 preventDefault，加了这个标记浏览器不用等 JS 就能滚
+  window.addEventListener('scroll', onWindowScroll, { passive: true })
   const id = route.params.id as string
   await loadArticle(id)
   loadComments()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', onWindowScroll)
+  if (tocRaf) cancelAnimationFrame(tocRaf)
 })
 
 // 监听路由参数变化，同一组件内切换文章时重新加载
@@ -548,6 +666,9 @@ watch(() => route.params.id, async (newId) => {
   if (!newId) return
   loadCurrentUser()
   resetComments()
+  // 先清空目录：新文章的标题解析还没回来，留着上一篇的会读到不存在的锚点
+  tocItems.value = []
+  activeTocId.value = ''
   await loadArticle(newId as string)
   loadComments()
 })
@@ -560,6 +681,98 @@ watch(() => route.params.id, async (newId) => {
   grid-template-columns: 1fr 340px;
   gap: 24px;
   align-items: start;
+}
+
+/* ====== 文章目录 ====== */
+/* 默认隐藏，≥1201px 才进三列布局（见文件末尾媒体查询）。
+   两个容器共用 .article-toc__list / __link 的样式，只是外壳不同。 */
+.article-toc {
+  display: none;
+  position: sticky;
+  /* 60px 吸顶导航 + 16px 间距，与右栏评论区对齐 */
+  top: 76px;
+  align-self: start;
+  max-height: calc(100vh - 92px);
+  /* 两个方向都写明：只写一个方向时另一方向会从 visible 隐式变 auto（本项目踩过） */
+  overflow: hidden auto;
+  padding: 14px 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.article-toc__title {
+  margin: 0 0 10px;
+  padding: 0 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.article-toc__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.article-toc__link {
+  /* -webkit-box 是为了两行截断：长标题用省略号会截在最关键的词上，
+     两行至少能看到小节名的前半句 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.76rem;
+  line-height: 1.42;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.article-toc__link:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-strong);
+}
+
+/* 缩进由行内 padding 控制（depth 决定），这里只把子级字号压小一点 */
+.article-toc__link--sub {
+  font-size: 0.75rem;
+}
+
+.article-toc__link--active {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--primary-600, var(--primary-500));
+  font-weight: 600;
+}
+
+/* 窄屏折叠目录 */
+.article-toc-inline {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.07);
+}
+
+.article-toc-inline__summary {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.article-toc__list--inline {
+  margin-top: 8px;
 }
 
 .article-content {
@@ -956,6 +1169,22 @@ watch(() => route.params.id, async (newId) => {
 @media (max-width: 768px) {
   .article-detail {
     grid-template-columns: 1fr;
+  }
+}
+
+/* 宽屏才加目录列：1200 容器里塞三列，正文会掉到 500px 以内，
+   宁可让目录变成正文顶部的折叠块，也不能把正文挤窄。 */
+@media (min-width: 1201px) {
+  .article-detail {
+    grid-template-columns: 184px minmax(0, 1fr) 340px;
+  }
+
+  .article-toc {
+    display: block;
+  }
+
+  .article-toc-inline {
+    display: none;
   }
 }
 </style>
