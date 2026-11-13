@@ -18,19 +18,8 @@
         <div class="ai-chat__title">
           <img src="/logo-mark.svg" alt="" class="ai-chat__logo" />
           <span>AI 答疑</span>
-          <!-- 多个模型时才给下拉：只有一个模型时下拉没有可选项，
-               反而让人以为还能选别的。 -->
-          <select
-            v-if="models.length > 1"
-            class="ai-chat__model-select"
-            :value="selectedModelID"
-            :disabled="streaming || !context?.enabled"
-            title="切换模型只影响后续消息，已有回答不受影响"
-            @change="onModelChange"
-          >
-            <option v-for="m in models" :key="m.id" :value="m.id">{{ m.model }}</option>
-          </select>
-          <span v-else-if="currentModel" class="ai-chat__model">{{ currentModel }}</span>
+          <!-- 模型选择已移到输入框下方的操作行：它影响的是「下一次提问用哪个模型」，
+               和会话切换是同一类请求级设置，放头部容易被理解成全局设置。 -->
         </div>
         <div class="ai-chat__actions">
           <!-- 新建会话必须带文字。
@@ -229,14 +218,71 @@
           :current-article-id="articleId"
           @send="onComposerSend"
           @stop="stop"
-        />
+        >
+          <template #toolbar>
+            <!-- 会话切换：显示当前会话名，点开列出这篇文章下「我」的会话。
+                 菜单向上弹——输入框贴着面板底部，向下弹会被视口裁掉。 -->
+            <div ref="sessionWrapEl" class="ai-chat__session">
+              <button
+                class="ai-chat__session-btn"
+                :class="{ 'is-open': sessionMenuOpen }"
+                type="button"
+                :title="sessionBtnTitle"
+                :aria-expanded="sessionMenuOpen"
+                @click="toggleSessionMenu"
+              >
+                <span class="ai-chat__session-name">{{ sessionLabel }}</span>
+                <span class="ai-chat__session-caret" aria-hidden="true">&#9662;</span>
+              </button>
+
+              <div v-if="sessionMenuOpen" class="ai-chat__session-menu" role="listbox">
+                <p v-if="loadingSessions" class="ai-chat__session-hint">加载中…</p>
+                <p v-else-if="sessionOptions.length === 0" class="ai-chat__session-hint">
+                  这篇文章还没有历史会话
+                </p>
+                <template v-else>
+                  <p class="ai-chat__session-group">这篇对话记录（{{ sessionOptions.length }}）</p>
+                  <button
+                    v-for="s in sessionOptions"
+                    :key="s.id"
+                    class="ai-chat__session-item"
+                    :class="{ 'is-current': s.id === sessionId }"
+                    type="button"
+                    role="option"
+                    :aria-selected="s.id === sessionId"
+                    @click="switchSession(s.id)"
+                  >
+                    <span class="ai-chat__session-item-name">{{ s.title || '未命名对话' }}</span>
+                    <span class="ai-chat__session-item-meta">{{ sessionMeta(s) }}</span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <!-- 多个模型时才给下拉：只有一个模型时下拉没有可选项，
+                 反而让人以为还能选别的。 -->
+            <select
+              v-if="models.length > 1"
+              class="ai-chat__model-select ai-chat__model-select--bar"
+              :value="selectedModelID"
+              :disabled="streaming || !context?.enabled"
+              title="切换模型只影响后续消息，已有回答不受影响"
+              @change="onModelChange"
+            >
+              <option v-for="m in models" :key="m.id" :value="m.id">{{ m.model }}</option>
+            </select>
+            <span v-else-if="currentModel" class="ai-chat__model ai-chat__model--bar">
+              {{ currentModel }}
+            </span>
+          </template>
+        </ChatComposer>
       </template>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
@@ -250,6 +296,7 @@ import {
   type ChatContext,
   fetchToolMessages,
   updateChatSession,
+  type ChatSession,
   type ChatStep,
   type ChatToolMessage,
   type RefChunk
@@ -305,6 +352,14 @@ const listEl = ref<HTMLElement | null>(null)
 const composerRef = ref<InstanceType<typeof ChatComposer> | null>(null)
 
 const sessionId = ref(0)
+// 这篇文章下当前用户的会话列表（来源 GET /articles/:id/chat/context）。
+//
+// 为什么不每次点开都请求：context 里还带了模型列表、RAG 就绪状态等，
+// 每次开菜单拉一遍纯属浪费；列表只在 ① 打开面板 ② 点开菜单 ③ 首问生成标题 三处刷新。
+const sessions = ref<ChatSession[]>([])
+const sessionMenuOpen = ref(false)
+const loadingSessions = ref(false)
+const sessionWrapEl = ref<HTMLElement | null>(null)
 // 当前会话（或即将创建的那个）使用的模型配置 id。
 //
 // 为什么要有这个状态而不是每次都读 context.default_model_id：
@@ -333,6 +388,23 @@ const currentModel = computed(() => {
 })
 // 后端说「最多 8 篇（含当前文章）」，前端算 pill 上限时减 1。
 // 不写死 7：将来后端调这个数，前端自动跟上。
+// ===== 会话框（输入框左侧） =====
+
+// 会话还没落库时（刚点「新对话」）显示「新对话」；
+// 已落库但后端还没生成标题（首问之前）时显示「未命名对话」——不能显示空字符串，
+// 否则按钮会缩成只剩一个箭头的怪东西。
+const sessionLabel = computed(() => {
+  if (!sessionId.value) return '新对话'
+  const hit = sessions.value.find((s) => s.id === sessionId.value)
+  return (hit?.title || '').trim() || '未命名对话'
+})
+
+const sessionBtnTitle = computed(() => `当前会话：${sessionLabel.value}（点击切换）`)
+
+// 菜单里不显示「当前会话」之外的特殊项：新建走右上角的「新对话」按钮。
+// 列表本身已经按 last_message_at 倒序，最近聊的排最前。
+const sessionOptions = computed(() => sessions.value)
+
 const maxRefs = computed(() => Math.max((context.value?.max_ref_articles || 8) - 1, 0))
 const sampleQuestions = computed(() => [
   '这篇文章主要讲了什么？',
@@ -435,6 +507,105 @@ const lastSessionKey = () => {
   return `chat_last_session:${uid}:${props.articleId}`
 }
 
+/** 会话列表项右侧的附加信息：消息条数 + 最近活动时间 */
+function sessionMeta(s: ChatSession): string {
+  const count = s.message_count || 0
+  const time = s.last_message_at ? fmtSessionTime(s.last_message_at) : ''
+  if (count <= 0) return time || '还没聊过'
+  return time ? `${count} 条 · ${time}` : `${count} 条`
+}
+
+/** 今天显示时分，更早显示月/日——一年前的会话显示「13:42」毫无意义 */
+function fmtSessionTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const now = new Date()
+  if (d.toDateString() === now.toDateString()) {
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+/**
+ * 重新拉会话列表。
+ *
+ * 只取 sessions 字段，其余（模型、RAG 状态、enabled）不动：
+ * 把它们一起覆盖的话，万一后端此刻判定不可用，面板会直接切到「不可用」提示，
+ * 正在输入的内容和上下文全丢——刷新列表不该有这种副作用。
+ */
+async function refreshSessions() {
+  if (loadingSessions.value) return
+  loadingSessions.value = true
+  try {
+    const ctx = await fetchChatContext(props.articleId)
+    sessions.value = ctx.sessions || []
+  } catch {
+    // 拉不到就沿用旧列表：切会话用不了旧数据也能用，不该弹错误打断用户
+  } finally {
+    loadingSessions.value = false
+  }
+}
+
+async function toggleSessionMenu() {
+  if (streaming.value) {
+    showToast('正在生成回答，稍后再切换会话', 'info')
+    return
+  }
+  sessionMenuOpen.value = !sessionMenuOpen.value
+  // 打开时静默刷新：用户可能在别的标签页或刚才的对话里新建过会话
+  if (sessionMenuOpen.value) void refreshSessions()
+}
+
+function closeSessionMenu() {
+  sessionMenuOpen.value = false
+}
+
+/**
+ * 切换到另一个历史会话。
+ *
+ * ⚠️ 流式中禁止切换：此时 SSE 还在往当前消息里写，换了会话后
+ * 新 token 会落到错误的对话里（内存里看不出问题，刷新后才发现串了）。
+ */
+async function switchSession(id: number) {
+  sessionMenuOpen.value = false
+  if (streaming.value || id === sessionId.value) return
+
+  const hit = sessions.value.find((s) => s.id === id)
+  sessionId.value = id
+  localStorage.setItem(lastSessionKey(), String(id))
+  // 模型跟着会话走：每个会话绑的是自己当时选的模型，沿用当前值会让 PATCH 悄悄改掉旧会话的绑定
+  if (hit?.model_config_id) selectedModelID.value = hit.model_config_id
+
+  // 清掉草稿：里面可能还挂着上一个会话引用过的 pill，
+  // 带过去等于把 A 的上下文悄悄塞进 B
+  composerRef.value?.clear()
+  await loadHistory(id)
+  composerRef.value?.focus()
+}
+
+/** 点击面板其它地方 / 按 Esc 关闭会话菜单 */
+function onDocPointerDown(e: MouseEvent) {
+  if (!sessionMenuOpen.value) return
+  const wrap = sessionWrapEl.value
+  if (wrap && e.target instanceof Node && wrap.contains(e.target)) return
+  sessionMenuOpen.value = false
+}
+
+function onDocKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && sessionMenuOpen.value) sessionMenuOpen.value = false
+}
+
+/**
+ * 首问之后后端才把会话标题写成「首问摘要」，本地列表里那条还是空标题。
+ * 此时静默刷一次，否则输入框左边会一直显示「未命名对话」。
+ */
+function refreshTitleIfMissing() {
+  if (!sessionId.value) return
+  const hit = sessions.value.find((s) => s.id === sessionId.value)
+  if (!hit || !hit.title) void refreshSessions()
+}
+
 function scrollToBottom() {
   nextTick(() => {
     const el = listEl.value
@@ -469,6 +640,8 @@ async function loadContext() {
     return
   }
   if (!context.value.enabled) return
+  // 会话列表与 context 一次拿到：面板打开后用户第一件想做的事可能就是切回上次那个
+  sessions.value = context.value.sessions || []
 
   // 优先 localStorage（记录「这台设备上次真正打开的那个」），服务端只作兜底
   const saved = Number(localStorage.getItem(lastSessionKey()) || 0)
@@ -550,6 +723,7 @@ async function loadHistory(id: number) {
 
 function startNewSession() {
   if (streaming.value) return
+  closeSessionMenu()
   sessionId.value = 0
   messages.value = []
   localStorage.removeItem(lastSessionKey())
@@ -713,6 +887,9 @@ async function onComposerSend(payload: ComposerPayload) {
                 }
               })
             }
+            // 首问已落库，会话标题这时才由后端生成：静默刷一次列表，
+            // 让输入框左边的名字从「未命名对话」变成真正的标题
+            refreshTitleIfMissing()
           })
           scrollToBottom()
         },
@@ -771,9 +948,17 @@ watch(
   }
 )
 
+onMounted(() => {
+  // 捕获阶段不必要，会话菜单只需要「点到外面就关」
+  document.addEventListener('mousedown', onDocPointerDown)
+  document.addEventListener('keydown', onDocKeydown)
+})
+
 onBeforeUnmount(() => {
   abortController?.abort()
   if (flushTimer !== null) window.clearTimeout(flushTimer)
+  document.removeEventListener('mousedown', onDocPointerDown)
+  document.removeEventListener('keydown', onDocKeydown)
 })
 </script>
 
@@ -887,6 +1072,142 @@ onBeforeUnmount(() => {
 .ai-chat__model-select:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ===== 输入框操作行：会话框 + 模型 ===== */
+
+/* 会话框吃掉剩余宽度。不给 max-width：真正防挤出的是「发送」的 flex:0 0 auto，
+   用百分比上限反而会让会话名过早出现省略号。 */
+.ai-chat__session {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ai-chat__session-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease;
+}
+
+.ai-chat__session-btn:hover,
+.ai-chat__session-btn.is-open {
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+}
+
+.ai-chat__session-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.ai-chat__session-caret {
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  color: var(--text-faint);
+}
+
+/* 菜单向上弹：输入框贴着面板底部，向下弹会被裁掉。
+   定位父级是 .composer（不是按钮）：bottom 从 composer 底边算起，
+   66px = 12 内边距 + 34 按钮行 + 8 间距 + 12 空隙，正好落在输入框上沿之上，
+   不会盖住 placeholder。 */
+.ai-chat__session-menu {
+  position: absolute;
+  left: 12px;
+  bottom: 66px;
+  z-index: 6;
+  /* 不超过面板：按 composer 宽度收一点，避免菜单右边被面板裁掉 */
+  width: min(300px, calc(100% - 24px));
+  max-height: 240px;
+  overflow: hidden auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.ai-chat__session-group {
+  margin: 4px 6px 6px;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+}
+
+.ai-chat__session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-chat__session-item:hover {
+  background: var(--surface-soft);
+}
+
+.ai-chat__session-item.is-current {
+  background: var(--accent-soft);
+  color: var(--accent-500);
+}
+
+.ai-chat__session-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-chat__session-item-meta {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  color: var(--text-faint);
+}
+
+.ai-chat__session-hint {
+  margin: 0;
+  padding: 10px;
+  text-align: center;
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}
+
+/* 操作行里的模型控件：比原来头部那版窄，把宽度让给会话名 */
+.ai-chat__model-select--bar {
+  flex: 0 1 auto;
+  max-width: 118px;
+}
+
+.ai-chat__model--bar {
+  flex: 0 1 auto;
+  max-width: 118px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
 }
 
 .ai-chat__actions {

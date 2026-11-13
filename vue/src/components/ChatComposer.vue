@@ -41,6 +41,11 @@
     <p v-if="hint" class="composer__hint">{{ hint }}</p>
 
     <div class="composer__actions">
+      <!-- 左侧工具栏：会话切换、模型选择。这些是「影响这次提问怎么执行」的控件，
+           和下面的输入框属于同一层操作，放头部会让人以为它们改的是整个面板。 -->
+      <div class="composer__toolbar">
+        <slot name="toolbar" />
+      </div>
       <button
         v-if="!streaming"
         class="composer__send"
@@ -602,11 +607,26 @@ defineExpose({ clear, focus })
 
 .composer__actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-top: 8px;
 }
 
+/* 工具栏可压缩：面板只有 388px，会话名过长时靠 ellipsis 收，
+   不能把「发送」挤出面板 */
+.composer__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .composer__send {
+  /* 绝不被工具栏挤压：压缩后会被挤成两行甚至挤出面板 */
+  flex: 0 0 auto;
+  white-space: nowrap;
   height: 34px;
   padding: 0 18px;
   border: none;
