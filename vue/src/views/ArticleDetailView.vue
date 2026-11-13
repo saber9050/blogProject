@@ -2,11 +2,14 @@
   <div class="article-page">
     <NavBar />
     <main class="page-shell">
-      <div class="article-detail">
+      <!-- has-toc 修饰类必须与目录 aside 的 v-if 用同一个判断：
+           grid 模板是写死的列，节点被 v-if 摘掉后子元素会按文档顺序顶上去，
+           正文就会掉进 184px 的目录列（见文件末尾媒体查询）。 -->
+      <div class="article-detail" :class="{ 'article-detail--with-toc': hasToc }">
         <!-- 目录（桌面三列布局时固定在左侧）。
              只在 ≥1201px 显示：1200 容器塞不下「目录 + 正文 + 评论」三列，
              硬塞会把正文压到 500px 以下。窄屏由正文顶部的折叠目录承担。 -->
-        <aside v-if="tocItems.length > 1" class="article-toc" aria-label="文章目录">
+        <aside v-if="hasToc" class="article-toc" aria-label="文章目录">
           <p class="article-toc__title">目录</p>
           <nav class="article-toc__list">
             <button
@@ -47,7 +50,7 @@
           </div>
           <!-- 窄屏目录：同一份数据，用原生 details 折叠，
                不占正文常态空间。桌面下由 CSS 隐藏。 -->
-          <details v-if="tocItems.length > 1" ref="inlineTocEl" class="article-toc-inline">
+          <details v-if="hasToc" ref="inlineTocEl" class="article-toc-inline">
             <summary class="article-toc-inline__summary">
               目录 · {{ tocItems.length }} 节
             </summary>
@@ -317,6 +320,16 @@ const displayContent = computed(() => (article.value.content || '').trim())
 const tocItems = ref<TocItem[]>([])
 const activeTocId = ref('')
 const inlineTocEl = ref<HTMLDetailsElement | null>(null)
+
+/**
+ * 是否展示目录。只保留一个标题没有意义，所以要求至少 2 项。
+ *
+ * ⚠️ 这个判断同时决定「aside 渲不渲染」和「grid 要不要切三列」，
+ * 两边必须同源：宽屏三列模板是 `184px 1fr 340px`，目录节点一旦被
+ * v-if 摘掉，正文会按文档顺序顶进第一列，被压成 184px 宽。
+ */
+const hasToc = computed(() => tocItems.value.length > 1)
+
 // 吸顶导航 60px + 一条边框；跳转后标题落在导航下方留 16px 呼吸位
 const HEADING_OFFSET = 76
 
@@ -1173,9 +1186,13 @@ watch(() => route.params.id, async (newId) => {
 }
 
 /* 宽屏才加目录列：1200 容器里塞三列，正文会掉到 500px 以内，
-   宁可让目录变成正文顶部的折叠块，也不能把正文挤窄。 */
+   宁可让目录变成正文顶部的折叠块，也不能把正文挤窄。
+
+   ⚠️ 三列模板必须挂在 --with-toc 上，不能直接写给 .article-detail：
+   没有目录时 aside 被 v-if 摘掉，grid 仍按三列自动填充，正文会顶进
+   184px 的目录列，被压成每行四五个字（2026-11-13 踩过）。 */
 @media (min-width: 1201px) {
-  .article-detail {
+  .article-detail--with-toc {
     grid-template-columns: 184px minmax(0, 1fr) 340px;
   }
 
